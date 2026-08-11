@@ -56,6 +56,23 @@ func TestLoadOrCreateBootstrapTokenIsStableAndPrivate(t *testing.T) {
 	}
 }
 
+func TestLoadOrCreateEncryptionKeyIsStable(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "keys", "relay-encryption.key")
+	first, err := LoadOrCreateEncryptionKey(path)
+	if err != nil {
+		t.Fatalf("first LoadOrCreateEncryptionKey() error = %v", err)
+	}
+	second, err := LoadOrCreateEncryptionKey(path)
+	if err != nil {
+		t.Fatalf("second LoadOrCreateEncryptionKey() error = %v", err)
+	}
+	if len(first) != 32 || !bytes.Equal(first, second) {
+		t.Fatal("encryption key is invalid or changed")
+	}
+}
+
 func TestLoadOrCreateRejectsInsecureExistingFile(t *testing.T) {
 	t.Parallel()
 
