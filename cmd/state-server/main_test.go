@@ -25,6 +25,12 @@ func TestNewApplicationCreatesPrivatePersistentSecretsAndServesHealth(t *testing
 	if response.Code != http.StatusOK {
 		t.Fatalf("ready status = %d, body = %s", response.Code, response.Body.String())
 	}
+	mcpRequest := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	mcpResponse := httptest.NewRecorder()
+	application.handler.ServeHTTP(mcpResponse, mcpRequest)
+	if mcpResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated MCP status = %d, body = %s", mcpResponse.Code, mcpResponse.Body.String())
+	}
 	if err := application.close(); err != nil {
 		t.Fatalf("close() error = %v", err)
 	}
