@@ -22,6 +22,9 @@ type Repository interface {
 	ListChanges(context.Context, int64, int) ([]Change, error)
 	AddComment(context.Context, Comment, AuditEvent, string) (Comment, error)
 	ListComments(context.Context, string) ([]Comment, error)
+	GetOccurrence(context.Context, string) (Occurrence, error)
+	ListOccurrences(context.Context, string, OccurrenceListOptions) ([]Occurrence, error)
+	UpdateOccurrence(context.Context, Occurrence, int64, AuditEvent, string) (Occurrence, error)
 }
 
 type Service struct {
@@ -335,6 +338,95 @@ func (service *Service) ListComments(ctx context.Context, reminderID string) ([]
 	return service.repository.ListComments(ctx, reminderID)
 }
 
+func (service *Service) ListOccurrences(ctx context.Context, reminderID string, options OccurrenceListOptions) ([]Occurrence, error) {
+	if reminderID == "" {
+		return nil, ErrInvalidInput
+	}
+	return service.repository.ListOccurrences(ctx, reminderID, options)
+}
+
+func (service *Service) CompleteOccurrence(ctx context.Context, actor Actor, occurrenceID string, input CompleteOccurrenceInput) (Occurrence, error) {
+	if actor.ID == "" || actor.Kind == "" || occurrenceID == "" || input.ClientRequestID == "" {
+		return Occurrence{}, ErrInvalidInput
+	}
+	current, err := service.repository.GetOccurrence(ctx, occurrenceID)
+	if err != nil {
+		return Occurrence{}, err
+	}
+	updated := cloneOccurrence(current)
+	now := service.clock().UTC()
+	updated.Status = OccurrenceStatusCompleted
+	updated.CompletedAt = &now
+	updated.SnoozedUntil = nil
+	updated.Revision++
+	updated.UpdatedAt = now
+	return service.updateOccurrence(ctx, actor, current, updated, input.ExpectedRevision, input.ClientTime, input.Source, input.SourceExcerpt, input.ClientRequestID, input.CorrelationID, AuditActionOccurrenceDone, []string{"occurrence.completed_at", "occurrence.status"})
+}
+
+func (service *Service) SnoozeOccurrence(ctx context.Context, actor Actor, occurrenceID string, input SnoozeOccurrenceInput) (Occurrence, error) {
+	if actor.ID == "" || actor.Kind == "" || occurrenceID == "" || input.ClientRequestID == "" || !input.Until.After(service.clock()) {
+		return Occurrence{}, ErrInvalidInput
+	}
+	current, err := service.repository.GetOccurrence(ctx, occurrenceID)
+	if err != nil {
+		return Occurrence{}, err
+	}
+	updated := cloneOccurrence(current)
+	until := input.Until.UTC()
+	now := service.clock().UTC()
+	updated.Status = OccurrenceStatusSnoozed
+	updated.SnoozedUntil = &until
+	updated.CompletedAt = nil
+	updated.Revision++
+	updated.UpdatedAt = now
+	return service.updateOccurrence(ctx, actor, current, updated, input.ExpectedRevision, input.ClientTime, input.Source, input.SourceExcerpt, input.ClientRequestID, input.CorrelationID, AuditActionOccurrenceSnoozed, []string{"occurrence.snoozed_until", "occurrence.status"})
+}
+
+func (service *Service) updateOccurrence(
+	ctx context.Context,
+	actor Actor,
+	current Occurrence,
+	updated Occurrence,
+	expectedRevision int64,
+	clientTime *time.Time,
+	source string,
+	sourceExcerpt string,
+	clientRequestID string,
+	requestedCorrelationID string,
+	action AuditAction,
+	changedFields []string,
+) (Occurrence, error) {
+	beforeSnapshot, err := json.Marshal(current)
+	if err != nil {
+		return Occurrence{}, fmt.Errorf("encode previous occurrence snapshot: %w", err)
+	}
+	afterSnapshot, err := json.Marshal(updated)
+	if err != nil {
+		return Occurrence{}, fmt.Errorf("encode updated occurrence snapshot: %w", err)
+	}
+	eventID, err := service.newID()
+	if err != nil {
+		return Occurrence{}, fmt.Errorf("generate audit event ID: %w", err)
+	}
+	event := AuditEvent{
+		ID:              eventID,
+		ReminderID:      current.ReminderID,
+		Action:          action,
+		Actor:           actor,
+		ServerTime:      updated.UpdatedAt,
+		ClientTime:      clientTime,
+		Source:          source,
+		SourceExcerpt:   sourceExcerpt,
+		BeforeSnapshot:  beforeSnapshot,
+		AfterSnapshot:   afterSnapshot,
+		ChangedFields:   changedFields,
+		Revision:        updated.Revision,
+		CorrelationID:   correlationID(requestedCorrelationID, clientRequestID),
+		ClientRequestID: clientRequestID,
+	}
+	return service.repository.UpdateOccurrence(ctx, updated, expectedRevision, event, clientRequestID)
+}
+
 func validateMutation(actor Actor, title string, clientRequestID string) error {
 	if actor.ID == "" || actor.Kind == "" || strings.TrimSpace(title) == "" || clientRequestID == "" {
 		return ErrInvalidInput
@@ -369,6 +461,22 @@ func cloneRecurrence(recurrence *RecurrenceRule) *RecurrenceRule {
 	}
 	copy := *recurrence
 	return &copy
+}
+
+func cloneOccurrence(occurrence Occurrence) Occurrence {
+	if occurrence.ScheduledAt != nil {
+		value := *occurrence.ScheduledAt
+		occurrence.ScheduledAt = &value
+	}
+	if occurrence.CompletedAt != nil {
+		value := *occurrence.CompletedAt
+		occurrence.CompletedAt = &value
+	}
+	if occurrence.SnoozedUntil != nil {
+		value := *occurrence.SnoozedUntil
+		occurrence.SnoozedUntil = &value
+	}
+	return occurrence
 }
 
 func contains(values []string, target string) bool {

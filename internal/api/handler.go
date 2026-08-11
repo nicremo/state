@@ -28,9 +28,10 @@ type Handler struct {
 }
 
 type ReminderDetail struct {
-	Reminder state.Reminder     `json:"reminder"`
-	Comments []state.Comment    `json:"comments"`
-	History  []state.AuditEvent `json:"history"`
+	Reminder    state.Reminder     `json:"reminder"`
+	Comments    []state.Comment    `json:"comments"`
+	Occurrences []state.Occurrence `json:"occurrences"`
+	History     []state.AuditEvent `json:"history"`
 }
 
 type ErrorResponse struct {
@@ -64,6 +65,9 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("GET /api/v1/reminders/{id}/history", handler.getReminderHistory)
 	handler.router.HandleFunc("POST /api/v1/reminders/{id}/comments", handler.addComment)
 	handler.router.HandleFunc("GET /api/v1/reminders/{id}/comments", handler.listComments)
+	handler.router.HandleFunc("GET /api/v1/reminders/{id}/occurrences", handler.listOccurrences)
+	handler.router.HandleFunc("POST /api/v1/occurrences/{id}/complete", handler.completeOccurrence)
+	handler.router.HandleFunc("POST /api/v1/occurrences/{id}/snooze", handler.snoozeOccurrence)
 	handler.router.HandleFunc("GET /api/v1/changes", handler.getChanges)
 	handler.router.HandleFunc("GET /api/v1/briefing", handler.getBriefing)
 }
@@ -211,7 +215,17 @@ func (handler *Handler) getReminder(writer http.ResponseWriter, request *http.Re
 		writeError(writer, err, nil)
 		return
 	}
-	writeJSON(writer, http.StatusOK, ReminderDetail{Reminder: reminder, Comments: comments, History: history})
+	occurrences, err := handler.state.ListOccurrences(request.Context(), reminderID, state.OccurrenceListOptions{Limit: 500})
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, ReminderDetail{
+		Reminder:    reminder,
+		Comments:    comments,
+		Occurrences: occurrences,
+		History:     history,
+	})
 }
 
 func (handler *Handler) updateReminder(writer http.ResponseWriter, request *http.Request) {
@@ -286,6 +300,74 @@ func (handler *Handler) listComments(writer http.ResponseWriter, request *http.R
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{"comments": comments})
+}
+
+func (handler *Handler) listOccurrences(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticate(writer, request); !ok {
+		return
+	}
+	limit, err := queryInteger(request, "limit", 100)
+	if err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	options := state.OccurrenceListOptions{Limit: limit}
+	if status := request.URL.Query().Get("status"); status != "" {
+		parsed := state.OccurrenceStatus(status)
+		if parsed != state.OccurrenceStatusPending && parsed != state.OccurrenceStatusCompleted && parsed != state.OccurrenceStatusSnoozed {
+			writeError(writer, state.ErrInvalidInput, nil)
+			return
+		}
+		options.Status = &parsed
+	}
+	occurrences, err := handler.state.ListOccurrences(request.Context(), request.PathValue("id"), options)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"occurrences": occurrences})
+}
+
+func (handler *Handler) completeOccurrence(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	var input state.CompleteOccurrenceInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	occurrence, err := handler.state.CompleteOccurrence(request.Context(), actor, request.PathValue("id"), input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, occurrence)
+}
+
+func (handler *Handler) snoozeOccurrence(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	var input state.SnoozeOccurrenceInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	occurrence, err := handler.state.SnoozeOccurrence(request.Context(), actor, request.PathValue("id"), input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, occurrence)
 }
 
 func (handler *Handler) getChanges(writer http.ResponseWriter, request *http.Request) {

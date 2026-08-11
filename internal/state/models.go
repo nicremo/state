@@ -67,6 +67,40 @@ type RecurrenceRule struct {
 	UntilDate string              `json:"until_date,omitempty"`
 }
 
+type OccurrenceSeed struct {
+	LocalDate         string       `json:"local_date"`
+	LocalTime         string       `json:"local_time,omitempty"`
+	TimeZone          string       `json:"time_zone"`
+	TimeZoneMode      TimeZoneMode `json:"time_zone_mode"`
+	PrewarningMinutes int          `json:"prewarning_minutes,omitempty"`
+	ScheduledAt       *time.Time   `json:"scheduled_at,omitempty"`
+}
+
+type OccurrenceStatus string
+
+const (
+	OccurrenceStatusPending   OccurrenceStatus = "pending"
+	OccurrenceStatusCompleted OccurrenceStatus = "completed"
+	OccurrenceStatusSnoozed   OccurrenceStatus = "snoozed"
+)
+
+type Occurrence struct {
+	ID                string           `json:"id"`
+	ReminderID        string           `json:"reminder_id"`
+	LocalDate         string           `json:"local_date"`
+	LocalTime         string           `json:"local_time,omitempty"`
+	TimeZone          string           `json:"time_zone"`
+	TimeZoneMode      TimeZoneMode     `json:"time_zone_mode"`
+	PrewarningMinutes int              `json:"prewarning_minutes,omitempty"`
+	ScheduledAt       *time.Time       `json:"scheduled_at,omitempty"`
+	Status            OccurrenceStatus `json:"status"`
+	CompletedAt       *time.Time       `json:"completed_at,omitempty"`
+	SnoozedUntil      *time.Time       `json:"snoozed_until,omitempty"`
+	Revision          int64            `json:"revision"`
+	CreatedAt         time.Time        `json:"created_at"`
+	UpdatedAt         time.Time        `json:"updated_at"`
+}
+
 type Reminder struct {
 	ID          string          `json:"id"`
 	Title       string          `json:"title"`
@@ -157,6 +191,30 @@ type AddCommentInput struct {
 	SourceExcerpt   string     `json:"source_excerpt,omitempty"`
 	ClientRequestID string     `json:"client_request_id"`
 	CorrelationID   string     `json:"correlation_id,omitempty"`
+}
+
+type OccurrenceListOptions struct {
+	Status *OccurrenceStatus
+	Limit  int
+}
+
+type CompleteOccurrenceInput struct {
+	ExpectedRevision int64      `json:"expected_revision"`
+	ClientTime       *time.Time `json:"client_time,omitempty"`
+	Source           string     `json:"source,omitempty"`
+	SourceExcerpt    string     `json:"source_excerpt,omitempty"`
+	ClientRequestID  string     `json:"client_request_id"`
+	CorrelationID    string     `json:"correlation_id,omitempty"`
+}
+
+type SnoozeOccurrenceInput struct {
+	Until            time.Time  `json:"until"`
+	ExpectedRevision int64      `json:"expected_revision"`
+	ClientTime       *time.Time `json:"client_time,omitempty"`
+	Source           string     `json:"source,omitempty"`
+	SourceExcerpt    string     `json:"source_excerpt,omitempty"`
+	ClientRequestID  string     `json:"client_request_id"`
+	CorrelationID    string     `json:"correlation_id,omitempty"`
 }
 
 type ReminderListOptions struct {
