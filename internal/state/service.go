@@ -197,6 +197,20 @@ func (service *Service) UpdateReminder(ctx context.Context, actor Actor, reminde
 	return service.repository.UpdateReminder(ctx, updated, input.ExpectedRevision, event, input.ClientRequestID)
 }
 
+func (service *Service) GetReminder(ctx context.Context, reminderID string) (Reminder, error) {
+	if reminderID == "" {
+		return Reminder{}, ErrInvalidInput
+	}
+	return service.repository.GetReminder(ctx, reminderID)
+}
+
+func (service *Service) ListAuditEvents(ctx context.Context, reminderID string) ([]AuditEvent, error) {
+	if reminderID == "" {
+		return nil, ErrInvalidInput
+	}
+	return service.repository.ListAuditEvents(ctx, reminderID)
+}
+
 func validateMutation(actor Actor, title string, clientRequestID string) error {
 	if actor.ID == "" || actor.Kind == "" || strings.TrimSpace(title) == "" || clientRequestID == "" {
 		return ErrInvalidInput
