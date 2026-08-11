@@ -1,0 +1,15 @@
+.git
+.github
+.build
+.swiftpm
+DerivedData
+build
+dist
+coverage.out
+ios
+state_data
+relay_data
+.secrets
+*.key
+*.p8
+*.pem

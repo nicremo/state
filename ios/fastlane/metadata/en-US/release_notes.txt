@@ -1,0 +1,1 @@
+Initial release with reminders, comments, complete history, offline editing, conflict resolution and encrypted notifications.
