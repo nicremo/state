@@ -1,14 +1,17 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	stateauth "github.com/nicremo/state/internal/auth"
+	statepush "github.com/nicremo/state/internal/push"
 	"github.com/nicremo/state/internal/state"
 )
 
@@ -17,12 +20,14 @@ const maxRequestBodyBytes = 1 << 20
 type Config struct {
 	Auth    *stateauth.Manager
 	State   *state.Service
+	Push    *statepush.Service
 	Version string
 }
 
 type Handler struct {
 	auth    *stateauth.Manager
 	state   *state.Service
+	push    *statepush.Service
 	version string
 	router  *http.ServeMux
 }
@@ -44,6 +49,7 @@ func NewHandler(config Config) http.Handler {
 	handler := &Handler{
 		auth:    config.Auth,
 		state:   config.State,
+		push:    config.Push,
 		version: config.Version,
 		router:  http.NewServeMux(),
 	}
@@ -64,6 +70,9 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("DELETE /api/v1/agents/{id}", handler.revokeActor)
 	handler.router.HandleFunc("GET /api/v1/devices", handler.listDevices)
 	handler.router.HandleFunc("DELETE /api/v1/devices/{id}", handler.revokeActor)
+	handler.router.HandleFunc("PUT /api/v1/devices/push", handler.registerDevicePush)
+	handler.router.HandleFunc("DELETE /api/v1/devices/push", handler.deleteDevicePush)
+	handler.router.HandleFunc("POST /api/v1/devices/push/confirmations", handler.confirmDeviceOccurrences)
 	handler.router.HandleFunc("POST /api/v1/reminders", handler.createReminder)
 	handler.router.HandleFunc("GET /api/v1/reminders", handler.listReminders)
 	handler.router.HandleFunc("GET /api/v1/reminders/{id}", handler.getReminder)
@@ -83,7 +92,7 @@ func (handler *Handler) healthLive(writer http.ResponseWriter, _ *http.Request) 
 }
 
 func (handler *Handler) healthReady(writer http.ResponseWriter, _ *http.Request) {
-	if handler.auth == nil || handler.state == nil {
+	if handler.auth == nil || handler.state == nil || handler.push == nil {
 		writeJSON(writer, http.StatusServiceUnavailable, map[string]string{"status": "not_ready"})
 		return
 	}
@@ -202,6 +211,55 @@ func (handler *Handler) revokeActor(writer http.ResponseWriter, request *http.Re
 	writer.WriteHeader(http.StatusNoContent)
 }
 
+func (handler *Handler) registerDevicePush(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	var input statepush.RegisterDeviceInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	route, err := handler.push.RegisterDevice(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, route)
+}
+
+func (handler *Handler) deleteDevicePush(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if err := handler.push.DeleteDevice(request.Context(), actor); err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) confirmDeviceOccurrences(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	input := struct {
+		OccurrenceIDs []string `json:"occurrence_ids"`
+	}{}
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if err := handler.push.ConfirmOccurrences(request.Context(), actor, input.OccurrenceIDs); err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writer.WriteHeader(http.StatusNoContent)
+}
+
 func (handler *Handler) createReminder(writer http.ResponseWriter, request *http.Request) {
 	actor, ok := handler.authenticate(writer, request)
 	if !ok {
@@ -220,6 +278,7 @@ func (handler *Handler) createReminder(writer http.ResponseWriter, request *http
 		writeError(writer, err, nil)
 		return
 	}
+	handler.notifySync(request.Context(), actor.ID)
 	writeJSON(writer, http.StatusCreated, reminder)
 }
 
@@ -316,6 +375,7 @@ func (handler *Handler) updateReminder(writer http.ResponseWriter, request *http
 		writeError(writer, err, details)
 		return
 	}
+	handler.notifySync(request.Context(), actor.ID)
 	writeJSON(writer, http.StatusOK, reminder)
 }
 
@@ -349,6 +409,7 @@ func (handler *Handler) addComment(writer http.ResponseWriter, request *http.Req
 		writeError(writer, err, nil)
 		return
 	}
+	handler.notifySync(request.Context(), actor.ID)
 	writeJSON(writer, http.StatusCreated, comment)
 }
 
@@ -408,6 +469,7 @@ func (handler *Handler) completeOccurrence(writer http.ResponseWriter, request *
 		writeError(writer, err, nil)
 		return
 	}
+	handler.notifySync(request.Context(), actor.ID)
 	writeJSON(writer, http.StatusOK, occurrence)
 }
 
@@ -429,7 +491,17 @@ func (handler *Handler) snoozeOccurrence(writer http.ResponseWriter, request *ht
 		writeError(writer, err, nil)
 		return
 	}
+	handler.notifySync(request.Context(), actor.ID)
 	writeJSON(writer, http.StatusOK, occurrence)
+}
+
+func (handler *Handler) notifySync(parent context.Context, excludedActorID string) {
+	if handler.push == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
+	defer cancel()
+	_ = handler.push.NotifySync(ctx, excludedActorID)
 }
 
 func (handler *Handler) getChanges(writer http.ResponseWriter, request *http.Request) {

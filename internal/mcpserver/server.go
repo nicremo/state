@@ -10,18 +10,21 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	stateauth "github.com/nicremo/state/internal/auth"
+	statepush "github.com/nicremo/state/internal/push"
 	"github.com/nicremo/state/internal/state"
 )
 
 type Config struct {
 	Auth    *stateauth.Manager
 	State   *state.Service
+	Push    *statepush.Service
 	Version string
 }
 
 type server struct {
 	auth  *stateauth.Manager
 	state *state.Service
+	push  *statepush.Service
 	mcp   *mcp.Server
 }
 
@@ -94,7 +97,7 @@ type snoozeOccurrenceInput struct {
 }
 
 func NewHandler(config Config) http.Handler {
-	instance := &server{auth: config.Auth, state: config.State}
+	instance := &server{auth: config.Auth, state: config.State, push: config.Push}
 	instance.mcp = mcp.NewServer(&mcp.Implementation{
 		Name:    "state",
 		Version: config.Version,
@@ -258,6 +261,7 @@ func (server *server) createReminder(ctx context.Context, request *mcp.CallToolR
 	if err != nil {
 		return nil, nil, err
 	}
+	server.notifySync(ctx, actor.ID)
 	return nil, map[string]any{"stored": true, "reminder": reminder}, nil
 }
 
@@ -293,6 +297,7 @@ func (server *server) updateReminder(ctx context.Context, request *mcp.CallToolR
 	if err != nil {
 		return nil, nil, err
 	}
+	server.notifySync(ctx, actor.ID)
 	return nil, map[string]any{"stored": true, "reminder": reminder}, nil
 }
 
@@ -311,6 +316,7 @@ func (server *server) addComment(ctx context.Context, request *mcp.CallToolReque
 	if err != nil {
 		return nil, nil, err
 	}
+	server.notifySync(ctx, actor.ID)
 	return nil, map[string]any{"stored": true, "comment": comment}, nil
 }
 
@@ -329,6 +335,7 @@ func (server *server) completeOccurrence(ctx context.Context, request *mcp.CallT
 	if err != nil {
 		return nil, nil, err
 	}
+	server.notifySync(ctx, actor.ID)
 	return nil, map[string]any{"stored": true, "occurrence": occurrence}, nil
 }
 
@@ -348,7 +355,17 @@ func (server *server) snoozeOccurrence(ctx context.Context, request *mcp.CallToo
 	if err != nil {
 		return nil, nil, err
 	}
+	server.notifySync(ctx, actor.ID)
 	return nil, map[string]any{"stored": true, "occurrence": occurrence}, nil
+}
+
+func (server *server) notifySync(parent context.Context, excludedActorID string) {
+	if server.push == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
+	defer cancel()
+	_ = server.push.NotifySync(ctx, excludedActorID)
 }
 
 func (server *server) actor(ctx context.Context, request *mcp.CallToolRequest) (state.Actor, error) {

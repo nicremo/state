@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	stateauth "github.com/nicremo/state/internal/auth"
+	statepush "github.com/nicremo/state/internal/push"
 	"github.com/nicremo/state/internal/state"
 	"github.com/nicremo/state/internal/store"
 	"github.com/pocketbase/pocketbase"
@@ -317,6 +318,53 @@ func TestCredentialAndActorManagementAPI(t *testing.T) {
 	}
 }
 
+func TestDevicePushRegistrationAndConfirmationAPI(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+	owner := bootstrapOwner(t, handler)
+	registerResponse := performJSONRequest(t, handler, http.MethodPut, "/api/v1/devices/push", owner.Token, map[string]any{
+		"relay_url":     "https://relay.example.com",
+		"route_id":      "0198a127-8780-724a-aa12-0ff815ba7789",
+		"authorization": "route-capability",
+		"public_key":    bytes.Repeat([]byte{0x42}, 32),
+	})
+	if registerResponse.Code != http.StatusOK {
+		t.Fatalf("push registration status = %d, body = %s", registerResponse.Code, registerResponse.Body.String())
+	}
+	var route statepush.DeviceRoute
+	decodeResponse(t, registerResponse, &route)
+	if route.ActorID != owner.Actor.ID || route.RouteID == "" || route.Authorization != "" {
+		t.Fatalf("push route = %#v", route)
+	}
+
+	createResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/reminders", owner.Token, map[string]any{
+		"title":             "Locally scheduled",
+		"client_request_id": "0198a127-8780-7dde-87db-200a4ad36812",
+		"schedule": map[string]any{
+			"local_date": "2026-08-17",
+			"local_time": "09:00",
+			"time_zone":  "Europe/Copenhagen",
+			"mode":       "floating",
+		},
+	})
+	var reminder state.Reminder
+	decodeResponse(t, createResponse, &reminder)
+	detailResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/reminders/"+reminder.ID, owner.Token, nil)
+	var detail ReminderDetail
+	decodeResponse(t, detailResponse, &detail)
+	confirmResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/devices/push/confirmations", owner.Token, map[string]any{
+		"occurrence_ids": []string{detail.Occurrences[0].ID},
+	})
+	if confirmResponse.Code != http.StatusNoContent {
+		t.Fatalf("confirmation status = %d, body = %s", confirmResponse.Code, confirmResponse.Body.String())
+	}
+	deleteResponse := performJSONRequest(t, handler, http.MethodDelete, "/api/v1/devices/push", owner.Token, nil)
+	if deleteResponse.Code != http.StatusNoContent {
+		t.Fatalf("delete push status = %d, body = %s", deleteResponse.Code, deleteResponse.Body.String())
+	}
+}
+
 func newTestHandler(t *testing.T) http.Handler {
 	t.Helper()
 
@@ -348,9 +396,14 @@ func newTestHandler(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
+	pushRepository, err := statepush.NewRepository(app, bytes.Repeat([]byte{0x73}, 32))
+	if err != nil {
+		t.Fatalf("NewRepository(push) error = %v", err)
+	}
 	return NewHandler(Config{
 		Auth:    authManager,
 		State:   state.NewService(repository),
+		Push:    statepush.NewService(pushRepository, statepush.NewHTTPSender(nil)),
 		Version: "test-version",
 	})
 }

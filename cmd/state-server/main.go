@@ -17,6 +17,7 @@ import (
 	"github.com/nicremo/state/internal/api"
 	stateauth "github.com/nicremo/state/internal/auth"
 	"github.com/nicremo/state/internal/mcpserver"
+	statepush "github.com/nicremo/state/internal/push"
 	"github.com/nicremo/state/internal/securefile"
 	"github.com/nicremo/state/internal/state"
 	"github.com/nicremo/state/internal/store"
@@ -34,6 +35,7 @@ type application struct {
 	handler    http.Handler
 	pocketBase *pocketbase.PocketBase
 	repository *store.PocketBaseRepository
+	push       *statepush.Service
 }
 
 func main() {
@@ -88,6 +90,7 @@ func runServe(args []string, stderr io.Writer, logger *slog.Logger) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	go runPushScheduler(ctx, app.push, logger)
 	serverError := make(chan error, 1)
 	go func() {
 		logger.Info("state-server listening", "address", *httpAddress, "version", version)
@@ -171,15 +174,28 @@ func newApplication(config applicationConfig) (*application, error) {
 		_ = pb.ResetBootstrapState()
 		return nil, err
 	}
+	pushKey, err := securefile.LoadOrCreateEncryptionKey(filepath.Join(secretDirectory, "push-encryption.key"))
+	if err != nil {
+		_ = pb.ResetBootstrapState()
+		return nil, fmt.Errorf("load push encryption key: %w", err)
+	}
+	pushRepository, err := statepush.NewRepository(pb, pushKey)
+	if err != nil {
+		_ = pb.ResetBootstrapState()
+		return nil, err
+	}
+	pushService := statepush.NewService(pushRepository, statepush.NewHTTPSender(nil))
 	stateService := state.NewService(repository)
 	restHandler := api.NewHandler(api.Config{
 		Auth:    authManager,
 		State:   stateService,
+		Push:    pushService,
 		Version: config.version,
 	})
 	mcpHandler := mcpserver.NewHandler(mcpserver.Config{
 		Auth:    authManager,
 		State:   stateService,
+		Push:    pushService,
 		Version: config.version,
 	})
 	handler := http.NewServeMux()
@@ -189,7 +205,35 @@ func newApplication(config applicationConfig) (*application, error) {
 		handler:    handler,
 		pocketBase: pb,
 		repository: repository,
+		push:       pushService,
 	}, nil
+}
+
+func runPushScheduler(ctx context.Context, service *statepush.Service, logger *slog.Logger) {
+	if service == nil {
+		return
+	}
+	run := func() {
+		now := time.Now().UTC()
+		delivered, err := service.DeliverDue(ctx, now.Add(-24*time.Hour), now)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			logger.Warn("push scheduler cycle failed", "error", err)
+		}
+		if delivered > 0 {
+			logger.Info("push scheduler delivered notifications", "count", delivered)
+		}
+	}
+	run()
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
 }
 
 func (app *application) close() error {
