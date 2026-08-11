@@ -42,6 +42,27 @@ func LoadOrCreateBootstrapToken(path string) (string, error) {
 	})
 }
 
+func LoadOrCreateEncryptionKey(path string) ([]byte, error) {
+	encoded, err := loadOrCreate(path, func() (string, error) {
+		buffer := make([]byte, 32)
+		if _, err := rand.Read(buffer); err != nil {
+			return "", err
+		}
+		return base64.RawURLEncoding.EncodeToString(buffer), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	key, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("decode encryption key: %w", err)
+	}
+	if len(key) != 32 {
+		return nil, errors.New("invalid encryption key length")
+	}
+	return key, nil
+}
+
 func loadOrCreate(path string, generate func() (string, error)) (string, error) {
 	if path == "" {
 		return "", errors.New("secure file path is empty")
