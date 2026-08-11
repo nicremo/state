@@ -1,0 +1,55 @@
+name: Go
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Format check
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: Vet
+        run: go vet ./...
+      - name: Race tests
+        run: go test -race ./...
+      - name: Build binaries
+        run: |
+          go build ./cmd/state-server
+          go build ./cmd/state-relay
+          go build ./cmd/statectl
+      - name: Validate Compose
+        run: docker compose -f deploy/compose.yaml config --quiet
+      - name: Validate OpenAPI YAML
+        run: |
+          ruby -e 'require "yaml"; YAML.safe_load_file("openapi/state-v1.yaml", aliases: true)'
+
+  container:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          target: state-server
+          push: false
+      - name: Build relay image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          target: state-relay
+          push: false

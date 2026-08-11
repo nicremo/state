@@ -1,0 +1,1 @@
+agent,reminder,self-hosted,codex,claude,context,todo,history,mcp

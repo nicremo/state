@@ -1,0 +1,16 @@
+State connects your self-hosted reminder service with Codex, Claude Code and OpenCode.
+
+Ask an agent to remember something and State records the reminder, its source, revision and complete change history. Review and edit it on your iPhone, add context, complete occurrences or snooze them. Every change remains attributable to a person, device, harness or system process.
+
+State is designed for technical self-hosters. Your personal server processes reminder content for search and agent tools. The shared push relay receives only encrypted packages and opaque routes.
+
+Features:
+• Native Today, Planned, Activity and Settings views
+• Offline access and queued edits
+• Explicit conflict resolution
+• Local notification protection for upcoming reminders
+• Encrypted remote notification fallback
+• Separate revocable credentials for every agent harness
+• German and English interface
+
+A self-hosted State server is required for normal use. The included demo can be explored without an account.
