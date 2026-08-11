@@ -92,6 +92,62 @@ func TestPairRejectsMismatchedHarness(t *testing.T) {
 	}
 }
 
+func TestRotateAndRevokeCredential(t *testing.T) {
+	t.Parallel()
+
+	currentToken := "state_current_credential"
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+currentToken {
+			http.Error(writer, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		switch request.URL.Path {
+		case "/api/v1/credentials/rotate":
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(stateauth.Credential{
+				Actor: state.Actor{ID: "01989f4a-ddfa-73a5-a131-3a6ef6a09cba", Kind: state.ActorKindHarness, Harness: "codex"},
+				Token: "state_rotated_credential",
+			})
+		case "/api/v1/credentials/revoke":
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	configStore := NewConfigStore(filepath.Join(t.TempDir(), "statectl.json"))
+	profile := Profile{
+		Name:      "codex",
+		ServerURL: server.URL,
+		ActorID:   "01989f4a-ddfa-73a5-a131-3a6ef6a09cba",
+		Harness:   "codex",
+	}
+	if err := configStore.SaveProfile(profile); err != nil {
+		t.Fatalf("SaveProfile() error = %v", err)
+	}
+	secrets := &memorySecretStore{values: map[string]string{profile.CredentialAccount(): currentToken}}
+	service := NewPairService(configStore, secrets, server.Client())
+	if err := service.Rotate(context.Background(), profile.Name); err != nil {
+		t.Fatalf("Rotate() error = %v", err)
+	}
+	rotated, err := secrets.Get(profile.CredentialAccount())
+	if err != nil || rotated != "state_rotated_credential" {
+		t.Fatalf("rotated credential = %q, %v", rotated, err)
+	}
+
+	secrets.values[profile.CredentialAccount()] = currentToken
+	if err := service.Revoke(context.Background(), profile.Name); err != nil {
+		t.Fatalf("Revoke() error = %v", err)
+	}
+	if _, err := secrets.Get(profile.CredentialAccount()); err != ErrCredentialNotFound {
+		t.Fatalf("credential after revoke error = %v", err)
+	}
+	if _, err := configStore.LoadProfile(profile.Name); err != ErrProfileNotFound {
+		t.Fatalf("profile after revoke error = %v", err)
+	}
+}
+
 type memorySecretStore struct {
 	values map[string]string
 }
