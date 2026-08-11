@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	stateauth "github.com/nicremo/state/internal/auth"
@@ -28,6 +29,7 @@ type Handler struct {
 
 type ReminderDetail struct {
 	Reminder state.Reminder     `json:"reminder"`
+	Comments []state.Comment    `json:"comments"`
 	History  []state.AuditEvent `json:"history"`
 }
 
@@ -56,9 +58,14 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("POST /api/v1/pairing/codes", handler.createPairingCode)
 	handler.router.HandleFunc("POST /api/v1/pairing/exchange", handler.exchangePairingCode)
 	handler.router.HandleFunc("POST /api/v1/reminders", handler.createReminder)
+	handler.router.HandleFunc("GET /api/v1/reminders", handler.listReminders)
 	handler.router.HandleFunc("GET /api/v1/reminders/{id}", handler.getReminder)
 	handler.router.HandleFunc("PATCH /api/v1/reminders/{id}", handler.updateReminder)
 	handler.router.HandleFunc("GET /api/v1/reminders/{id}/history", handler.getReminderHistory)
+	handler.router.HandleFunc("POST /api/v1/reminders/{id}/comments", handler.addComment)
+	handler.router.HandleFunc("GET /api/v1/reminders/{id}/comments", handler.listComments)
+	handler.router.HandleFunc("GET /api/v1/changes", handler.getChanges)
+	handler.router.HandleFunc("GET /api/v1/briefing", handler.getBriefing)
 }
 
 func (handler *Handler) healthLive(writer http.ResponseWriter, _ *http.Request) {
@@ -150,6 +157,40 @@ func (handler *Handler) createReminder(writer http.ResponseWriter, request *http
 	writeJSON(writer, http.StatusCreated, reminder)
 }
 
+func (handler *Handler) listReminders(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticate(writer, request); !ok {
+		return
+	}
+	limit, err := queryInteger(request, "limit", 100)
+	if err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	query := strings.TrimSpace(request.URL.Query().Get("q"))
+	var reminders []state.Reminder
+	if query != "" {
+		reminders, err = handler.state.SearchReminders(request.Context(), query, limit)
+	} else {
+		includeArchived := false
+		if value := request.URL.Query().Get("include_archived"); value != "" {
+			includeArchived, err = strconv.ParseBool(value)
+			if err != nil {
+				writeError(writer, state.ErrInvalidInput, nil)
+				return
+			}
+		}
+		reminders, err = handler.state.ListReminders(request.Context(), state.ReminderListOptions{
+			IncludeArchived: includeArchived,
+			Limit:           limit,
+		})
+	}
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"reminders": reminders})
+}
+
 func (handler *Handler) getReminder(writer http.ResponseWriter, request *http.Request) {
 	if _, ok := handler.authenticate(writer, request); !ok {
 		return
@@ -165,7 +206,12 @@ func (handler *Handler) getReminder(writer http.ResponseWriter, request *http.Re
 		writeError(writer, err, nil)
 		return
 	}
-	writeJSON(writer, http.StatusOK, ReminderDetail{Reminder: reminder, History: history})
+	comments, err := handler.state.ListComments(request.Context(), reminderID)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, ReminderDetail{Reminder: reminder, Comments: comments, History: history})
 }
 
 func (handler *Handler) updateReminder(writer http.ResponseWriter, request *http.Request) {
@@ -207,6 +253,93 @@ func (handler *Handler) getReminderHistory(writer http.ResponseWriter, request *
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{"events": history})
+}
+
+func (handler *Handler) addComment(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	var input state.AddCommentInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	comment, err := handler.state.AddComment(request.Context(), actor, request.PathValue("id"), input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusCreated, comment)
+}
+
+func (handler *Handler) listComments(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticate(writer, request); !ok {
+		return
+	}
+	comments, err := handler.state.ListComments(request.Context(), request.PathValue("id"))
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"comments": comments})
+}
+
+func (handler *Handler) getChanges(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticate(writer, request); !ok {
+		return
+	}
+	after, err := queryInteger64(request, "after", 0)
+	if err != nil || after < 0 {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	limit, err := queryInteger(request, "limit", 100)
+	if err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	changes, err := handler.state.ListChanges(request.Context(), after, limit)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	cursor := after
+	if len(changes) > 0 {
+		cursor = changes[len(changes)-1].Cursor
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"changes": changes,
+		"cursor":  cursor,
+	})
+}
+
+func (handler *Handler) getBriefing(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticate(writer, request); !ok {
+		return
+	}
+	after, err := queryInteger64(request, "after", 0)
+	if err != nil || after < 0 {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	limit, err := queryInteger(request, "limit", 50)
+	if err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	briefing, err := handler.state.GetBriefing(request.Context(), state.BriefingOptions{
+		AfterCursor: after,
+		Limit:       limit,
+	})
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, briefing)
 }
 
 func (handler *Handler) authenticate(writer http.ResponseWriter, request *http.Request) (state.Actor, bool) {
@@ -282,4 +415,24 @@ func securityHeaders(next http.Handler) http.Handler {
 		writer.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		next.ServeHTTP(writer, request)
 	})
+}
+
+func queryInteger(request *http.Request, name string, fallback int) (int, error) {
+	value := request.URL.Query().Get(name)
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 || parsed > 500 {
+		return 0, state.ErrInvalidInput
+	}
+	return parsed, nil
+}
+
+func queryInteger64(request *http.Request, name string, fallback int64) (int64, error) {
+	value := request.URL.Query().Get(name)
+	if value == "" {
+		return fallback, nil
+	}
+	return strconv.ParseInt(value, 10, 64)
 }
