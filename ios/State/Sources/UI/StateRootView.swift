@@ -18,16 +18,16 @@ struct StateRootView: View {
         .background(StateTheme.warmBackground.ignoresSafeArea())
         .task {
             await model.start()
-            if model.session != nil {
+            if model.session != nil, !model.isDemo {
                 await notificationCoordinator.activate(model: model)
             }
         }
         .onChange(of: model.session?.actor.id) { _, actorID in
-            guard actorID != nil else { return }
+            guard actorID != nil, !model.isDemo else { return }
             Task { await notificationCoordinator.activate(model: model) }
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active, model.session != nil else { return }
+            guard phase == .active, model.session != nil, !model.isDemo else { return }
             Task {
                 await model.synchronize()
                 await notificationCoordinator.refresh(model: model)
@@ -40,7 +40,7 @@ struct StateRootView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .stateAPNSToken)) { notification in
-            guard let token = notification.object as? Data else { return }
+            guard !model.isDemo, let token = notification.object as? Data else { return }
             Task { await pushRegistrationService.registerIfSupported(apnsToken: token, model: model) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .stateNotificationAction)) { notification in

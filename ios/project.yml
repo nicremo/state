@@ -25,7 +25,6 @@ targets:
     platform: iOS
     sources:
       - path: State/Sources
-    resources:
       - path: State/Resources
     dependencies:
       - package: GRDB
@@ -37,6 +36,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.fabincrm.state
         INFOPLIST_FILE: State/Supporting/Info.plist
         PRODUCT_NAME: State
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO
       configs:
@@ -47,6 +47,7 @@ targets:
     scheme:
       testTargets:
         - StateTests
+        - StateUITests
       gatherCoverageData: true
   StateNotificationService:
     type: app-extension
@@ -77,3 +78,15 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/State.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/State"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  StateUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: StateUITests
+    dependencies:
+      - target: State
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fabincrm.state.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: State

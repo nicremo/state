@@ -142,12 +142,13 @@ struct ReminderRow: View {
                     OriginBadge(actor: actor)
                 }
                 Spacer(minLength: 0)
-                Text("r\(reminder.revision)")
+                Text(verbatim: "r\(reminder.revision)")
                     .font(.caption2.monospaced())
                     .foregroundStyle(.tertiary)
             }
         }
         .padding(.vertical, 5)
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("reminder-\(reminder.id)")
     }
 }

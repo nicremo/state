@@ -21,7 +21,10 @@ struct ActivityView: View {
                                     showsConflicts = true
                                 } label: {
                                     Label(
-                                        String(localized: "Resolve \(model.conflicts.count) conflicts"),
+                                        String.localizedStringWithFormat(
+                                            String(localized: "Resolve conflicts (%lld)"),
+                                            Int64(model.conflicts.count)
+                                        ),
                                         systemImage: "exclamationmark.triangle.fill"
                                     )
                                     .foregroundStyle(.orange)
@@ -60,7 +63,12 @@ struct ConflictResolutionView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(title(for: conflict))
                         .font(.headline)
-                    Text("Changed fields: \(conflict.fields.joined(separator: ", "))")
+                    Text(
+                        String(
+                            format: String(localized: "Changed fields: %@"),
+                            conflict.fields.joined(separator: ", ")
+                        )
+                    )
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(conflict.createdAt, format: .dateTime.day().month().year().hour().minute())

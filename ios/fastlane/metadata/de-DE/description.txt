@@ -1,0 +1,16 @@
+State verbindet deinen selbst gehosteten Erinnerungsdienst mit Codex, Claude Code und OpenCode.
+
+Bitte einen Agenten, sich etwas zu merken. State speichert die Erinnerung zusammen mit Quelle, Revision und vollständigem Änderungsverlauf. Auf dem iPhone kannst du sie prüfen, bearbeiten, kommentieren, erledigen oder schlummern. Jede Änderung bleibt einer Person, einem Gerät, einem Harness oder einem Systemprozess zugeordnet.
+
+State richtet sich an technische Self-Hoster. Dein persönlicher Server verarbeitet Erinnerungsinhalte für Suche und Agentenwerkzeuge. Der gemeinsame Push-Relay erhält ausschließlich verschlüsselte Pakete und opake Routen.
+
+Funktionen:
+• Native Ansichten für Heute, Geplant, Aktivität und Einstellungen
+• Offline-Zugriff und vorgemerkte Änderungen
+• Sichtbare Konfliktauflösung
+• Lokale Absicherung anstehender Erinnerungen
+• Verschlüsselter Push als Rückfallebene
+• Getrennte, widerrufbare Zugänge für jedes Agenten-Harness
+• Deutsche und englische Oberfläche
+
+Für die reguläre Nutzung wird ein selbst gehosteter State-Server benötigt. Die enthaltene Demo funktioniert ohne Konto.

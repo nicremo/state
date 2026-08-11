@@ -1,0 +1,162 @@
+require "fileutils"
+
+default_platform(:ios)
+
+IOS_ROOT = File.expand_path("..", __dir__)
+PROJECT_PATH = File.join(IOS_ROOT, "State.xcodeproj")
+
+platform :ios do
+  before_all do
+    sh("xcodegen generate --spec #{File.join(IOS_ROOT, 'project.yml')} --project #{IOS_ROOT}")
+  end
+
+  private_lane :connect_api_key do
+    app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_filepath: ENV.fetch("ASC_KEY_PATH"),
+      duration: 1_200,
+      in_house: false
+    )
+  end
+
+  desc "Verify the local release toolchain and run all tests"
+  lane :diagnose do
+    sh("ruby --version")
+    sh("xcodebuild -version")
+    sh("xcodegen --version")
+    scan(
+      project: PROJECT_PATH,
+      scheme: "State",
+      device: ENV.fetch("SCAN_DEVICE", "iPhone 16 Pro"),
+      clean: true,
+      code_coverage: true
+    )
+  end
+
+  desc "Create the App Store Connect application if it does not exist"
+  lane :create_app do
+    produce(
+      api_key: connect_api_key,
+      app_identifier: "com.fabincrm.state",
+      app_name: "State: Agent Context",
+      language: "en-US",
+      sku: ENV.fetch("STATE_APP_SKU", "state-agent-context-ios")
+    )
+  end
+
+  desc "Run unit and UI tests"
+  lane :test do
+    scan(
+      project: PROJECT_PATH,
+      scheme: "State",
+      device: ENV.fetch("SCAN_DEVICE", "iPhone 16 Pro"),
+      clean: true,
+      code_coverage: true
+    )
+  end
+
+  desc "Create a signed App Store archive"
+  lane :build do
+    increment_build_number(
+      xcodeproj: PROJECT_PATH,
+      build_number: ENV.fetch("BUILD_NUMBER", Time.now.utc.strftime("%Y%m%d%H%M"))
+    )
+    build_app(
+      project: PROJECT_PATH,
+      scheme: "State",
+      clean: true,
+      export_method: "app-store",
+      output_directory: File.join(IOS_ROOT, "build"),
+      output_name: "State.ipa",
+      xcargs: "-allowProvisioningUpdates"
+    )
+  end
+
+  desc "Upload an internal TestFlight build"
+  lane :beta do
+    build
+    upload_to_testflight(
+      api_key: connect_api_key,
+      ipa: File.join(IOS_ROOT, "build/State.ipa"),
+      distribute_external: false,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc "Capture deterministic German and English 6.9-inch screenshots"
+  lane :screenshots do
+    capture_screenshots(
+      project: PROJECT_PATH,
+      scheme: "State",
+      output_directory: File.join(IOS_ROOT, "screenshots"),
+      clean: true,
+      erase_simulator: true,
+      reinstall_app: true,
+      override_status_bar: true
+    )
+    Dir.glob(File.join(IOS_ROOT, "screenshots", "{de-DE,en-US}", "iPhone 16 Pro Max-*.png")).each do |source|
+      locale = File.basename(File.dirname(source))
+      destination = File.join(__dir__, "screenshots", locale)
+      FileUtils.mkdir_p(destination)
+      FileUtils.cp(source, destination)
+    end
+  end
+
+  desc "Upload localized metadata and screenshots"
+  lane :metadata do
+    deliver(
+      api_key: connect_api_key,
+      app_identifier: "com.fabincrm.state",
+      metadata_path: File.join(__dir__, "metadata"),
+      screenshots_path: File.join(__dir__, "screenshots"),
+      skip_binary_upload: true,
+      skip_screenshots: false,
+      force: true
+    )
+  end
+
+  desc "Submit the uploaded build for App Review"
+  lane :review do
+    deliver(
+      api_key: connect_api_key,
+      app_identifier: "com.fabincrm.state",
+      submit_for_review: true,
+      automatic_release: false,
+      phased_release: false,
+      force: true,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: true,
+        export_compliance_is_exempt: true
+      }
+    )
+  end
+
+  desc "Build, upload, update metadata and submit"
+  lane :release do
+    build
+    upload_to_app_store(
+      api_key: connect_api_key,
+      app_identifier: "com.fabincrm.state",
+      ipa: File.join(IOS_ROOT, "build/State.ipa"),
+      metadata_path: File.join(__dir__, "metadata"),
+      screenshots_path: File.join(__dir__, "screenshots"),
+      submit_for_review: true,
+      automatic_release: false,
+      phased_release: false,
+      force: true
+    )
+  end
+
+  desc "Report the latest live App Store version"
+  lane :live_check do
+    build = app_store_build_number(
+      api_key: connect_api_key,
+      app_identifier: "com.fabincrm.state",
+      live: true
+    )
+    version = lane_context[SharedValues::LATEST_VERSION]
+    UI.message("Live State version: #{version}, build #{build}")
+  end
+end

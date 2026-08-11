@@ -105,7 +105,7 @@ actor APIClient: StateAPI {
     func listActors(kind: ActorKind) async throws -> [Actor] {
         let path = kind == .harness ? "/api/v1/agents" : "/api/v1/devices"
         let data = try await request(path: path)
-        return try StateJSON.decoder.decode(ActorListResponse.self, from: data).actors
+        return try StateJSON.decoder.decode(ActorListResponse.self, from: data).actors.map(\.actor)
     }
 
     func revokeActor(id: String, kind: ActorKind) async throws {
@@ -215,8 +215,4 @@ actor APIClient: StateAPI {
         if scheme == "https" { return true }
         return scheme == "http" && (host == "localhost" || host == "127.0.0.1" || host == "::1")
     }
-}
-
-private struct ActorListResponse: Codable {
-    let actors: [Actor]
 }

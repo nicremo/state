@@ -1,0 +1,3 @@
+State is a client for a self-hosted service. No review account is required. On the first screen, tap "Explore demo" to access deterministic sample reminders, activity history and settings without a server. The demo does not transmit data.
+
+For a full self-hosted test, deploy the public server from this repository and scan its one-time pairing code. Notification delivery uses standard local notifications first. The shared relay receives encrypted content only.

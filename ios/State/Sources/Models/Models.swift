@@ -169,10 +169,48 @@ struct DeviceRoute: Codable, Sendable {
     let updatedAt: Date
 }
 
+struct ActorRecord: Codable, Sendable {
+    let actor: Actor
+    let createdAt: Date
+}
+
+struct ActorListResponse: Codable, Sendable {
+    let actors: [ActorRecord]
+}
+
+private struct StateCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        intValue = nil
+    }
+
+    init?(intValue: Int) {
+        stringValue = String(intValue)
+        self.intValue = intValue
+    }
+}
+
 enum StateJSON {
     static var decoder: JSONDecoder {
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.keyDecodingStrategy = .custom { codingPath in
+            let rawKey = codingPath.last?.stringValue ?? ""
+            let components = rawKey.split(separator: "_", omittingEmptySubsequences: false)
+            var converted = components.first.map(String.init) ?? rawKey
+            for component in components.dropFirst() where !component.isEmpty {
+                converted += component.prefix(1).uppercased() + component.dropFirst()
+            }
+            if converted.hasSuffix("Id"), converted != "id" {
+                converted = String(converted.dropLast(2)) + "ID"
+            }
+            if converted.hasSuffix("Url"), converted != "url" {
+                converted = String(converted.dropLast(3)) + "URL"
+            }
+            return StateCodingKey(stringValue: converted)!
+        }
         decoder.dateDecodingStrategy = .custom { decoder in
             let value = try decoder.singleValueContainer().decode(String.self)
             let fractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)

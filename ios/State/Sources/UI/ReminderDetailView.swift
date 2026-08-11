@@ -28,7 +28,12 @@ struct ReminderDetailView: View {
                                     Label(String(localized: "No date"), systemImage: "calendar.badge.minus")
                                 }
                                 Spacer()
-                                Text("Revision \(detail.reminder.revision)")
+                                Text(
+                                    String.localizedStringWithFormat(
+                                        String(localized: "Revision %lld"),
+                                        detail.reminder.revision
+                                    )
+                                )
                                     .font(.caption.monospaced())
                                     .foregroundStyle(.tertiary)
                             }
@@ -241,7 +246,7 @@ struct AuditEventRow: View {
                         .foregroundStyle(.secondary)
                 }
                 if let excerpt = event.sourceExcerpt, !excerpt.isEmpty {
-                    Text("“\(excerpt)”")
+                    Text(verbatim: "“\(excerpt)”")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
@@ -257,7 +262,7 @@ struct AuditEventRow: View {
         case "reminder.updated": String(localized: "Reminder changed")
         case "reminder.archived": String(localized: "Reminder archived")
         case "reminder.restored": String(localized: "Reminder restored")
-        case "comment.created": String(localized: "Comment added")
+        case "comment.added": String(localized: "Comment added")
         case "occurrence.completed": String(localized: "Occurrence completed")
         case "occurrence.snoozed": String(localized: "Occurrence snoozed")
         case "conflict.resolved": String(localized: "Conflict resolved")

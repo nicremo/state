@@ -1,0 +1,1 @@
+Erste Version mit Erinnerungen, Kommentaren, vollständigem Verlauf, Offline-Bearbeitung, Konfliktauflösung und verschlüsselten Benachrichtigungen.

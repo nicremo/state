@@ -1,6 +1,9 @@
 .DS_Store
 .build/
+.bundle/
 .swiftpm/
+vendor/bundle/
+ios/vendor/bundle/
 DerivedData/
 build/
 dist/
@@ -11,11 +14,13 @@ relay_data/
 xcuserdata/
 fastlane/report.xml
 fastlane/Preview.html
+ios/fastlane/report.xml
+ios/fastlane/Preview.html
 fastlane/screenshots/
+ios/screenshots/
 *.mobileprovision
 *.p8
 *.pem
 *.key
 *.crt
 .secrets/
-

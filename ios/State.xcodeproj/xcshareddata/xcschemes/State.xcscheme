@@ -51,6 +51,17 @@
                ReferencedContainer = "container:State.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "104EC70C7496741E7C0C2453"
+               BuildableName = "StateUITests.xctest"
+               BlueprintName = "StateUITests"
+               ReferencedContainer = "container:State.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

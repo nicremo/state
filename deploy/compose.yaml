@@ -1,0 +1,104 @@
+name: state
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  init: true
+  read_only: true
+  user: "10001:10001"
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+  deploy:
+    resources:
+      limits:
+        cpus: "1.50"
+        memory: 768M
+      reservations:
+        cpus: "0.10"
+        memory: 64M
+
+services:
+  state-server:
+    <<: *service-defaults
+    image: ghcr.io/nicremo/state-server:0.1.0
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: state-server
+      args:
+        STATE_VERSION: 0.1.0
+    environment:
+      STATE_DATA_DIR: /data
+      STATE_HTTP_ADDR: 0.0.0.0:8090
+    expose:
+      - "8090"
+    volumes:
+      - state-server-data:/data
+      - state-backups:/backups
+    networks:
+      state-internal: {}
+      proxy-network:
+        aliases:
+          - state-server
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8090/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+  state-relay:
+    <<: *service-defaults
+    image: ghcr.io/nicremo/state-relay:0.1.0
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: state-relay
+      args:
+        STATE_VERSION: 0.1.0
+    environment:
+      STATE_RELAY_DATA_DIR: /data
+      STATE_RELAY_HTTP_ADDR: 0.0.0.0:8091
+      STATE_RELAY_APP_ID: 5DKU7FFK4X.com.fabincrm.state
+      STATE_RELAY_ALLOW_DEVELOPMENT_ATTEST: "true"
+      STATE_RELAY_DRY_RUN_APNS: "true"
+      STATE_RELAY_APNS_TOPIC: com.fabincrm.state
+    expose:
+      - "8091"
+    volumes:
+      - state-relay-data:/data
+      - state-backups:/backups
+    networks:
+      state-internal: {}
+      proxy-network:
+        aliases:
+          - state-relay
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8091/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+networks:
+  state-internal:
+    internal: true
+  proxy-network:
+    external: true
+    name: proxy-network
+
+volumes:
+  state-server-data:
+    name: state-server-data
+  state-relay-data:
+    name: state-relay-data
+  state-backups:
+    name: state-backups

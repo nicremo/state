@@ -28,7 +28,7 @@ struct OriginBadge: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(color.opacity(0.12), in: Capsule())
-            .accessibilityLabel(String(localized: "Origin: \(label)"))
+            .accessibilityLabel(String(format: String(localized: "Origin: %@"), label))
     }
 
     private var label: String {
