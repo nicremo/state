@@ -17,6 +17,11 @@ type Repository interface {
 	UpdateReminder(context.Context, Reminder, int64, AuditEvent, string) (Reminder, error)
 	GetReminder(context.Context, string) (Reminder, error)
 	ListAuditEvents(context.Context, string) ([]AuditEvent, error)
+	ListReminders(context.Context, ReminderListOptions) ([]Reminder, error)
+	SearchReminders(context.Context, string, int) ([]Reminder, error)
+	ListChanges(context.Context, int64, int) ([]Change, error)
+	AddComment(context.Context, Comment, AuditEvent, string) (Comment, error)
+	ListComments(context.Context, string) ([]Comment, error)
 }
 
 type Service struct {
@@ -209,6 +214,125 @@ func (service *Service) ListAuditEvents(ctx context.Context, reminderID string) 
 		return nil, ErrInvalidInput
 	}
 	return service.repository.ListAuditEvents(ctx, reminderID)
+}
+
+func (service *Service) ListReminders(ctx context.Context, options ReminderListOptions) ([]Reminder, error) {
+	return service.repository.ListReminders(ctx, options)
+}
+
+func (service *Service) SearchReminders(ctx context.Context, query string, limit int) ([]Reminder, error) {
+	if strings.TrimSpace(query) == "" {
+		return service.repository.ListReminders(ctx, ReminderListOptions{Limit: limit})
+	}
+	return service.repository.SearchReminders(ctx, query, limit)
+}
+
+func (service *Service) ListChanges(ctx context.Context, afterCursor int64, limit int) ([]Change, error) {
+	if afterCursor < 0 {
+		return nil, ErrInvalidInput
+	}
+	return service.repository.ListChanges(ctx, afterCursor, limit)
+}
+
+func (service *Service) GetBriefing(ctx context.Context, options BriefingOptions) (Briefing, error) {
+	if options.AfterCursor < 0 {
+		return Briefing{}, ErrInvalidInput
+	}
+	limit := options.Limit
+	if limit <= 0 || limit > 50 {
+		limit = 50
+	}
+	active := ReminderStatusActive
+	reminders, err := service.repository.ListReminders(ctx, ReminderListOptions{
+		Status: &active,
+		Limit:  limit,
+	})
+	if err != nil {
+		return Briefing{}, err
+	}
+	sort.SliceStable(reminders, func(left int, right int) bool {
+		leftSchedule := reminders[left].Schedule
+		rightSchedule := reminders[right].Schedule
+		if leftSchedule == nil {
+			return false
+		}
+		if rightSchedule == nil {
+			return true
+		}
+		leftKey := leftSchedule.LocalDate + "T" + leftSchedule.LocalTime
+		rightKey := rightSchedule.LocalDate + "T" + rightSchedule.LocalTime
+		return leftKey < rightKey
+	})
+	changes, err := service.repository.ListChanges(ctx, options.AfterCursor, limit)
+	if err != nil {
+		return Briefing{}, err
+	}
+	cursor := options.AfterCursor
+	if len(changes) > 0 {
+		cursor = changes[len(changes)-1].Cursor
+	}
+	return Briefing{
+		GeneratedAt: service.clock().UTC(),
+		Cursor:      cursor,
+		Summary:     fmt.Sprintf("%d active reminders. %d changes since cursor %d.", len(reminders), len(changes), options.AfterCursor),
+		Reminders:   reminders,
+		Changes:     changes,
+	}, nil
+}
+
+func (service *Service) AddComment(ctx context.Context, actor Actor, reminderID string, input AddCommentInput) (Comment, error) {
+	if actor.ID == "" || actor.Kind == "" || reminderID == "" || strings.TrimSpace(input.Body) == "" || input.ClientRequestID == "" {
+		return Comment{}, ErrInvalidInput
+	}
+	reminder, err := service.repository.GetReminder(ctx, reminderID)
+	if err != nil {
+		return Comment{}, err
+	}
+	commentID, err := service.newID()
+	if err != nil {
+		return Comment{}, fmt.Errorf("generate comment ID: %w", err)
+	}
+	eventID, err := service.newID()
+	if err != nil {
+		return Comment{}, fmt.Errorf("generate audit event ID: %w", err)
+	}
+	now := service.clock().UTC()
+	comment := Comment{
+		ID:         commentID,
+		ReminderID: reminderID,
+		Body:       strings.TrimSpace(input.Body),
+		Actor:      actor,
+		Revision:   1,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	afterSnapshot, err := json.Marshal(comment)
+	if err != nil {
+		return Comment{}, fmt.Errorf("encode comment snapshot: %w", err)
+	}
+	event := AuditEvent{
+		ID:              eventID,
+		ReminderID:      reminderID,
+		Action:          AuditActionCommentAdded,
+		Actor:           actor,
+		ServerTime:      now,
+		ClientTime:      input.ClientTime,
+		Source:          input.Source,
+		SourceExcerpt:   input.SourceExcerpt,
+		AfterSnapshot:   afterSnapshot,
+		ChangedFields:   []string{"comments"},
+		Revision:        reminder.Revision,
+		CorrelationID:   correlationID(input.CorrelationID, input.ClientRequestID),
+		ClientRequestID: input.ClientRequestID,
+	}
+	return service.repository.AddComment(ctx, comment, event, input.ClientRequestID)
+}
+
+func (service *Service) ListComments(ctx context.Context, reminderID string) ([]Comment, error) {
+	if reminderID == "" {
+		return nil, ErrInvalidInput
+	}
+	return service.repository.ListComments(ctx, reminderID)
 }
 
 func validateMutation(actor Actor, title string, clientRequestID string) error {

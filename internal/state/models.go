@@ -80,6 +80,16 @@ type Reminder struct {
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
+type Comment struct {
+	ID         string    `json:"id"`
+	ReminderID string    `json:"reminder_id"`
+	Body       string    `json:"body"`
+	Actor      Actor     `json:"actor"`
+	Revision   int64     `json:"revision"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 type AuditAction string
 
 const (
@@ -138,4 +148,37 @@ type UpdateReminderInput struct {
 	SourceExcerpt    string           `json:"source_excerpt,omitempty"`
 	ClientRequestID  string           `json:"client_request_id"`
 	CorrelationID    string           `json:"correlation_id,omitempty"`
+}
+
+type AddCommentInput struct {
+	Body            string     `json:"body"`
+	ClientTime      *time.Time `json:"client_time,omitempty"`
+	Source          string     `json:"source,omitempty"`
+	SourceExcerpt   string     `json:"source_excerpt,omitempty"`
+	ClientRequestID string     `json:"client_request_id"`
+	CorrelationID   string     `json:"correlation_id,omitempty"`
+}
+
+type ReminderListOptions struct {
+	IncludeArchived bool
+	Status          *ReminderStatus
+	Limit           int
+}
+
+type Change struct {
+	Cursor int64      `json:"cursor"`
+	Event  AuditEvent `json:"event"`
+}
+
+type BriefingOptions struct {
+	AfterCursor int64
+	Limit       int
+}
+
+type Briefing struct {
+	GeneratedAt time.Time  `json:"generated_at"`
+	Cursor      int64      `json:"cursor"`
+	Summary     string     `json:"summary"`
+	Reminders   []Reminder `json:"reminders"`
+	Changes     []Change   `json:"changes"`
 }

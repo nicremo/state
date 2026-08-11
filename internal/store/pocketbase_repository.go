@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/nicremo/state/internal/state"
@@ -90,6 +92,12 @@ func (repository *PocketBaseRepository) CreateReminder(
 		if err := insertAuditEvent(txApp, sealedEvent); err != nil {
 			return err
 		}
+		if err := upsertReminderSearch(txApp, reminder); err != nil {
+			return err
+		}
+		if err := insertAuditSearch(txApp, sealedEvent); err != nil {
+			return err
+		}
 		if err := insertIdempotencyResult(txApp, clientRequestID, event.Actor.ID, reminder); err != nil {
 			return err
 		}
@@ -167,6 +175,12 @@ func (repository *PocketBaseRepository) UpdateReminder(
 		if err := insertAuditEvent(txApp, sealedEvent); err != nil {
 			return err
 		}
+		if err := upsertReminderSearch(txApp, reminder); err != nil {
+			return err
+		}
+		if err := insertAuditSearch(txApp, sealedEvent); err != nil {
+			return err
+		}
 		if err := insertIdempotencyResult(txApp, clientRequestID, event.Actor.ID, reminder); err != nil {
 			return err
 		}
@@ -205,6 +219,192 @@ func (repository *PocketBaseRepository) ListAuditEvents(_ context.Context, remin
 		events = append(events, event)
 	}
 	return events, nil
+}
+
+func (repository *PocketBaseRepository) ListReminders(_ context.Context, options state.ReminderListOptions) ([]state.Reminder, error) {
+	where := "WHERE 1 = 1"
+	params := dbx.Params{}
+	if !options.IncludeArchived {
+		where += " AND archived = 0"
+	}
+	if options.Status != nil {
+		where += " AND json_extract(data_json, '$.status') = {:status}"
+		params["status"] = string(*options.Status)
+	}
+	params["limit"] = normalizeLimit(options.Limit)
+	rows := make([]struct {
+		DataJSON string `db:"data_json"`
+	}, 0)
+	err := repository.app.DB().NewQuery(`
+		SELECT data_json FROM state_reminders
+		` + where + `
+		ORDER BY updated_at DESC, id DESC
+		LIMIT {:limit}
+	`).Bind(params).All(&rows)
+	if err != nil {
+		return nil, fmt.Errorf("list reminders: %w", err)
+	}
+	return decodeReminders(rows)
+}
+
+func (repository *PocketBaseRepository) SearchReminders(_ context.Context, query string, limit int) ([]state.Reminder, error) {
+	matchQuery := ftsQuery(query)
+	if matchQuery == "" {
+		return repository.ListReminders(context.Background(), state.ReminderListOptions{Limit: limit})
+	}
+	rows := make([]struct {
+		ReminderID string  `db:"reminder_id"`
+		Rank       float64 `db:"rank"`
+	}, 0)
+	err := repository.app.DB().NewQuery(`
+		SELECT reminder_id, bm25(state_search) AS rank
+		FROM state_search
+		WHERE state_search MATCH {:query}
+		ORDER BY rank ASC
+		LIMIT {:limit}
+	`).Bind(dbx.Params{
+		"query": matchQuery,
+		"limit": normalizeLimit(limit) * 4,
+	}).All(&rows)
+	if err != nil {
+		return nil, fmt.Errorf("search reminders: %w", err)
+	}
+	seen := make(map[string]struct{})
+	result := make([]state.Reminder, 0)
+	for _, row := range rows {
+		if _, exists := seen[row.ReminderID]; exists {
+			continue
+		}
+		reminder, err := getReminder(repository.app, row.ReminderID)
+		if err != nil {
+			return nil, err
+		}
+		seen[row.ReminderID] = struct{}{}
+		result = append(result, reminder)
+		if len(result) == normalizeLimit(limit) {
+			break
+		}
+	}
+	return result, nil
+}
+
+func (repository *PocketBaseRepository) ListChanges(_ context.Context, afterCursor int64, limit int) ([]state.Change, error) {
+	rows := make([]struct {
+		Sequence  int64  `db:"sequence"`
+		EventJSON string `db:"event_json"`
+	}, 0)
+	err := repository.app.DB().NewQuery(`
+		SELECT sequence, event_json
+		FROM state_audit_events
+		WHERE sequence > {:after_cursor}
+		ORDER BY sequence ASC
+		LIMIT {:limit}
+	`).Bind(dbx.Params{
+		"after_cursor": afterCursor,
+		"limit":        normalizeLimit(limit),
+	}).All(&rows)
+	if err != nil {
+		return nil, fmt.Errorf("list changes: %w", err)
+	}
+	changes := make([]state.Change, 0, len(rows))
+	for _, row := range rows {
+		var event state.AuditEvent
+		if err := json.Unmarshal([]byte(row.EventJSON), &event); err != nil {
+			return nil, fmt.Errorf("decode change event: %w", err)
+		}
+		changes = append(changes, state.Change{Cursor: row.Sequence, Event: event})
+	}
+	return changes, nil
+}
+
+func (repository *PocketBaseRepository) AddComment(
+	_ context.Context,
+	comment state.Comment,
+	event state.AuditEvent,
+	clientRequestID string,
+) (state.Comment, error) {
+	var result state.Comment
+	err := repository.app.RunInTransaction(func(txApp core.App) error {
+		existing, found, err := lookupIdempotentComment(txApp, clientRequestID, event.Actor.ID)
+		if err != nil {
+			return err
+		}
+		if found {
+			result = existing
+			return nil
+		}
+		if _, err := getReminder(txApp, comment.ReminderID); err != nil {
+			return err
+		}
+		commentJSON, err := json.Marshal(comment)
+		if err != nil {
+			return fmt.Errorf("encode comment: %w", err)
+		}
+		_, err = txApp.DB().NewQuery(`
+			INSERT INTO state_comments (
+				id, reminder_id, body, revision, created_at, updated_at, data_json
+			) VALUES (
+				{:id}, {:reminder_id}, {:body}, {:revision}, {:created_at}, {:updated_at}, {:data_json}
+			)
+		`).Bind(dbx.Params{
+			"id":          comment.ID,
+			"reminder_id": comment.ReminderID,
+			"body":        comment.Body,
+			"revision":    comment.Revision,
+			"created_at":  formatTime(comment.CreatedAt),
+			"updated_at":  formatTime(comment.UpdatedAt),
+			"data_json":   string(commentJSON),
+		}).Execute()
+		if err != nil {
+			return fmt.Errorf("insert comment: %w", err)
+		}
+		sealedEvent, err := repository.sealAuditEvent(txApp, event)
+		if err != nil {
+			return err
+		}
+		if err := insertAuditEvent(txApp, sealedEvent); err != nil {
+			return err
+		}
+		if err := insertCommentSearch(txApp, comment); err != nil {
+			return err
+		}
+		if err := insertAuditSearch(txApp, sealedEvent); err != nil {
+			return err
+		}
+		if err := insertIdempotencyValue(txApp, clientRequestID, event.Actor.ID, "comment", comment.ID, comment); err != nil {
+			return err
+		}
+		result = comment
+		return nil
+	})
+	if err != nil {
+		return state.Comment{}, err
+	}
+	return result, nil
+}
+
+func (repository *PocketBaseRepository) ListComments(_ context.Context, reminderID string) ([]state.Comment, error) {
+	rows := make([]struct {
+		DataJSON string `db:"data_json"`
+	}, 0)
+	err := repository.app.DB().NewQuery(`
+		SELECT data_json
+		FROM state_comments
+		WHERE reminder_id = {:reminder_id}
+		ORDER BY created_at ASC, id ASC
+	`).Bind(dbx.Params{"reminder_id": reminderID}).All(&rows)
+	if err != nil {
+		return nil, fmt.Errorf("list comments: %w", err)
+	}
+	comments := make([]state.Comment, 0, len(rows))
+	for _, row := range rows {
+		var comment state.Comment
+		if err := json.Unmarshal([]byte(row.DataJSON), &comment); err != nil {
+			return nil, fmt.Errorf("decode comment: %w", err)
+		}
+		comments = append(comments, comment)
+	}
+	return comments, nil
 }
 
 func (repository *PocketBaseRepository) VerifyAuditChain(_ context.Context) error {
@@ -266,6 +466,17 @@ func (repository *PocketBaseRepository) ensureSchema() error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		) STRICT`,
+		`CREATE TABLE IF NOT EXISTS state_comments (
+			id TEXT PRIMARY KEY,
+			reminder_id TEXT NOT NULL REFERENCES state_reminders(id),
+			body TEXT NOT NULL,
+			revision INTEGER NOT NULL CHECK(revision > 0),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			data_json TEXT NOT NULL CHECK(json_valid(data_json))
+		) STRICT`,
+		`CREATE INDEX IF NOT EXISTS state_comments_reminder_created_idx
+			ON state_comments(reminder_id, created_at)`,
 		`CREATE TABLE IF NOT EXISTS state_audit_events (
 			sequence INTEGER PRIMARY KEY AUTOINCREMENT,
 			id TEXT NOT NULL UNIQUE,
@@ -291,6 +502,12 @@ func (repository *PocketBaseRepository) ensureSchema() error {
 			ON state_audit_events(reminder_id, sequence)`,
 		`CREATE INDEX IF NOT EXISTS state_reminders_updated_at_idx
 			ON state_reminders(updated_at DESC)`,
+		`CREATE VIRTUAL TABLE IF NOT EXISTS state_search USING fts5(
+			reminder_id UNINDEXED,
+			kind UNINDEXED,
+			content,
+			tokenize = 'unicode61 remove_diacritics 2'
+		)`,
 		`CREATE TRIGGER IF NOT EXISTS state_audit_events_no_update
 			BEFORE UPDATE ON state_audit_events
 			BEGIN
@@ -307,6 +524,27 @@ func (repository *PocketBaseRepository) ensureSchema() error {
 			if _, err := txApp.DB().NewQuery(statement).Execute(); err != nil {
 				return err
 			}
+		}
+		if _, err := txApp.DB().NewQuery(`
+			INSERT INTO state_search (reminder_id, kind, content)
+			SELECT id, 'reminder', title || char(10) || description
+			FROM state_reminders r
+			WHERE NOT EXISTS (
+				SELECT 1 FROM state_search s WHERE s.reminder_id = r.id AND s.kind = 'reminder'
+			)
+		`).Execute(); err != nil {
+			return err
+		}
+		if _, err := txApp.DB().NewQuery(`
+			INSERT INTO state_search (reminder_id, kind, content)
+			SELECT reminder_id, 'comment', body
+			FROM state_comments c
+			WHERE NOT EXISTS (
+				SELECT 1 FROM state_search s
+				WHERE s.reminder_id = c.reminder_id AND s.kind = 'comment' AND s.content = c.body
+			)
+		`).Execute(); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -390,7 +628,11 @@ func insertAuditEvent(app core.App, event state.AuditEvent) error {
 }
 
 func insertIdempotencyResult(app core.App, clientRequestID string, actorID string, reminder state.Reminder) error {
-	resultJSON, err := json.Marshal(reminder)
+	return insertIdempotencyValue(app, clientRequestID, actorID, "reminder", reminder.ID, reminder)
+}
+
+func insertIdempotencyValue(app core.App, clientRequestID string, actorID string, resultType string, resultID string, value any) error {
+	resultJSON, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("encode idempotency result: %w", err)
 	}
@@ -398,12 +640,13 @@ func insertIdempotencyResult(app core.App, clientRequestID string, actorID strin
 		INSERT INTO state_idempotency (
 			client_request_id, actor_id, result_type, result_id, result_json, created_at
 		) VALUES (
-			{:client_request_id}, {:actor_id}, 'reminder', {:result_id}, {:result_json}, {:created_at}
+			{:client_request_id}, {:actor_id}, {:result_type}, {:result_id}, {:result_json}, {:created_at}
 		)
 	`).Bind(dbx.Params{
 		"client_request_id": clientRequestID,
 		"actor_id":          actorID,
-		"result_id":         reminder.ID,
+		"result_type":       resultType,
+		"result_id":         resultID,
 		"result_json":       string(resultJSON),
 		"created_at":        formatTime(time.Now().UTC()),
 	}).Execute()
@@ -416,10 +659,11 @@ func insertIdempotencyResult(app core.App, clientRequestID string, actorID strin
 func lookupIdempotentReminder(app core.App, clientRequestID string, actorID string) (state.Reminder, bool, error) {
 	row := struct {
 		ActorID    string `db:"actor_id"`
+		ResultType string `db:"result_type"`
 		ResultJSON string `db:"result_json"`
 	}{}
 	err := app.DB().NewQuery(`
-		SELECT actor_id, result_json
+		SELECT actor_id, result_type, result_json
 		FROM state_idempotency
 		WHERE client_request_id = {:client_request_id}
 	`).Bind(dbx.Params{"client_request_id": clientRequestID}).One(&row)
@@ -432,11 +676,44 @@ func lookupIdempotentReminder(app core.App, clientRequestID string, actorID stri
 	if row.ActorID != actorID {
 		return state.Reminder{}, false, state.ErrForbidden
 	}
+	if row.ResultType != "reminder" {
+		return state.Reminder{}, false, state.ErrInvalidInput
+	}
 	var reminder state.Reminder
 	if err := json.Unmarshal([]byte(row.ResultJSON), &reminder); err != nil {
 		return state.Reminder{}, false, fmt.Errorf("decode idempotency result: %w", err)
 	}
 	return reminder, true, nil
+}
+
+func lookupIdempotentComment(app core.App, clientRequestID string, actorID string) (state.Comment, bool, error) {
+	row := struct {
+		ActorID    string `db:"actor_id"`
+		ResultType string `db:"result_type"`
+		ResultJSON string `db:"result_json"`
+	}{}
+	err := app.DB().NewQuery(`
+		SELECT actor_id, result_type, result_json
+		FROM state_idempotency
+		WHERE client_request_id = {:client_request_id}
+	`).Bind(dbx.Params{"client_request_id": clientRequestID}).One(&row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return state.Comment{}, false, nil
+	}
+	if err != nil {
+		return state.Comment{}, false, fmt.Errorf("read comment idempotency result: %w", err)
+	}
+	if row.ActorID != actorID {
+		return state.Comment{}, false, state.ErrForbidden
+	}
+	if row.ResultType != "comment" {
+		return state.Comment{}, false, state.ErrInvalidInput
+	}
+	var comment state.Comment
+	if err := json.Unmarshal([]byte(row.ResultJSON), &comment); err != nil {
+		return state.Comment{}, false, fmt.Errorf("decode comment idempotency result: %w", err)
+	}
+	return comment, true, nil
 }
 
 func getReminder(app core.App, reminderID string) (state.Reminder, error) {
@@ -461,4 +738,99 @@ func getReminder(app core.App, reminderID string) (state.Reminder, error) {
 
 func formatTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func upsertReminderSearch(app core.App, reminder state.Reminder) error {
+	if _, err := app.DB().NewQuery(`
+		DELETE FROM state_search WHERE reminder_id = {:reminder_id} AND kind = 'reminder'
+	`).Bind(dbx.Params{"reminder_id": reminder.ID}).Execute(); err != nil {
+		return fmt.Errorf("remove reminder search document: %w", err)
+	}
+	_, err := app.DB().NewQuery(`
+		INSERT INTO state_search (reminder_id, kind, content)
+		VALUES ({:reminder_id}, 'reminder', {:content})
+	`).Bind(dbx.Params{
+		"reminder_id": reminder.ID,
+		"content":     reminder.Title + "\n" + reminder.Description,
+	}).Execute()
+	if err != nil {
+		return fmt.Errorf("insert reminder search document: %w", err)
+	}
+	return nil
+}
+
+func insertAuditSearch(app core.App, event state.AuditEvent) error {
+	contentParts := []string{
+		string(event.Action),
+		event.Actor.DisplayName,
+		event.Actor.Harness,
+		event.Actor.DeviceName,
+		event.SourceExcerpt,
+		strings.Join(event.ChangedFields, " "),
+	}
+	_, err := app.DB().NewQuery(`
+		INSERT INTO state_search (reminder_id, kind, content)
+		VALUES ({:reminder_id}, 'audit', {:content})
+	`).Bind(dbx.Params{
+		"reminder_id": event.ReminderID,
+		"content":     strings.Join(contentParts, "\n"),
+	}).Execute()
+	if err != nil {
+		return fmt.Errorf("insert audit search document: %w", err)
+	}
+	return nil
+}
+
+func insertCommentSearch(app core.App, comment state.Comment) error {
+	_, err := app.DB().NewQuery(`
+		INSERT INTO state_search (reminder_id, kind, content)
+		VALUES ({:reminder_id}, 'comment', {:content})
+	`).Bind(dbx.Params{
+		"reminder_id": comment.ReminderID,
+		"content":     comment.Body,
+	}).Execute()
+	if err != nil {
+		return fmt.Errorf("insert comment search document: %w", err)
+	}
+	return nil
+}
+
+func ftsQuery(query string) string {
+	terms := strings.Fields(query)
+	if len(terms) == 0 {
+		return ""
+	}
+	encoded := make([]string, 0, len(terms))
+	for _, term := range terms {
+		term = strings.ReplaceAll(term, `"`, `""`)
+		encoded = append(encoded, `"`+term+`"*`)
+	}
+	return strings.Join(encoded, " AND ")
+}
+
+func normalizeLimit(limit int) int {
+	if limit <= 0 {
+		return 100
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
+}
+
+func decodeReminders(rows []struct {
+	DataJSON string `db:"data_json"`
+}) ([]state.Reminder, error) {
+	reminders := make([]state.Reminder, 0, len(rows))
+	for _, row := range rows {
+		var reminder state.Reminder
+		if err := json.Unmarshal([]byte(row.DataJSON), &reminder); err != nil {
+			return nil, fmt.Errorf("decode reminder list item: %w", err)
+		}
+		reminders = append(reminders, reminder)
+	}
+	sort.SliceStable(reminders, func(left int, right int) bool {
+		return reminders[left].UpdatedAt.After(reminders[right].UpdatedAt)
+	})
+	return reminders, nil
 }

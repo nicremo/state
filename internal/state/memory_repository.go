@@ -7,25 +7,32 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"sort"
+	"strings"
 	"sync"
 )
 
 type MemoryRepository struct {
-	mu             sync.RWMutex
-	reminders      map[string]Reminder
-	auditEvents    map[string][]AuditEvent
-	requestResults map[string]Reminder
-	lastAuditHash  string
-	signingKey     ed25519.PrivateKey
+	mu              sync.RWMutex
+	reminders       map[string]Reminder
+	auditEvents     map[string][]AuditEvent
+	requestResults  map[string]Reminder
+	comments        map[string][]Comment
+	requestComments map[string]Comment
+	auditChain      []AuditEvent
+	lastAuditHash   string
+	signingKey      ed25519.PrivateKey
 }
 
 func NewMemoryRepository() *MemoryRepository {
 	seed := sha256.Sum256([]byte("state-memory-repository-signing-key"))
 	return &MemoryRepository{
-		reminders:      make(map[string]Reminder),
-		auditEvents:    make(map[string][]AuditEvent),
-		requestResults: make(map[string]Reminder),
-		signingKey:     ed25519.NewKeyFromSeed(seed[:]),
+		reminders:       make(map[string]Reminder),
+		auditEvents:     make(map[string][]AuditEvent),
+		requestResults:  make(map[string]Reminder),
+		comments:        make(map[string][]Comment),
+		requestComments: make(map[string]Comment),
+		signingKey:      ed25519.NewKeyFromSeed(seed[:]),
 	}
 }
 
@@ -39,6 +46,7 @@ func (repository *MemoryRepository) CreateReminder(_ context.Context, reminder R
 	event = repository.sealAuditEvent(event)
 	repository.reminders[reminder.ID] = cloneReminder(reminder)
 	repository.auditEvents[reminder.ID] = append(repository.auditEvents[reminder.ID], cloneAuditEvent(event))
+	repository.auditChain = append(repository.auditChain, cloneAuditEvent(event))
 	repository.requestResults[clientRequestID] = cloneReminder(reminder)
 	return cloneReminder(reminder), nil
 }
@@ -60,6 +68,7 @@ func (repository *MemoryRepository) UpdateReminder(_ context.Context, reminder R
 	event = repository.sealAuditEvent(event)
 	repository.reminders[reminder.ID] = cloneReminder(reminder)
 	repository.auditEvents[reminder.ID] = append(repository.auditEvents[reminder.ID], cloneAuditEvent(event))
+	repository.auditChain = append(repository.auditChain, cloneAuditEvent(event))
 	repository.requestResults[clientRequestID] = cloneReminder(reminder)
 	return cloneReminder(reminder), nil
 }
@@ -87,6 +96,119 @@ func (repository *MemoryRepository) ListAuditEvents(_ context.Context, reminderI
 	return result, nil
 }
 
+func (repository *MemoryRepository) ListReminders(_ context.Context, options ReminderListOptions) ([]Reminder, error) {
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+
+	result := make([]Reminder, 0, len(repository.reminders))
+	for _, reminder := range repository.reminders {
+		if !options.IncludeArchived && reminder.Archived {
+			continue
+		}
+		if options.Status != nil && reminder.Status != *options.Status {
+			continue
+		}
+		result = append(result, cloneReminder(reminder))
+	}
+	sort.Slice(result, func(left int, right int) bool {
+		return result[left].UpdatedAt.After(result[right].UpdatedAt)
+	})
+	limit := normalizeLimit(options.Limit)
+	if len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+func (repository *MemoryRepository) SearchReminders(_ context.Context, query string, limit int) ([]Reminder, error) {
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+
+	query = strings.ToLower(strings.TrimSpace(query))
+	result := make([]Reminder, 0)
+	for _, reminder := range repository.reminders {
+		haystack := strings.ToLower(reminder.Title + "\n" + reminder.Description)
+		for _, event := range repository.auditEvents[reminder.ID] {
+			haystack += "\n" + strings.ToLower(event.SourceExcerpt)
+		}
+		for _, comment := range repository.comments[reminder.ID] {
+			haystack += "\n" + strings.ToLower(comment.Body)
+		}
+		if strings.Contains(haystack, query) {
+			result = append(result, cloneReminder(reminder))
+		}
+	}
+	sort.Slice(result, func(left int, right int) bool {
+		return result[left].UpdatedAt.After(result[right].UpdatedAt)
+	})
+	normalizedLimit := normalizeLimit(limit)
+	if len(result) > normalizedLimit {
+		result = result[:normalizedLimit]
+	}
+	return result, nil
+}
+
+func (repository *MemoryRepository) AddComment(_ context.Context, comment Comment, event AuditEvent, clientRequestID string) (Comment, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+
+	if existing, ok := repository.requestComments[clientRequestID]; ok {
+		return cloneComment(existing), nil
+	}
+	if _, collision := repository.requestResults[clientRequestID]; collision {
+		return Comment{}, ErrInvalidInput
+	}
+	if _, exists := repository.reminders[comment.ReminderID]; !exists {
+		return Comment{}, ErrNotFound
+	}
+	event = repository.sealAuditEvent(event)
+	repository.comments[comment.ReminderID] = append(repository.comments[comment.ReminderID], cloneComment(comment))
+	repository.requestComments[clientRequestID] = cloneComment(comment)
+	repository.auditEvents[comment.ReminderID] = append(repository.auditEvents[comment.ReminderID], cloneAuditEvent(event))
+	repository.auditChain = append(repository.auditChain, cloneAuditEvent(event))
+	return cloneComment(comment), nil
+}
+
+func (repository *MemoryRepository) ListComments(_ context.Context, reminderID string) ([]Comment, error) {
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+
+	comments := repository.comments[reminderID]
+	result := make([]Comment, len(comments))
+	for index, comment := range comments {
+		result[index] = cloneComment(comment)
+	}
+	return result, nil
+}
+
+func (repository *MemoryRepository) ListChanges(_ context.Context, afterCursor int64, limit int) ([]Change, error) {
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+
+	result := make([]Change, 0)
+	for index, event := range repository.auditChain {
+		cursor := int64(index + 1)
+		if cursor <= afterCursor {
+			continue
+		}
+		result = append(result, Change{Cursor: cursor, Event: cloneAuditEvent(event)})
+		if len(result) == normalizeLimit(limit) {
+			break
+		}
+	}
+	return result, nil
+}
+
+func normalizeLimit(limit int) int {
+	if limit <= 0 {
+		return 100
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
+}
+
 func (repository *MemoryRepository) sealAuditEvent(event AuditEvent) AuditEvent {
 	event.PreviousHash = repository.lastAuditHash
 	event.Hash = ""
@@ -107,4 +229,8 @@ func cloneAuditEvent(event AuditEvent) AuditEvent {
 	event.AfterSnapshot = append(json.RawMessage(nil), event.AfterSnapshot...)
 	event.ChangedFields = append([]string(nil), event.ChangedFields...)
 	return event
+}
+
+func cloneComment(comment Comment) Comment {
+	return comment
 }

@@ -121,6 +121,41 @@ func TestReminderAPIMapsRevisionConflictAndAgentArchive(t *testing.T) {
 	}
 }
 
+func TestCommentAPIAddsContextToReminderDetail(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+	owner := bootstrapOwner(t, handler)
+	createResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/reminders", owner.Token, map[string]any{
+		"title":             "Comment target",
+		"client_request_id": "01989e82-adb5-7ce3-aaf1-a9b29ddc2a33",
+	})
+	var reminder state.Reminder
+	decodeResponse(t, createResponse, &reminder)
+	commentResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/reminders/"+reminder.ID+"/comments", owner.Token, map[string]any{
+		"body":              "This came from the iPhone.",
+		"client_request_id": "01989e82-adb5-7f73-8245-e07e516b0cc9",
+	})
+	if commentResponse.Code != http.StatusCreated {
+		t.Fatalf("comment status = %d, body = %s", commentResponse.Code, commentResponse.Body.String())
+	}
+	var comment state.Comment
+	decodeResponse(t, commentResponse, &comment)
+	if comment.Actor.Kind != state.ActorKindOwner {
+		t.Fatalf("comment actor = %#v", comment.Actor)
+	}
+
+	detailResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/reminders/"+reminder.ID, owner.Token, nil)
+	var detail ReminderDetail
+	decodeResponse(t, detailResponse, &detail)
+	if len(detail.Comments) != 1 || detail.Comments[0].Body != "This came from the iPhone." {
+		t.Fatalf("detail comments = %#v", detail.Comments)
+	}
+	if len(detail.History) != 2 || detail.History[1].Action != state.AuditActionCommentAdded {
+		t.Fatalf("detail history = %#v", detail.History)
+	}
+}
+
 func TestHealthAndVersionEndpointsArePublic(t *testing.T) {
 	t.Parallel()
 
@@ -130,6 +165,67 @@ func TestHealthAndVersionEndpointsArePublic(t *testing.T) {
 		if response.Code != http.StatusOK {
 			t.Fatalf("GET %s status = %d, body = %s", path, response.Code, response.Body.String())
 		}
+	}
+}
+
+func TestListSearchChangesAndBriefingEndpoints(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+	owner := bootstrapOwner(t, handler)
+	for index, title := range []string{"Quarterly metrics", "Dentist appointment"} {
+		response := performJSONRequest(t, handler, http.MethodPost, "/api/v1/reminders", owner.Token, map[string]any{
+			"title":             title,
+			"description":       "Context for " + title,
+			"client_request_id": []string{"01989e39-3ba8-7e61-a572-6306a8dc00ed", "01989e39-3ba8-7765-9b6f-15aff25c5e09"}[index],
+		})
+		if response.Code != http.StatusCreated {
+			t.Fatalf("create %d status = %d, body = %s", index, response.Code, response.Body.String())
+		}
+	}
+
+	listResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/reminders", owner.Token, nil)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("list status = %d, body = %s", listResponse.Code, listResponse.Body.String())
+	}
+	var listResult struct {
+		Reminders []state.Reminder `json:"reminders"`
+	}
+	decodeResponse(t, listResponse, &listResult)
+	if len(listResult.Reminders) != 2 {
+		t.Fatalf("list reminder count = %d, want 2", len(listResult.Reminders))
+	}
+
+	searchResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/reminders?q=quarterly", owner.Token, nil)
+	var searchResult struct {
+		Reminders []state.Reminder `json:"reminders"`
+	}
+	decodeResponse(t, searchResponse, &searchResult)
+	if len(searchResult.Reminders) != 1 || searchResult.Reminders[0].Title != "Quarterly metrics" {
+		t.Fatalf("search reminders = %#v", searchResult.Reminders)
+	}
+
+	changesResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/changes?after=0&limit=20", owner.Token, nil)
+	if changesResponse.Code != http.StatusOK {
+		t.Fatalf("changes status = %d, body = %s", changesResponse.Code, changesResponse.Body.String())
+	}
+	var changesResult struct {
+		Changes []state.Change `json:"changes"`
+		Cursor  int64          `json:"cursor"`
+	}
+	decodeResponse(t, changesResponse, &changesResult)
+	if len(changesResult.Changes) != 2 || changesResult.Cursor != 2 {
+		t.Fatalf("changes = %#v, cursor = %d", changesResult.Changes, changesResult.Cursor)
+	}
+
+	briefingResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/briefing?after=0", owner.Token, nil)
+	if briefingResponse.Code != http.StatusOK {
+		t.Fatalf("briefing status = %d, body = %s", briefingResponse.Code, briefingResponse.Body.String())
+	}
+	var briefing state.Briefing
+	decodeResponse(t, briefingResponse, &briefing)
+	if len(briefing.Reminders) != 2 || briefing.Cursor != 2 {
+		t.Fatalf("briefing = %#v", briefing)
 	}
 }
 
