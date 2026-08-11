@@ -165,7 +165,11 @@ func TestServiceDeliversOnlyUnconfirmedOccurrenceOnce(t *testing.T) {
 	}
 	recorder := &recordingSender{}
 	service := NewService(repository, recorder)
-	start := time.Date(2026, time.August, 17, 8, 59, 0, 0, time.Local)
+	location, err := time.LoadLocation("Europe/Copenhagen")
+	if err != nil {
+		t.Fatalf("LoadLocation() error = %v", err)
+	}
+	start := time.Date(2026, time.August, 17, 8, 59, 0, 0, location)
 	delivered, err := service.DeliverDue(context.Background(), start.UTC(), start.Add(2*time.Minute).UTC())
 	if err != nil {
 		t.Fatalf("DeliverDue() error = %v", err)
