@@ -156,6 +156,43 @@ func TestCommentAPIAddsContextToReminderDetail(t *testing.T) {
 	}
 }
 
+func TestOccurrenceAPICompletesScheduledReminder(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+	owner := bootstrapOwner(t, handler)
+	createResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/reminders", owner.Token, map[string]any{
+		"title":             "Scheduled API reminder",
+		"client_request_id": "01989ee8-3d9d-706d-9de7-472a46242086",
+		"schedule": map[string]any{
+			"local_date": "2026-08-17",
+			"local_time": "09:00",
+			"time_zone":  "Europe/Copenhagen",
+			"mode":       "floating",
+		},
+	})
+	var reminder state.Reminder
+	decodeResponse(t, createResponse, &reminder)
+	detailResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/reminders/"+reminder.ID, owner.Token, nil)
+	var detail ReminderDetail
+	decodeResponse(t, detailResponse, &detail)
+	if len(detail.Occurrences) != 1 {
+		t.Fatalf("detail occurrences = %#v", detail.Occurrences)
+	}
+	completeResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/occurrences/"+detail.Occurrences[0].ID+"/complete", owner.Token, map[string]any{
+		"expected_revision": 1,
+		"client_request_id": "01989ee8-3d9d-7b5d-a2ec-cf12c571aa29",
+	})
+	if completeResponse.Code != http.StatusOK {
+		t.Fatalf("complete status = %d, body = %s", completeResponse.Code, completeResponse.Body.String())
+	}
+	var completed state.Occurrence
+	decodeResponse(t, completeResponse, &completed)
+	if completed.Status != state.OccurrenceStatusCompleted || completed.Revision != 2 {
+		t.Fatalf("completed occurrence = %#v", completed)
+	}
+}
+
 func TestHealthAndVersionEndpointsArePublic(t *testing.T) {
 	t.Parallel()
 

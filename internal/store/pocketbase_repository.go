@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nicremo/state/internal/state"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -101,6 +102,9 @@ func (repository *PocketBaseRepository) CreateReminder(
 		if err := insertIdempotencyResult(txApp, clientRequestID, event.Actor.ID, reminder); err != nil {
 			return err
 		}
+		if err := reconcileOccurrences(txApp, reminder); err != nil {
+			return err
+		}
 		result = reminder
 		return nil
 	})
@@ -182,6 +186,9 @@ func (repository *PocketBaseRepository) UpdateReminder(
 			return err
 		}
 		if err := insertIdempotencyResult(txApp, clientRequestID, event.Actor.ID, reminder); err != nil {
+			return err
+		}
+		if err := reconcileOccurrences(txApp, reminder); err != nil {
 			return err
 		}
 		result = reminder
@@ -407,6 +414,119 @@ func (repository *PocketBaseRepository) ListComments(_ context.Context, reminder
 	return comments, nil
 }
 
+func (repository *PocketBaseRepository) GetOccurrence(_ context.Context, occurrenceID string) (state.Occurrence, error) {
+	return getOccurrence(repository.app, occurrenceID)
+}
+
+func (repository *PocketBaseRepository) ListOccurrences(_ context.Context, reminderID string, options state.OccurrenceListOptions) ([]state.Occurrence, error) {
+	where := "WHERE reminder_id = {:reminder_id}"
+	params := dbx.Params{
+		"reminder_id": reminderID,
+		"limit":       normalizeLimit(options.Limit),
+	}
+	if options.Status != nil {
+		where += " AND status = {:status}"
+		params["status"] = string(*options.Status)
+	}
+	rows := make([]struct {
+		DataJSON string `db:"data_json"`
+	}, 0)
+	err := repository.app.DB().NewQuery(`
+		SELECT data_json
+		FROM state_occurrences
+		` + where + `
+		ORDER BY local_date ASC, local_time ASC, id ASC
+		LIMIT {:limit}
+	`).Bind(params).All(&rows)
+	if err != nil {
+		return nil, fmt.Errorf("list occurrences: %w", err)
+	}
+	occurrences := make([]state.Occurrence, 0, len(rows))
+	for _, row := range rows {
+		var occurrence state.Occurrence
+		if err := json.Unmarshal([]byte(row.DataJSON), &occurrence); err != nil {
+			return nil, fmt.Errorf("decode occurrence: %w", err)
+		}
+		occurrences = append(occurrences, occurrence)
+	}
+	return occurrences, nil
+}
+
+func (repository *PocketBaseRepository) UpdateOccurrence(
+	_ context.Context,
+	occurrence state.Occurrence,
+	expectedRevision int64,
+	event state.AuditEvent,
+	clientRequestID string,
+) (state.Occurrence, error) {
+	var result state.Occurrence
+	err := repository.app.RunInTransaction(func(txApp core.App) error {
+		existing, found, err := lookupIdempotentOccurrence(txApp, clientRequestID, event.Actor.ID)
+		if err != nil {
+			return err
+		}
+		if found {
+			result = existing
+			return nil
+		}
+		current, err := getOccurrence(txApp, occurrence.ID)
+		if err != nil {
+			return err
+		}
+		if current.Revision != expectedRevision {
+			return state.ErrRevisionConflict
+		}
+		occurrenceJSON, err := json.Marshal(occurrence)
+		if err != nil {
+			return fmt.Errorf("encode occurrence: %w", err)
+		}
+		databaseResult, err := txApp.DB().NewQuery(`
+			UPDATE state_occurrences
+			SET status = {:status},
+				revision = {:new_revision},
+				updated_at = {:updated_at},
+				data_json = {:data_json}
+			WHERE id = {:id} AND revision = {:expected_revision}
+		`).Bind(dbx.Params{
+			"id":                occurrence.ID,
+			"status":            string(occurrence.Status),
+			"new_revision":      occurrence.Revision,
+			"updated_at":        formatTime(occurrence.UpdatedAt),
+			"data_json":         string(occurrenceJSON),
+			"expected_revision": expectedRevision,
+		}).Execute()
+		if err != nil {
+			return fmt.Errorf("update occurrence: %w", err)
+		}
+		rowsAffected, err := databaseResult.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("read occurrence update result: %w", err)
+		}
+		if rowsAffected != 1 {
+			return state.ErrRevisionConflict
+		}
+		sealedEvent, err := repository.sealAuditEvent(txApp, event)
+		if err != nil {
+			return err
+		}
+		if err := insertAuditEvent(txApp, sealedEvent); err != nil {
+			return err
+		}
+		if err := insertAuditSearch(txApp, sealedEvent); err != nil {
+			return err
+		}
+		if err := insertIdempotencyValue(txApp, clientRequestID, event.Actor.ID, "occurrence", occurrence.ID, occurrence); err != nil {
+			return err
+		}
+		result = occurrence
+		return nil
+	})
+	if err != nil {
+		return state.Occurrence{}, err
+	}
+	return result, nil
+}
+
 func (repository *PocketBaseRepository) VerifyAuditChain(_ context.Context) error {
 	rows := make([]struct {
 		EventJSON string `db:"event_json"`
@@ -477,6 +597,22 @@ func (repository *PocketBaseRepository) ensureSchema() error {
 		) STRICT`,
 		`CREATE INDEX IF NOT EXISTS state_comments_reminder_created_idx
 			ON state_comments(reminder_id, created_at)`,
+		`CREATE TABLE IF NOT EXISTS state_occurrences (
+			id TEXT PRIMARY KEY,
+			reminder_id TEXT NOT NULL REFERENCES state_reminders(id),
+			local_date TEXT NOT NULL,
+			local_time TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL CHECK(status IN ('pending', 'completed', 'snoozed')),
+			revision INTEGER NOT NULL CHECK(revision > 0),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			data_json TEXT NOT NULL CHECK(json_valid(data_json)),
+			UNIQUE(reminder_id, local_date, local_time)
+		) STRICT`,
+		`CREATE INDEX IF NOT EXISTS state_occurrences_reminder_schedule_idx
+			ON state_occurrences(reminder_id, local_date, local_time)`,
+		`CREATE INDEX IF NOT EXISTS state_occurrences_status_schedule_idx
+			ON state_occurrences(status, local_date, local_time)`,
 		`CREATE TABLE IF NOT EXISTS state_audit_events (
 			sequence INTEGER PRIMARY KEY AUTOINCREMENT,
 			id TEXT NOT NULL UNIQUE,
@@ -716,6 +852,36 @@ func lookupIdempotentComment(app core.App, clientRequestID string, actorID strin
 	return comment, true, nil
 }
 
+func lookupIdempotentOccurrence(app core.App, clientRequestID string, actorID string) (state.Occurrence, bool, error) {
+	row := struct {
+		ActorID    string `db:"actor_id"`
+		ResultType string `db:"result_type"`
+		ResultJSON string `db:"result_json"`
+	}{}
+	err := app.DB().NewQuery(`
+		SELECT actor_id, result_type, result_json
+		FROM state_idempotency
+		WHERE client_request_id = {:client_request_id}
+	`).Bind(dbx.Params{"client_request_id": clientRequestID}).One(&row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return state.Occurrence{}, false, nil
+	}
+	if err != nil {
+		return state.Occurrence{}, false, fmt.Errorf("read occurrence idempotency result: %w", err)
+	}
+	if row.ActorID != actorID {
+		return state.Occurrence{}, false, state.ErrForbidden
+	}
+	if row.ResultType != "occurrence" {
+		return state.Occurrence{}, false, state.ErrInvalidInput
+	}
+	var occurrence state.Occurrence
+	if err := json.Unmarshal([]byte(row.ResultJSON), &occurrence); err != nil {
+		return state.Occurrence{}, false, fmt.Errorf("decode occurrence idempotency result: %w", err)
+	}
+	return occurrence, true, nil
+}
+
 func getReminder(app core.App, reminderID string) (state.Reminder, error) {
 	row := struct {
 		DataJSON string `db:"data_json"`
@@ -736,8 +902,98 @@ func getReminder(app core.App, reminderID string) (state.Reminder, error) {
 	return reminder, nil
 }
 
+func getOccurrence(app core.App, occurrenceID string) (state.Occurrence, error) {
+	row := struct {
+		DataJSON string `db:"data_json"`
+	}{}
+	err := app.DB().NewQuery(`
+		SELECT data_json FROM state_occurrences WHERE id = {:id}
+	`).Bind(dbx.Params{"id": occurrenceID}).One(&row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return state.Occurrence{}, state.ErrNotFound
+	}
+	if err != nil {
+		return state.Occurrence{}, fmt.Errorf("get occurrence: %w", err)
+	}
+	var occurrence state.Occurrence
+	if err := json.Unmarshal([]byte(row.DataJSON), &occurrence); err != nil {
+		return state.Occurrence{}, fmt.Errorf("decode occurrence: %w", err)
+	}
+	return occurrence, nil
+}
+
 func formatTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func reconcileOccurrences(app core.App, reminder state.Reminder) error {
+	if _, err := app.DB().NewQuery(`
+		DELETE FROM state_occurrences
+		WHERE reminder_id = {:reminder_id} AND status = 'pending'
+	`).Bind(dbx.Params{"reminder_id": reminder.ID}).Execute(); err != nil {
+		return fmt.Errorf("remove pending occurrences: %w", err)
+	}
+	if reminder.Schedule == nil || reminder.Archived {
+		return nil
+	}
+	fromDate := reminder.Schedule.LocalDate
+	if reminder.Recurrence != nil {
+		location, err := time.LoadLocation(reminder.Schedule.TimeZone)
+		if err != nil {
+			return err
+		}
+		fromDate = reminder.UpdatedAt.In(location).Format("2006-01-02")
+	}
+	throughDate := reminder.UpdatedAt.AddDate(1, 1, 0).Format("2006-01-02")
+	seeds, err := state.ExpandOccurrenceSeeds(reminder, fromDate, throughDate)
+	if err != nil {
+		return err
+	}
+	for _, seed := range seeds {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return fmt.Errorf("generate occurrence ID: %w", err)
+		}
+		occurrence := state.Occurrence{
+			ID:                id.String(),
+			ReminderID:        reminder.ID,
+			LocalDate:         seed.LocalDate,
+			LocalTime:         seed.LocalTime,
+			TimeZone:          seed.TimeZone,
+			TimeZoneMode:      seed.TimeZoneMode,
+			PrewarningMinutes: seed.PrewarningMinutes,
+			ScheduledAt:       seed.ScheduledAt,
+			Status:            state.OccurrenceStatusPending,
+			Revision:          1,
+			CreatedAt:         reminder.UpdatedAt,
+			UpdatedAt:         reminder.UpdatedAt,
+		}
+		occurrenceJSON, err := json.Marshal(occurrence)
+		if err != nil {
+			return fmt.Errorf("encode occurrence: %w", err)
+		}
+		_, err = app.DB().NewQuery(`
+			INSERT OR IGNORE INTO state_occurrences (
+				id, reminder_id, local_date, local_time, status, revision, created_at, updated_at, data_json
+			) VALUES (
+				{:id}, {:reminder_id}, {:local_date}, {:local_time}, {:status}, {:revision}, {:created_at}, {:updated_at}, {:data_json}
+			)
+		`).Bind(dbx.Params{
+			"id":          occurrence.ID,
+			"reminder_id": occurrence.ReminderID,
+			"local_date":  occurrence.LocalDate,
+			"local_time":  occurrence.LocalTime,
+			"status":      string(occurrence.Status),
+			"revision":    occurrence.Revision,
+			"created_at":  formatTime(occurrence.CreatedAt),
+			"updated_at":  formatTime(occurrence.UpdatedAt),
+			"data_json":   string(occurrenceJSON),
+		}).Execute()
+		if err != nil {
+			return fmt.Errorf("insert occurrence: %w", err)
+		}
+	}
+	return nil
 }
 
 func upsertReminderSearch(app core.App, reminder state.Reminder) error {
