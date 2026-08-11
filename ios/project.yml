@@ -1,0 +1,79 @@
+name: State
+options:
+  bundleIdPrefix: com.fabincrm
+  deploymentTarget:
+    iOS: "18.0"
+  developmentLanguage: en
+  xcodeVersion: "26.0"
+  groupSortPosition: top
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    exactVersion: 7.10.0
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    GENERATE_INFOPLIST_FILE: NO
+    MARKETING_VERSION: 1.0.0
+    CURRENT_PROJECT_VERSION: 1
+    DEVELOPMENT_TEAM: 5DKU7FFK4X
+targets:
+  State:
+    type: application
+    platform: iOS
+    sources:
+      - path: State/Sources
+    resources:
+      - path: State/Resources
+    dependencies:
+      - package: GRDB
+        product: GRDB
+      - target: StateNotificationService
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fabincrm.state
+        INFOPLIST_FILE: State/Supporting/Info.plist
+        PRODUCT_NAME: State
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: State/Supporting/StateDebug.entitlements
+        Release:
+          CODE_SIGN_ENTITLEMENTS: State/Supporting/State.entitlements
+    scheme:
+      testTargets:
+        - StateTests
+      gatherCoverageData: true
+  StateNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: StateNotificationService/Sources
+      - path: State/Sources/Security/PushEnvelope.swift
+      - path: State/Sources/Security/SharedKeychain.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fabincrm.state.notificationservice
+        INFOPLIST_FILE: StateNotificationService/Supporting/Info.plist
+        CODE_SIGN_ENTITLEMENTS: StateNotificationService/Supporting/StateNotificationService.entitlements
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+  StateTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: StateTests
+    dependencies:
+      - target: State
+      - package: GRDB
+        product: GRDB
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fabincrm.state.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/State.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/State"
+        BUNDLE_LOADER: "$(TEST_HOST)"
