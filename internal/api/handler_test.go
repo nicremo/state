@@ -266,6 +266,57 @@ func TestListSearchChangesAndBriefingEndpoints(t *testing.T) {
 	}
 }
 
+func TestCredentialAndActorManagementAPI(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+	owner := bootstrapOwner(t, handler)
+	pairingResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/pairing/codes", owner.Token, map[string]any{
+		"harness":      "codex",
+		"display_name": "Codex",
+		"device_name":  "MacBook",
+	})
+	var pairing stateauth.PairingCode
+	decodeResponse(t, pairingResponse, &pairing)
+	exchangeResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/pairing/exchange", "", map[string]any{"code": pairing.Code})
+	var harness stateauth.Credential
+	decodeResponse(t, exchangeResponse, &harness)
+
+	agentsResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/agents", owner.Token, nil)
+	if agentsResponse.Code != http.StatusOK {
+		t.Fatalf("agents status = %d, body = %s", agentsResponse.Code, agentsResponse.Body.String())
+	}
+	var actors struct {
+		Actors []stateauth.ActorRecord `json:"actors"`
+	}
+	decodeResponse(t, agentsResponse, &actors)
+	if len(actors.Actors) != 1 || actors.Actors[0].Actor.ID != harness.Actor.ID {
+		t.Fatalf("agents = %#v", actors.Actors)
+	}
+
+	rotateResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/credentials/rotate", harness.Token, map[string]any{})
+	if rotateResponse.Code != http.StatusOK {
+		t.Fatalf("rotate status = %d, body = %s", rotateResponse.Code, rotateResponse.Body.String())
+	}
+	var rotated stateauth.Credential
+	decodeResponse(t, rotateResponse, &rotated)
+	if rotated.Token == "" || rotated.Token == harness.Token {
+		t.Fatalf("rotated token was not replaced")
+	}
+	oldResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/briefing", harness.Token, nil)
+	if oldResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("old token status = %d", oldResponse.Code)
+	}
+	revokeResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/credentials/revoke", rotated.Token, map[string]any{})
+	if revokeResponse.Code != http.StatusNoContent {
+		t.Fatalf("revoke status = %d, body = %s", revokeResponse.Code, revokeResponse.Body.String())
+	}
+	revokedResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/briefing", rotated.Token, nil)
+	if revokedResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked token status = %d", revokedResponse.Code)
+	}
+}
+
 func newTestHandler(t *testing.T) http.Handler {
 	t.Helper()
 

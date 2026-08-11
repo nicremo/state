@@ -31,7 +31,7 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger) error {
 	if len(args) == 0 {
-		return errors.New("usage: statectl <pair|mcp|doctor|install|uninstall|unpair|version>")
+		return errors.New("usage: statectl <pair|mcp|doctor|rotate|revoke|install|uninstall|unpair|version>")
 	}
 	switch args[0] {
 	case "pair":
@@ -40,6 +40,10 @@ func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger)
 		return runMCP(args[1:], stderr)
 	case "doctor", "diagnose":
 		return runDoctor(args[1:], stdout, stderr)
+	case "rotate":
+		return runRotate(args[1:], stdout, stderr)
+	case "revoke":
+		return runRevoke(args[1:], stdout, stderr)
 	case "install":
 		return runInstall(args[1:], stdout, stderr)
 	case "uninstall":
@@ -53,6 +57,53 @@ func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger)
 		logger.Debug("unknown statectl command", "command", args[0])
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func runRotate(args []string, stdout io.Writer, stderr io.Writer) error {
+	flags := flag.NewFlagSet("statectl rotate", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	profileName := flags.String("profile", "", "statectl profile name")
+	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	service := statectl.NewPairService(statectl.NewConfigStore(*configPath), statectl.KeyringSecretStore{}, nil)
+	if err := service.Rotate(context.Background(), *profileName); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintf(stdout, "rotated credential for %s\n", *profileName)
+	return err
+}
+
+func runRevoke(args []string, stdout io.Writer, stderr io.Writer) error {
+	flags := flag.NewFlagSet("statectl revoke", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	profileName := flags.String("profile", "", "statectl profile name")
+	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
+	removeIntegration := flags.Bool("uninstall", true, "remove harness configuration and rules")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	configStore := statectl.NewConfigStore(*configPath)
+	profile, err := configStore.LoadProfile(*profileName)
+	if err != nil {
+		return err
+	}
+	service := statectl.NewPairService(configStore, statectl.KeyringSecretStore{}, nil)
+	if err := service.Revoke(context.Background(), profile.Name); err != nil {
+		return err
+	}
+	if *removeIntegration {
+		installer, err := defaultInstaller()
+		if err != nil {
+			return err
+		}
+		if err := installer.Uninstall(profile.Harness); err != nil {
+			return err
+		}
+	}
+	_, err = fmt.Fprintf(stdout, "revoked credential for %s\n", profile.Name)
+	return err
 }
 
 func runPair(args []string, stdout io.Writer, stderr io.Writer) error {

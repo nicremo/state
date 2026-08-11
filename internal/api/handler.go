@@ -58,6 +58,12 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("POST /api/v1/pairing/owner", handler.bootstrapOwner)
 	handler.router.HandleFunc("POST /api/v1/pairing/codes", handler.createPairingCode)
 	handler.router.HandleFunc("POST /api/v1/pairing/exchange", handler.exchangePairingCode)
+	handler.router.HandleFunc("POST /api/v1/credentials/rotate", handler.rotateCredential)
+	handler.router.HandleFunc("POST /api/v1/credentials/revoke", handler.revokeCredential)
+	handler.router.HandleFunc("GET /api/v1/agents", handler.listAgents)
+	handler.router.HandleFunc("DELETE /api/v1/agents/{id}", handler.revokeActor)
+	handler.router.HandleFunc("GET /api/v1/devices", handler.listDevices)
+	handler.router.HandleFunc("DELETE /api/v1/devices/{id}", handler.revokeActor)
 	handler.router.HandleFunc("POST /api/v1/reminders", handler.createReminder)
 	handler.router.HandleFunc("GET /api/v1/reminders", handler.listReminders)
 	handler.router.HandleFunc("GET /api/v1/reminders/{id}", handler.getReminder)
@@ -138,6 +144,62 @@ func (handler *Handler) exchangePairingCode(writer http.ResponseWriter, request 
 		return
 	}
 	writeJSON(writer, http.StatusCreated, credential)
+}
+
+func (handler *Handler) rotateCredential(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticate(writer, request); !ok {
+		return
+	}
+	credential, err := handler.auth.RotateCredential(request.Context(), bearerToken(request))
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, credential)
+}
+
+func (handler *Handler) revokeCredential(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticate(writer, request); !ok {
+		return
+	}
+	if err := handler.auth.RevokeCredential(request.Context(), bearerToken(request)); err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) listAgents(writer http.ResponseWriter, request *http.Request) {
+	handler.listActors(writer, request, state.ActorKindHarness)
+}
+
+func (handler *Handler) listDevices(writer http.ResponseWriter, request *http.Request) {
+	handler.listActors(writer, request, state.ActorKindDevice)
+}
+
+func (handler *Handler) listActors(writer http.ResponseWriter, request *http.Request, kind state.ActorKind) {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	actors, err := handler.auth.ListActors(request.Context(), actor, kind)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"actors": actors})
+}
+
+func (handler *Handler) revokeActor(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if err := handler.auth.RevokeActor(request.Context(), actor, request.PathValue("id")); err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writer.WriteHeader(http.StatusNoContent)
 }
 
 func (handler *Handler) createReminder(writer http.ResponseWriter, request *http.Request) {
@@ -425,17 +487,25 @@ func (handler *Handler) getBriefing(writer http.ResponseWriter, request *http.Re
 }
 
 func (handler *Handler) authenticate(writer http.ResponseWriter, request *http.Request) (state.Actor, bool) {
-	header := request.Header.Get("Authorization")
-	if !strings.HasPrefix(header, "Bearer ") {
+	token := bearerToken(request)
+	if token == "" {
 		writeError(writer, stateauth.ErrInvalidCredential, nil)
 		return state.Actor{}, false
 	}
-	actor, err := handler.auth.Authenticate(request.Context(), strings.TrimPrefix(header, "Bearer "))
+	actor, err := handler.auth.Authenticate(request.Context(), token)
 	if err != nil {
 		writeError(writer, err, nil)
 		return state.Actor{}, false
 	}
 	return actor, true
+}
+
+func bearerToken(request *http.Request) string {
+	header := request.Header.Get("Authorization")
+	if !strings.HasPrefix(header, "Bearer ") {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
 }
 
 func decodeJSON(request *http.Request, output any) error {

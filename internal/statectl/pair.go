@@ -98,6 +98,95 @@ func (service *PairService) Pair(ctx context.Context, request PairRequest) (Prof
 	return profile, nil
 }
 
+func (service *PairService) Rotate(ctx context.Context, profileName string) error {
+	profile, token, err := service.profileAndToken(profileName)
+	if err != nil {
+		return err
+	}
+	response, err := service.credentialRequest(ctx, profile, token, "/api/v1/credentials/rotate")
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return responseStatusError("rotate credential", response)
+	}
+	var credential stateauth.Credential
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&credential); err != nil {
+		return fmt.Errorf("decode rotated credential: %w", err)
+	}
+	if credential.Token == "" || credential.Actor.ID != profile.ActorID || credential.Actor.Harness != profile.Harness {
+		return errors.New("rotated credential does not match local profile")
+	}
+	if err := service.secrets.Set(profile.CredentialAccount(), credential.Token); err != nil {
+		return fmt.Errorf("store rotated credential in operating system keychain: %w", err)
+	}
+	return nil
+}
+
+func (service *PairService) Revoke(ctx context.Context, profileName string) error {
+	profile, token, err := service.profileAndToken(profileName)
+	if err != nil {
+		return err
+	}
+	response, err := service.credentialRequest(ctx, profile, token, "/api/v1/credentials/revoke")
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		return responseStatusError("revoke credential", response)
+	}
+	if err := service.secrets.Delete(profile.CredentialAccount()); err != nil {
+		return fmt.Errorf("delete credential from operating system keychain: %w", err)
+	}
+	if err := service.config.RemoveProfile(profile.Name); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (service *PairService) profileAndToken(profileName string) (Profile, string, error) {
+	if service.config == nil || service.secrets == nil || profileName == "" {
+		return Profile{}, "", state.ErrInvalidInput
+	}
+	profile, err := service.config.LoadProfile(profileName)
+	if err != nil {
+		return Profile{}, "", err
+	}
+	token, err := service.secrets.Get(profile.CredentialAccount())
+	if err != nil {
+		return Profile{}, "", err
+	}
+	return profile, token, nil
+}
+
+func (service *PairService) credentialRequest(ctx context.Context, profile Profile, token string, path string) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, profile.ServerURL+path, bytes.NewReader([]byte("{}")))
+	if err != nil {
+		return nil, fmt.Errorf("create credential request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := service.httpClient.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func responseStatusError(action string, response *http.Response) error {
+	limited := io.LimitReader(response.Body, 1<<20)
+	var responseError struct {
+		Code string `json:"code"`
+	}
+	_ = json.NewDecoder(limited).Decode(&responseError)
+	if responseError.Code == "" {
+		responseError.Code = "request_failed"
+	}
+	return fmt.Errorf("%s failed with status %d and code %s", action, response.StatusCode, responseError.Code)
+}
+
 func validHarness(harness string) bool {
 	switch harness {
 	case "codex", "claude-code", "opencode":

@@ -34,9 +34,10 @@ type OwnerBootstrapRequest struct {
 }
 
 type PairingCodeRequest struct {
-	Harness     string `json:"harness"`
-	DisplayName string `json:"display_name"`
-	DeviceName  string `json:"device_name"`
+	Kind        state.ActorKind `json:"kind,omitempty"`
+	Harness     string          `json:"harness"`
+	DisplayName string          `json:"display_name"`
+	DeviceName  string          `json:"device_name"`
 }
 
 type PairingCode struct {
@@ -47,6 +48,13 @@ type PairingCode struct {
 type Credential struct {
 	Actor state.Actor `json:"actor"`
 	Token string      `json:"token"`
+}
+
+type ActorRecord struct {
+	Actor      state.Actor `json:"actor"`
+	CreatedAt  time.Time   `json:"created_at"`
+	LastUsedAt *time.Time  `json:"last_used_at,omitempty"`
+	RevokedAt  *time.Time  `json:"revoked_at,omitempty"`
 }
 
 type Manager struct {
@@ -188,6 +196,141 @@ func (manager *Manager) Authenticate(ctx context.Context, token string) (state.A
 	}, nil
 }
 
+func (manager *Manager) RotateCredential(ctx context.Context, currentToken string) (Credential, error) {
+	if err := ctx.Err(); err != nil {
+		return Credential{}, err
+	}
+	credentialID, err := manager.newID()
+	if err != nil {
+		return Credential{}, fmt.Errorf("generate credential ID: %w", err)
+	}
+	newToken, err := manager.newToken()
+	if err != nil {
+		return Credential{}, fmt.Errorf("generate credential: %w", err)
+	}
+	now := manager.clock().UTC()
+	var actor state.Actor
+	err = manager.app.RunInTransaction(func(txApp core.App) error {
+		currentCredentialID, currentActor, err := findCredential(txApp, currentToken)
+		if err != nil {
+			return err
+		}
+		actor = currentActor
+		result, err := txApp.DB().NewQuery(`
+			UPDATE state_credentials SET revoked_at = {:revoked_at}
+			WHERE id = {:id} AND revoked_at IS NULL
+		`).Bind(dbx.Params{"revoked_at": formatTime(now), "id": currentCredentialID}).Execute()
+		if err != nil {
+			return err
+		}
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rowsAffected != 1 {
+			return ErrInvalidCredential
+		}
+		return insertCredential(txApp, credentialID, actor.ID, newToken, now)
+	})
+	if err != nil {
+		return Credential{}, err
+	}
+	return Credential{Actor: actor, Token: newToken}, nil
+}
+
+func (manager *Manager) RevokeCredential(ctx context.Context, token string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if token == "" {
+		return ErrInvalidCredential
+	}
+	result, err := manager.app.DB().NewQuery(`
+		UPDATE state_credentials SET revoked_at = {:revoked_at}
+		WHERE token_hash = {:token_hash} AND revoked_at IS NULL
+	`).Bind(dbx.Params{
+		"revoked_at": formatTime(manager.clock()),
+		"token_hash": hashSecret(token),
+	}).Execute()
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected != 1 {
+		return ErrInvalidCredential
+	}
+	return nil
+}
+
+func (manager *Manager) ListActors(ctx context.Context, actor state.Actor, kind state.ActorKind) ([]ActorRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if actor.Kind != state.ActorKindOwner {
+		return nil, state.ErrForbidden
+	}
+	if kind != state.ActorKindDevice && kind != state.ActorKindHarness {
+		return nil, state.ErrInvalidInput
+	}
+	where := "a.kind = 'harness'"
+	if kind == state.ActorKindDevice {
+		where = "a.kind IN ('owner', 'device')"
+	}
+	rows := []struct {
+		ID          string  `db:"id"`
+		Kind        string  `db:"kind"`
+		DisplayName string  `db:"display_name"`
+		Harness     string  `db:"harness"`
+		DeviceName  string  `db:"device_name"`
+		CreatedAt   string  `db:"created_at"`
+		LastUsedAt  *string `db:"last_used_at"`
+		RevokedAt   *string `db:"revoked_at"`
+	}{}
+	query := fmt.Sprintf(`
+		SELECT a.id, a.kind, a.display_name, a.harness, a.device_name, a.created_at,
+			MAX(c.last_used_at) AS last_used_at, a.revoked_at
+		FROM state_actors a
+		LEFT JOIN state_credentials c ON c.actor_id = a.id
+		WHERE %s
+		GROUP BY a.id, a.kind, a.display_name, a.harness, a.device_name, a.created_at, a.revoked_at
+		ORDER BY CASE WHEN a.kind = 'owner' THEN 0 ELSE 1 END, a.created_at, a.id
+	`, where)
+	if err := manager.app.DB().NewQuery(query).All(&rows); err != nil {
+		return nil, fmt.Errorf("list actors: %w", err)
+	}
+	records := make([]ActorRecord, 0, len(rows))
+	for _, row := range rows {
+		createdAt, err := time.Parse(time.RFC3339Nano, row.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parse actor creation time: %w", err)
+		}
+		lastUsedAt, err := parseOptionalTime(row.LastUsedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parse actor last used time: %w", err)
+		}
+		revokedAt, err := parseOptionalTime(row.RevokedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parse actor revocation time: %w", err)
+		}
+		records = append(records, ActorRecord{
+			Actor: state.Actor{
+				ID:          row.ID,
+				Kind:        state.ActorKind(row.Kind),
+				DisplayName: row.DisplayName,
+				Harness:     row.Harness,
+				DeviceName:  row.DeviceName,
+			},
+			CreatedAt:  createdAt,
+			LastUsedAt: lastUsedAt,
+			RevokedAt:  revokedAt,
+		})
+	}
+	return records, nil
+}
+
 func (manager *Manager) CreatePairingCode(ctx context.Context, actor state.Actor, request PairingCodeRequest) (PairingCode, error) {
 	if err := ctx.Err(); err != nil {
 		return PairingCode{}, err
@@ -195,7 +338,13 @@ func (manager *Manager) CreatePairingCode(ctx context.Context, actor state.Actor
 	if actor.Kind != state.ActorKindOwner {
 		return PairingCode{}, state.ErrForbidden
 	}
-	if !validHarness(request.Harness) || strings.TrimSpace(request.DisplayName) == "" {
+	actorKind := request.Kind
+	if actorKind == "" && request.Harness != "" {
+		actorKind = state.ActorKindHarness
+	}
+	validDevice := actorKind == state.ActorKindDevice && request.Harness == "" && strings.TrimSpace(request.DeviceName) != ""
+	validAgent := actorKind == state.ActorKindHarness && validHarness(request.Harness)
+	if (!validDevice && !validAgent) || strings.TrimSpace(request.DisplayName) == "" {
 		return PairingCode{}, state.ErrInvalidInput
 	}
 	id, err := manager.newID()
@@ -210,13 +359,14 @@ func (manager *Manager) CreatePairingCode(ctx context.Context, actor state.Actor
 	expiresAt := now.Add(10 * time.Minute)
 	_, err = manager.app.DB().NewQuery(`
 		INSERT INTO state_pairing_codes (
-			id, code_hash, harness, display_name, device_name, created_by, created_at, expires_at
+			id, code_hash, actor_kind, harness, display_name, device_name, created_by, created_at, expires_at
 		) VALUES (
-			{:id}, {:code_hash}, {:harness}, {:display_name}, {:device_name}, {:created_by}, {:created_at}, {:expires_at}
+			{:id}, {:code_hash}, {:actor_kind}, {:harness}, {:display_name}, {:device_name}, {:created_by}, {:created_at}, {:expires_at}
 		)
 	`).Bind(dbx.Params{
 		"id":           id,
 		"code_hash":    hashSecret(normalizePairingCode(code)),
+		"actor_kind":   string(actorKind),
 		"harness":      request.Harness,
 		"display_name": strings.TrimSpace(request.DisplayName),
 		"device_name":  strings.TrimSpace(request.DeviceName),
@@ -255,6 +405,7 @@ func (manager *Manager) ExchangePairingCode(ctx context.Context, code string) (C
 	err = manager.app.RunInTransaction(func(txApp core.App) error {
 		row := struct {
 			ID          string  `db:"id"`
+			ActorKind   string  `db:"actor_kind"`
 			Harness     string  `db:"harness"`
 			DisplayName string  `db:"display_name"`
 			DeviceName  string  `db:"device_name"`
@@ -262,7 +413,7 @@ func (manager *Manager) ExchangePairingCode(ctx context.Context, code string) (C
 			UsedAt      *string `db:"used_at"`
 		}{}
 		err := txApp.DB().NewQuery(`
-			SELECT id, harness, display_name, device_name, expires_at, used_at
+			SELECT id, actor_kind, harness, display_name, device_name, expires_at, used_at
 			FROM state_pairing_codes
 			WHERE code_hash = {:code_hash}
 			LIMIT 1
@@ -285,7 +436,7 @@ func (manager *Manager) ExchangePairingCode(ctx context.Context, code string) (C
 		}
 		actor = state.Actor{
 			ID:          actorID,
-			Kind:        state.ActorKindHarness,
+			Kind:        state.ActorKind(row.ActorKind),
 			DisplayName: row.DisplayName,
 			Harness:     row.Harness,
 			DeviceName:  row.DeviceName,
@@ -376,6 +527,7 @@ func (manager *Manager) ensureSchema() error {
 		`CREATE TABLE IF NOT EXISTS state_pairing_codes (
 			id TEXT PRIMARY KEY,
 			code_hash TEXT NOT NULL UNIQUE,
+			actor_kind TEXT NOT NULL DEFAULT 'harness' CHECK(actor_kind IN ('device', 'harness')),
 			harness TEXT NOT NULL,
 			display_name TEXT NOT NULL,
 			device_name TEXT NOT NULL DEFAULT '',
@@ -391,8 +543,76 @@ func (manager *Manager) ensureSchema() error {
 				return err
 			}
 		}
+		columns := []struct {
+			Name string `db:"name"`
+		}{}
+		if err := txApp.DB().NewQuery(`PRAGMA table_info(state_pairing_codes)`).All(&columns); err != nil {
+			return err
+		}
+		hasActorKind := false
+		for _, column := range columns {
+			if column.Name == "actor_kind" {
+				hasActorKind = true
+				break
+			}
+		}
+		if !hasActorKind {
+			if _, err := txApp.DB().NewQuery(`
+				ALTER TABLE state_pairing_codes
+				ADD COLUMN actor_kind TEXT NOT NULL DEFAULT 'harness' CHECK(actor_kind IN ('device', 'harness'))
+			`).Execute(); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
+}
+
+func findCredential(app core.App, token string) (string, state.Actor, error) {
+	if token == "" {
+		return "", state.Actor{}, ErrInvalidCredential
+	}
+	row := struct {
+		CredentialID string `db:"credential_id"`
+		ActorID      string `db:"actor_id"`
+		Kind         string `db:"kind"`
+		DisplayName  string `db:"display_name"`
+		Harness      string `db:"harness"`
+		DeviceName   string `db:"device_name"`
+	}{}
+	err := app.DB().NewQuery(`
+		SELECT c.id AS credential_id, a.id AS actor_id, a.kind, a.display_name, a.harness, a.device_name
+		FROM state_credentials c
+		JOIN state_actors a ON a.id = c.actor_id
+		WHERE c.token_hash = {:token_hash}
+			AND c.revoked_at IS NULL
+			AND a.revoked_at IS NULL
+		LIMIT 1
+	`).Bind(dbx.Params{"token_hash": hashSecret(token)}).One(&row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", state.Actor{}, ErrInvalidCredential
+	}
+	if err != nil {
+		return "", state.Actor{}, fmt.Errorf("find credential: %w", err)
+	}
+	return row.CredentialID, state.Actor{
+		ID:          row.ActorID,
+		Kind:        state.ActorKind(row.Kind),
+		DisplayName: row.DisplayName,
+		Harness:     row.Harness,
+		DeviceName:  row.DeviceName,
+	}, nil
+}
+
+func parseOptionalTime(value *string) (*time.Time, error) {
+	if value == nil || *value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, *value)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }
 
 func insertActor(app core.App, actor state.Actor, createdAt time.Time) error {
