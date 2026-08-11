@@ -87,8 +87,12 @@ Test restore into isolated volumes before relying on a backup:
 
 ```bash
 STATE_AGE_IDENTITY_FILE=/secure/path/to/identity.txt \
-  ./ops/restore-state.sh /absolute/path/to/state-backup.tar.gz.age
+  ./ops/verify-backup.sh /absolute/path/to/state-backup.tar.gz.age
 ```
+
+The verification script checks the checksum, decrypts the archive, restores both data sets into temporary Docker volumes, starts isolated server and relay containers, checks both readiness endpoints and verifies the restored audit chain. It removes only its own temporary containers, volumes and plaintext archive.
+
+Use `restore-state.sh` only for an intentional production restore. It requires `STATE_RESTORE_CONFIRM=restore`, stops both services and replaces both production data volumes.
 
 The restore script requires the exact confirmation text `RESTORE STATE`. It must only be used during a planned maintenance window.
 
