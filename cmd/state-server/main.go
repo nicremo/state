@@ -16,6 +16,7 @@ import (
 
 	"github.com/nicremo/state/internal/api"
 	stateauth "github.com/nicremo/state/internal/auth"
+	"github.com/nicremo/state/internal/mcpserver"
 	"github.com/nicremo/state/internal/securefile"
 	"github.com/nicremo/state/internal/state"
 	"github.com/nicremo/state/internal/store"
@@ -170,11 +171,20 @@ func newApplication(config applicationConfig) (*application, error) {
 		_ = pb.ResetBootstrapState()
 		return nil, err
 	}
-	handler := api.NewHandler(api.Config{
+	stateService := state.NewService(repository)
+	restHandler := api.NewHandler(api.Config{
 		Auth:    authManager,
-		State:   state.NewService(repository),
+		State:   stateService,
 		Version: config.version,
 	})
+	mcpHandler := mcpserver.NewHandler(mcpserver.Config{
+		Auth:    authManager,
+		State:   stateService,
+		Version: config.version,
+	})
+	handler := http.NewServeMux()
+	handler.Handle("/mcp", mcpHandler)
+	handler.Handle("/", restHandler)
 	return &application{
 		handler:    handler,
 		pocketBase: pb,
