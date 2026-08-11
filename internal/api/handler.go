@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +44,13 @@ type ErrorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 	Details any    `json:"details,omitempty"`
+}
+
+type Export struct {
+	APIVersion  string           `json:"api_version"`
+	GeneratedAt time.Time        `json:"generated_at"`
+	Cursor      int64            `json:"cursor"`
+	Reminders   []ReminderDetail `json:"reminders"`
 }
 
 func NewHandler(config Config) http.Handler {
@@ -85,6 +93,7 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("POST /api/v1/occurrences/{id}/snooze", handler.snoozeOccurrence)
 	handler.router.HandleFunc("GET /api/v1/changes", handler.getChanges)
 	handler.router.HandleFunc("GET /api/v1/briefing", handler.getBriefing)
+	handler.router.HandleFunc("GET /api/v1/export", handler.exportState)
 }
 
 func (handler *Handler) healthLive(writer http.ResponseWriter, _ *http.Request) {
@@ -346,6 +355,89 @@ func (handler *Handler) getReminder(writer http.ResponseWriter, request *http.Re
 		Comments:    comments,
 		Occurrences: occurrences,
 		History:     history,
+	})
+}
+
+func (handler *Handler) exportState(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if actor.Kind != state.ActorKindOwner {
+		writeError(writer, state.ErrForbidden, nil)
+		return
+	}
+
+	const pageSize = 500
+	cursor := int64(0)
+	reminderIDs := make(map[string]struct{})
+	for {
+		changes, err := handler.state.ListChanges(request.Context(), cursor, pageSize)
+		if err != nil {
+			writeError(writer, err, nil)
+			return
+		}
+		for _, change := range changes {
+			reminderIDs[change.Event.ReminderID] = struct{}{}
+			cursor = change.Cursor
+		}
+		if len(changes) < pageSize {
+			break
+		}
+	}
+
+	reminders, err := handler.state.ListReminders(request.Context(), state.ReminderListOptions{
+		IncludeArchived: true,
+		Limit:           pageSize,
+	})
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	for _, reminder := range reminders {
+		reminderIDs[reminder.ID] = struct{}{}
+	}
+
+	ids := make([]string, 0, len(reminderIDs))
+	for id := range reminderIDs {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	details := make([]ReminderDetail, 0, len(ids))
+	for _, id := range ids {
+		reminder, err := handler.state.GetReminder(request.Context(), id)
+		if err != nil {
+			writeError(writer, err, nil)
+			return
+		}
+		comments, err := handler.state.ListComments(request.Context(), id)
+		if err != nil {
+			writeError(writer, err, nil)
+			return
+		}
+		occurrences, err := handler.state.ListOccurrences(request.Context(), id, state.OccurrenceListOptions{Limit: pageSize})
+		if err != nil {
+			writeError(writer, err, nil)
+			return
+		}
+		history, err := handler.state.ListAuditEvents(request.Context(), id)
+		if err != nil {
+			writeError(writer, err, nil)
+			return
+		}
+		details = append(details, ReminderDetail{
+			Reminder:    reminder,
+			Comments:    comments,
+			Occurrences: occurrences,
+			History:     history,
+		})
+	}
+
+	writeJSON(writer, http.StatusOK, Export{
+		APIVersion:  "v1",
+		GeneratedAt: time.Now().UTC(),
+		Cursor:      cursor,
+		Reminders:   details,
 	})
 }
 

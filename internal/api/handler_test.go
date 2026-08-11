@@ -206,6 +206,63 @@ func TestHealthAndVersionEndpointsArePublic(t *testing.T) {
 	}
 }
 
+func TestOwnerExportIncludesArchivedReminderContext(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+	owner := bootstrapOwner(t, handler)
+	createResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/reminders", owner.Token, map[string]any{
+		"title":             "Export target",
+		"client_request_id": "0198a188-43d7-7465-89be-d72d98fe833e",
+	})
+	var reminder state.Reminder
+	decodeResponse(t, createResponse, &reminder)
+	commentResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/reminders/"+reminder.ID+"/comments", owner.Token, map[string]any{
+		"body":              "Retained export context",
+		"client_request_id": "0198a188-43d7-7b12-9d95-818755fa22a9",
+	})
+	if commentResponse.Code != http.StatusCreated {
+		t.Fatalf("comment status = %d, body = %s", commentResponse.Code, commentResponse.Body.String())
+	}
+	archiveResponse := performJSONRequest(t, handler, http.MethodPatch, "/api/v1/reminders/"+reminder.ID, owner.Token, map[string]any{
+		"archived":          true,
+		"expected_revision": 1,
+		"client_request_id": "0198a188-43d7-77b1-8a29-8719e3fe99c9",
+	})
+	if archiveResponse.Code != http.StatusOK {
+		t.Fatalf("archive status = %d, body = %s", archiveResponse.Code, archiveResponse.Body.String())
+	}
+
+	exportResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/export", owner.Token, nil)
+	if exportResponse.Code != http.StatusOK {
+		t.Fatalf("export status = %d, body = %s", exportResponse.Code, exportResponse.Body.String())
+	}
+	var exported Export
+	decodeResponse(t, exportResponse, &exported)
+	if exported.APIVersion != "v1" || exported.Cursor != 3 || len(exported.Reminders) != 1 {
+		t.Fatalf("export = %#v", exported)
+	}
+	detail := exported.Reminders[0]
+	if !detail.Reminder.Archived || len(detail.Comments) != 1 || len(detail.History) != 3 {
+		t.Fatalf("exported detail = %#v", detail)
+	}
+
+	pairingResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/pairing/codes", owner.Token, map[string]any{
+		"harness":      "opencode",
+		"display_name": "OpenCode",
+		"device_name":  "MacBook",
+	})
+	var pairing stateauth.PairingCode
+	decodeResponse(t, pairingResponse, &pairing)
+	exchangeResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/pairing/exchange", "", map[string]any{"code": pairing.Code})
+	var harness stateauth.Credential
+	decodeResponse(t, exchangeResponse, &harness)
+	forbiddenResponse := performJSONRequest(t, handler, http.MethodGet, "/api/v1/export", harness.Token, nil)
+	if forbiddenResponse.Code != http.StatusForbidden {
+		t.Fatalf("harness export status = %d, body = %s", forbiddenResponse.Code, forbiddenResponse.Body.String())
+	}
+}
+
 func TestListSearchChangesAndBriefingEndpoints(t *testing.T) {
 	t.Parallel()
 

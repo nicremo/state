@@ -14,7 +14,10 @@ struct SettingsView: View {
             List {
                 Section("Connection") {
                     if let session = model.session {
-                        LabeledContent("Server", value: session.serverURL.host() ?? session.serverURL.absoluteString)
+                        LabeledContent(
+                            "Server",
+                            value: model.isDemo ? String(localized: "Local demo") : session.serverURL.host() ?? session.serverURL.absoluteString
+                        )
                         LabeledContent("Identity") {
                             OriginBadge(actor: session.actor)
                         }
@@ -57,9 +60,11 @@ struct SettingsView: View {
                                 Text(pairingCode.code)
                                     .font(.title3.monospaced().weight(.semibold))
                                     .textSelection(.enabled)
-                                Text("Expires \(pairingCode.expiresAt, style: .relative)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                LabeledContent("Expires") {
+                                    Text(pairingCode.expiresAt, style: .relative)
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                                 Button {
                                     UIPasteboard.general.string = pairingCommand(code: pairingCode.code)
                                 } label: {

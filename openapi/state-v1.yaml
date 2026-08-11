@@ -1,0 +1,827 @@
+openapi: 3.1.0
+info:
+  title: State API
+  version: 1.0.0
+  description: REST contract for the self-hosted State reminder and context service.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: https://state.example.com
+security:
+  - bearerAuth: []
+tags:
+  - name: System
+  - name: Pairing
+  - name: Credentials
+  - name: Reminders
+  - name: Occurrences
+  - name: Sync
+  - name: Devices
+paths:
+  /health/live:
+    get:
+      tags: [System]
+      operationId: healthLive
+      security: []
+      responses:
+        "200":
+          description: Process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /health/ready:
+    get:
+      tags: [System]
+      operationId: healthReady
+      security: []
+      responses:
+        "200":
+          description: Service dependencies are ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          description: Service dependencies are not ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /version:
+    get:
+      tags: [System]
+      operationId: getVersion
+      security: []
+      responses:
+        "200":
+          description: Running service and API version.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, version, api_version]
+                properties:
+                  name: { type: string, const: state-server }
+                  version: { type: string }
+                  api_version: { type: string, const: v1 }
+  /api/v1/pairing/owner:
+    post:
+      tags: [Pairing]
+      operationId: bootstrapOwner
+      security: []
+      parameters:
+        - name: X-State-Bootstrap-Token
+          in: header
+          required: true
+          schema: { type: string, minLength: 32 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OwnerBootstrapRequest"
+      responses:
+        "201":
+          description: Owner credential created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/pairing/codes:
+    post:
+      tags: [Pairing]
+      operationId: createPairingCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PairingCodeRequest"
+      responses:
+        "201":
+          description: One-time code created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PairingCode"
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/pairing/exchange:
+    post:
+      tags: [Pairing]
+      operationId: exchangePairingCode
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, minLength: 8 }
+      responses:
+        "201":
+          description: Device or harness credential created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/credentials/rotate:
+    post:
+      tags: [Credentials]
+      operationId: rotateCredential
+      responses:
+        "200":
+          description: Replacement credential.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/credentials/revoke:
+    post:
+      tags: [Credentials]
+      operationId: revokeCredential
+      responses:
+        "204": { description: Credential revoked. }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/agents:
+    get:
+      tags: [Credentials]
+      operationId: listAgents
+      responses:
+        "200":
+          description: Harness actors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActorList"
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/agents/{actor_id}:
+    delete:
+      tags: [Credentials]
+      operationId: revokeAgent
+      parameters:
+        - $ref: "#/components/parameters/ActorID"
+      responses:
+        "204": { description: Agent revoked. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/devices:
+    get:
+      tags: [Devices]
+      operationId: listDevices
+      responses:
+        "200":
+          description: Device actors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActorList"
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/devices/{actor_id}:
+    delete:
+      tags: [Devices]
+      operationId: revokeDevice
+      parameters:
+        - $ref: "#/components/parameters/ActorID"
+      responses:
+        "204": { description: Device revoked. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/devices/push:
+    put:
+      tags: [Devices]
+      operationId: registerDevicePush
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterDevicePushRequest"
+      responses:
+        "200":
+          description: Personal server push route stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceRoute"
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [Devices]
+      operationId: deleteDevicePush
+      responses:
+        "204": { description: Push route removed. }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/devices/push/confirmations:
+    post:
+      tags: [Devices]
+      operationId: confirmLocalNotifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [occurrence_ids]
+              properties:
+                occurrence_ids:
+                  type: array
+                  maxItems: 64
+                  uniqueItems: true
+                  items: { $ref: "#/components/schemas/UUIDv7" }
+      responses:
+        "204": { description: Local notification coverage confirmed. }
+        "400": { $ref: "#/components/responses/Error" }
+  /api/v1/reminders:
+    get:
+      tags: [Reminders]
+      operationId: listReminders
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 500 }
+        - name: include_archived
+          in: query
+          schema: { type: boolean, default: false }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Matching reminders.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reminders]
+                properties:
+                  reminders:
+                    type: array
+                    items: { $ref: "#/components/schemas/Reminder" }
+        "400": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Reminders]
+      operationId: createReminder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReminderRequest"
+      responses:
+        "201":
+          description: Reminder stored with its audit event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reminder" }
+        "400": { $ref: "#/components/responses/Error" }
+  /api/v1/reminders/{reminder_id}:
+    parameters:
+      - $ref: "#/components/parameters/ReminderID"
+    get:
+      tags: [Reminders]
+      operationId: getReminder
+      responses:
+        "200":
+          description: Current reminder, comments, occurrences and full history.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReminderDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [Reminders]
+      operationId: updateReminder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateReminderRequest" }
+      responses:
+        "200":
+          description: Updated reminder.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reminder" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Revision conflict. The current server reminder is in details.server.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/reminders/{reminder_id}/comments:
+    parameters:
+      - $ref: "#/components/parameters/ReminderID"
+    get:
+      tags: [Reminders]
+      operationId: listComments
+      responses:
+        "200":
+          description: Reminder comments.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [comments]
+                properties:
+                  comments:
+                    type: array
+                    items: { $ref: "#/components/schemas/Comment" }
+    post:
+      tags: [Reminders]
+      operationId: addComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddCommentRequest" }
+      responses:
+        "201":
+          description: Comment stored with its audit event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Comment" }
+        "400": { $ref: "#/components/responses/Error" }
+  /api/v1/reminders/{reminder_id}/history:
+    get:
+      tags: [Reminders]
+      operationId: getReminderHistory
+      parameters:
+        - $ref: "#/components/parameters/ReminderID"
+      responses:
+        "200":
+          description: Ordered immutable audit events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: "#/components/schemas/AuditEvent" }
+  /api/v1/reminders/{reminder_id}/occurrences:
+    get:
+      tags: [Occurrences]
+      operationId: listOccurrences
+      parameters:
+        - $ref: "#/components/parameters/ReminderID"
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/OccurrenceStatus" }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Reminder occurrences.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [occurrences]
+                properties:
+                  occurrences:
+                    type: array
+                    items: { $ref: "#/components/schemas/Occurrence" }
+  /api/v1/occurrences/{occurrence_id}/complete:
+    post:
+      tags: [Occurrences]
+      operationId: completeOccurrence
+      parameters:
+        - $ref: "#/components/parameters/OccurrenceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OccurrenceMutationRequest" }
+      responses:
+        "200":
+          description: Completed occurrence.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Occurrence" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/occurrences/{occurrence_id}/snooze:
+    post:
+      tags: [Occurrences]
+      operationId: snoozeOccurrence
+      parameters:
+        - $ref: "#/components/parameters/OccurrenceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/OccurrenceMutationRequest"
+                - type: object
+                  required: [until]
+                  properties:
+                    until: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Snoozed occurrence.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Occurrence" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/changes:
+    get:
+      tags: [Sync]
+      operationId: getChanges
+      parameters:
+        - $ref: "#/components/parameters/AfterCursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Ordered change feed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangesResponse" }
+  /api/v1/briefing:
+    get:
+      tags: [Sync]
+      operationId: getBriefing
+      parameters:
+        - $ref: "#/components/parameters/AfterCursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Bounded agent session context.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Briefing" }
+  /api/v1/export:
+    get:
+      tags: [Sync]
+      operationId: exportState
+      description: Owner-only complete JSON export including archived reminders and full context.
+      responses:
+        "200":
+          description: Point-in-time logical export.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Export" }
+        "403": { $ref: "#/components/responses/Error" }
+  /mcp:
+    post:
+      tags: [Sync]
+      operationId: mcpStreamableHTTP
+      description: MCP Streamable HTTP endpoint. Content types and session behavior follow the negotiated MCP protocol version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: MCP JSON or server-sent event stream.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+            text/event-stream:
+              schema: { type: string }
+        "202": { description: MCP notification accepted. }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    ActorID:
+      name: actor_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/UUIDv7" }
+    ReminderID:
+      name: reminder_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/UUIDv7" }
+    OccurrenceID:
+      name: occurrence_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/UUIDv7" }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+    AfterCursor:
+      name: after
+      in: query
+      schema: { type: integer, format: int64, minimum: 0, default: 0 }
+  responses:
+    Error:
+      description: Structured API error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    UUIDv7:
+      type: string
+      format: uuid
+      pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok, ready, not_ready] }
+    ActorKind:
+      type: string
+      enum: [owner, device, harness, system]
+    Actor:
+      type: object
+      required: [id, kind]
+      properties:
+        id: { $ref: "#/components/schemas/UUIDv7" }
+        kind: { $ref: "#/components/schemas/ActorKind" }
+        display_name: { type: [string, "null"] }
+        harness: { type: [string, "null"] }
+        device_name: { type: [string, "null"] }
+    ActorList:
+      type: object
+      required: [actors]
+      properties:
+        actors:
+          type: array
+          items: { $ref: "#/components/schemas/ActorRecord" }
+    ActorRecord:
+      type: object
+      required: [actor, created_at]
+      properties:
+        actor: { $ref: "#/components/schemas/Actor" }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+    OwnerBootstrapRequest:
+      type: object
+      required: [display_name, device_name]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        device_name: { type: string, minLength: 1, maxLength: 200 }
+    PairingCodeRequest:
+      type: object
+      required: [display_name]
+      properties:
+        kind: { type: string, enum: [device, harness] }
+        harness: { type: [string, "null"], enum: [codex, claude-code, opencode, null] }
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        device_name: { type: string, minLength: 1, maxLength: 200 }
+    PairingCode:
+      type: object
+      required: [code, expires_at]
+      properties:
+        code: { type: string }
+        expires_at: { type: string, format: date-time }
+    Credential:
+      type: object
+      required: [actor, token]
+      properties:
+        actor: { $ref: "#/components/schemas/Actor" }
+        token: { type: string, minLength: 32, writeOnly: true }
+    ReminderStatus:
+      type: string
+      enum: [active, completed]
+    TimeZoneMode:
+      type: string
+      enum: [floating, fixed]
+    Schedule:
+      type: object
+      required: [local_date, time_zone, mode]
+      properties:
+        local_date: { type: string, format: date }
+        local_time:
+          type: [string, "null"]
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+        time_zone:
+          type: string
+          description: IANA time zone identifier.
+        mode: { $ref: "#/components/schemas/TimeZoneMode" }
+        prewarning_minutes: { type: [integer, "null"], minimum: 0, maximum: 525600 }
+    RecurrenceRule:
+      type: object
+      required: [frequency, interval]
+      properties:
+        frequency: { type: string, enum: [daily, weekly, monthly, yearly] }
+        interval: { type: integer, minimum: 1, maximum: 100 }
+        until_date: { type: [string, "null"], format: date }
+    Reminder:
+      type: object
+      required: [id, title, status, revision, archived, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/UUIDv7" }
+        title: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: [string, "null"], maxLength: 100000 }
+        status: { $ref: "#/components/schemas/ReminderStatus" }
+        schedule:
+          oneOf:
+            - $ref: "#/components/schemas/Schedule"
+            - type: "null"
+        recurrence:
+          oneOf:
+            - $ref: "#/components/schemas/RecurrenceRule"
+            - type: "null"
+        revision: { type: integer, format: int64, minimum: 1 }
+        archived: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    OccurrenceStatus:
+      type: string
+      enum: [pending, completed, snoozed]
+    Occurrence:
+      type: object
+      required: [id, reminder_id, local_date, time_zone, time_zone_mode, status, revision, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/UUIDv7" }
+        reminder_id: { $ref: "#/components/schemas/UUIDv7" }
+        local_date: { type: string, format: date }
+        local_time: { type: [string, "null"] }
+        time_zone: { type: string }
+        time_zone_mode: { $ref: "#/components/schemas/TimeZoneMode" }
+        prewarning_minutes: { type: [integer, "null"] }
+        scheduled_at: { type: [string, "null"], format: date-time }
+        status: { $ref: "#/components/schemas/OccurrenceStatus" }
+        completed_at: { type: [string, "null"], format: date-time }
+        snoozed_until: { type: [string, "null"], format: date-time }
+        revision: { type: integer, format: int64, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Comment:
+      type: object
+      required: [id, reminder_id, body, actor, revision, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/UUIDv7" }
+        reminder_id: { $ref: "#/components/schemas/UUIDv7" }
+        body: { type: string, minLength: 1, maxLength: 100000 }
+        actor: { $ref: "#/components/schemas/Actor" }
+        revision: { type: integer, format: int64, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AuditEvent:
+      type: object
+      required: [id, reminder_id, action, actor, server_time, changed_fields, revision, correlation_id, client_request_id, hash, signature]
+      properties:
+        id: { $ref: "#/components/schemas/UUIDv7" }
+        reminder_id: { $ref: "#/components/schemas/UUIDv7" }
+        action: { type: string }
+        actor: { $ref: "#/components/schemas/Actor" }
+        server_time: { type: string, format: date-time }
+        client_time: { type: [string, "null"], format: date-time }
+        source: { type: [string, "null"] }
+        source_excerpt: { type: [string, "null"] }
+        before_snapshot: { type: [object, array, string, number, boolean, "null"] }
+        after_snapshot: { type: [object, array, string, number, boolean, "null"] }
+        changed_fields:
+          type: array
+          items: { type: string }
+        revision: { type: integer, format: int64, minimum: 1 }
+        correlation_id: { type: string }
+        client_request_id: { type: string }
+        previous_hash: { type: [string, "null"] }
+        hash: { type: string }
+        signature: { type: string }
+    ReminderDetail:
+      type: object
+      required: [reminder, comments, occurrences, history]
+      properties:
+        reminder: { $ref: "#/components/schemas/Reminder" }
+        comments:
+          type: array
+          items: { $ref: "#/components/schemas/Comment" }
+        occurrences:
+          type: array
+          items: { $ref: "#/components/schemas/Occurrence" }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/AuditEvent" }
+    MutationMetadata:
+      type: object
+      required: [client_request_id]
+      properties:
+        client_time: { type: [string, "null"], format: date-time }
+        source: { type: string, maxLength: 200 }
+        source_excerpt: { type: [string, "null"], maxLength: 10000 }
+        client_request_id: { type: string, minLength: 1, maxLength: 200 }
+        correlation_id: { type: string, maxLength: 200 }
+    CreateReminderRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [title]
+          properties:
+            title: { type: string, minLength: 1, maxLength: 500 }
+            description: { type: [string, "null"], maxLength: 100000 }
+            schedule:
+              oneOf:
+                - $ref: "#/components/schemas/Schedule"
+                - type: "null"
+            recurrence:
+              oneOf:
+                - $ref: "#/components/schemas/RecurrenceRule"
+                - type: "null"
+    UpdateReminderRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [expected_revision]
+          properties:
+            title: { type: string, minLength: 1, maxLength: 500 }
+            description: { type: [string, "null"], maxLength: 100000 }
+            status: { $ref: "#/components/schemas/ReminderStatus" }
+            schedule:
+              oneOf:
+                - $ref: "#/components/schemas/Schedule"
+                - type: "null"
+            recurrence:
+              oneOf:
+                - $ref: "#/components/schemas/RecurrenceRule"
+                - type: "null"
+            archived: { type: boolean }
+            expected_revision: { type: integer, format: int64, minimum: 1 }
+    AddCommentRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [body]
+          properties:
+            body: { type: string, minLength: 1, maxLength: 100000 }
+    OccurrenceMutationRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [expected_revision]
+          properties:
+            expected_revision: { type: integer, format: int64, minimum: 1 }
+    Change:
+      type: object
+      required: [cursor, event]
+      properties:
+        cursor: { type: integer, format: int64, minimum: 1 }
+        event: { $ref: "#/components/schemas/AuditEvent" }
+    ChangesResponse:
+      type: object
+      required: [changes, cursor]
+      properties:
+        changes:
+          type: array
+          items: { $ref: "#/components/schemas/Change" }
+        cursor: { type: integer, format: int64, minimum: 0 }
+    Briefing:
+      type: object
+      required: [generated_at, cursor, summary, reminders, changes]
+      properties:
+        generated_at: { type: string, format: date-time }
+        cursor: { type: integer, format: int64, minimum: 0 }
+        summary: { type: string }
+        reminders:
+          type: array
+          items: { $ref: "#/components/schemas/Reminder" }
+        changes:
+          type: array
+          items: { $ref: "#/components/schemas/Change" }
+    Export:
+      type: object
+      required: [api_version, generated_at, cursor, reminders]
+      properties:
+        api_version: { type: string, const: v1 }
+        generated_at: { type: string, format: date-time }
+        cursor: { type: integer, format: int64, minimum: 0 }
+        reminders:
+          type: array
+          items: { $ref: "#/components/schemas/ReminderDetail" }
+    RegisterDevicePushRequest:
+      type: object
+      required: [relay_url, route_id, authorization, public_key]
+      properties:
+        relay_url: { type: string, format: uri, pattern: "^https://" }
+        route_id: { $ref: "#/components/schemas/UUIDv7" }
+        authorization: { type: string, minLength: 32, writeOnly: true }
+        public_key:
+          type: string
+          contentEncoding: base64
+    DeviceRoute:
+      type: object
+      required: [actor_id, relay_url, route_id, public_key, created_at, updated_at]
+      properties:
+        actor_id: { $ref: "#/components/schemas/UUIDv7" }
+        relay_url: { type: string, format: uri }
+        route_id: { $ref: "#/components/schemas/UUIDv7" }
+        public_key: { type: string, contentEncoding: base64 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details: { type: [object, array, string, number, boolean, "null"] }

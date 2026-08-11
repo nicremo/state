@@ -1,0 +1,15 @@
+devices([
+  "iPhone 16 Pro Max"
+])
+
+languages([
+  "de-DE",
+  "en-US"
+])
+
+scheme("State")
+output_directory("./fastlane/screenshots")
+clear_previous_screenshots(true)
+stop_after_first_error(true)
+headless(true)
+localize_simulator(true)

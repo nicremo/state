@@ -68,6 +68,15 @@ struct OnboardingView: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(!canConnect || isConnecting)
 
+                        Button {
+                            Task { await model.enterDemo() }
+                        } label: {
+                            Label(String(localized: "Explore demo"), systemImage: "sparkles")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("explore-demo")
+
                         if DataScannerViewController.isSupported {
                             Button {
                                 scansCode = true

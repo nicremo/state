@@ -29,6 +29,7 @@ final class AppModel {
     private(set) var devices: [Actor] = []
     private(set) var isSyncing = false
     private(set) var lastSyncAt: Date?
+    private(set) var isDemo = false
     var presentedError: String?
 
     init(database: StateDatabase, sessionRepository: SessionRepository = SessionRepository()) {
@@ -84,6 +85,7 @@ final class AppModel {
             session = nil
             api = nil
             syncEngine = nil
+            isDemo = false
         } catch {
             presentedError = error.localizedDescription
         }
@@ -130,6 +132,10 @@ final class AppModel {
                 detail: ReminderDetail(reminder: reminder, comments: [], occurrences: occurrence.map { [$0] } ?? [], history: []),
                 cursor: nil
             )
+            if isDemo {
+                await reloadCache()
+                return
+            }
             let requestID = UUIDv7.generate().uuidString.lowercased()
             let request = CreateReminderRequest(
                 title: reminder.title,
@@ -184,6 +190,10 @@ final class AppModel {
                 history: detail.history
             )
             try await database.apply(detail: detail, cursor: nil)
+            if isDemo {
+                await reloadCache()
+                return
+            }
             let requestID = UUIDv7.generate().uuidString.lowercased()
             let request = UpdateReminderRequest(
                 title: title,
@@ -241,6 +251,10 @@ final class AppModel {
                 history: detail.history
             )
             try await database.apply(detail: detail, cursor: nil)
+            if isDemo {
+                await reloadCache()
+                return
+            }
             let request = AddCommentRequest(
                 body: body,
                 clientTime: now,
@@ -283,6 +297,10 @@ final class AppModel {
                 history: detail.history
             )
             try await database.apply(detail: detail, cursor: nil)
+            if isDemo {
+                await reloadCache()
+                return
+            }
             let requestID = UUIDv7.generate().uuidString.lowercased()
             let request = ArchiveReminderRequest(
                 archived: archived,
@@ -403,6 +421,28 @@ final class AppModel {
         }
     }
 
+    func enterDemo() async {
+        do {
+            isDemo = true
+            session = ServerSession(
+                serverURL: URL(string: "https://demo.state.invalid")!,
+                actor: Actor(
+                    id: "01989f00-0000-7000-8000-000000000001",
+                    kind: .owner,
+                    displayName: "Fabian",
+                    harness: nil,
+                    deviceName: "iPhone"
+                )
+            )
+            api = nil
+            syncEngine = nil
+            try await seedDemoData()
+            await reloadCache()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
     func revokeActor(_ actor: Actor) async {
         guard let api else { return }
         do {
@@ -415,6 +455,7 @@ final class AppModel {
 
     private func configure(session: ServerSession, token: String) throws {
         let api = try APIClient(serverURL: session.serverURL, token: token)
+        isDemo = false
         self.session = session
         self.api = api
         syncEngine = SyncEngine(database: database, api: api)
@@ -422,13 +463,191 @@ final class AppModel {
 
     private func reloadCache() async {
         do {
-            reminders = try await database.reminders()
-            activity = try await database.activity()
-            conflicts = try await database.conflicts().filter { !$0.resolved }
+            let loadedReminders = try await database.reminders()
+            let loadedActivity = try await database.activity()
+            if isDemo {
+                reminders = loadedReminders.filter { Self.demoReminderIDs.contains($0.id) }
+                activity = loadedActivity.filter { Self.demoReminderIDs.contains($0.reminderID) }
+                conflicts = []
+            } else {
+                reminders = loadedReminders
+                activity = loadedActivity
+                conflicts = try await database.conflicts().filter { !$0.resolved }
+            }
         } catch {
             presentedError = error.localizedDescription
         }
     }
+
+    private func seedDemoData() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = Date()
+        let today = now.formatted(.iso8601.year().month().day())
+        let nextWeek = calendar.date(byAdding: .day, value: 6, to: now) ?? now
+        let nextWeekText = nextWeek.formatted(.iso8601.year().month().day())
+        let claude = Actor(
+            id: "01989f00-0000-7000-8000-000000000002",
+            kind: .harness,
+            displayName: "Claude Code",
+            harness: "claude-code",
+            deviceName: "MacBook Pro"
+        )
+        let fabian = Actor(
+            id: "01989f00-0000-7000-8000-000000000001",
+            kind: .owner,
+            displayName: "Fabian",
+            harness: nil,
+            deviceName: "iPhone"
+        )
+        let first = Reminder(
+            id: Self.demoReminderIDs[0],
+            title: String(localized: "Prepare agent workflow review"),
+            description: String(localized: "Check the MCP result and add the final notes."),
+            status: .active,
+            schedule: Schedule(
+                localDate: today,
+                localTime: "21:00",
+                timeZone: TimeZone.current.identifier,
+                mode: .floating,
+                prewarningMinutes: 10
+            ),
+            recurrence: nil,
+            revision: 2,
+            archived: false,
+            createdAt: now.addingTimeInterval(-7_200),
+            updatedAt: now.addingTimeInterval(-1_800)
+        )
+        let second = Reminder(
+            id: Self.demoReminderIDs[1],
+            title: String(localized: "Renew VPS backup test"),
+            description: String(localized: "Verify the encrypted archive and restore it into an empty volume."),
+            status: .active,
+            schedule: Schedule(
+                localDate: nextWeekText,
+                localTime: "09:00",
+                timeZone: TimeZone.current.identifier,
+                mode: .fixed,
+                prewarningMinutes: 60
+            ),
+            recurrence: RecurrenceRule(frequency: .monthly, interval: 1, untilDate: nil),
+            revision: 1,
+            archived: false,
+            createdAt: now.addingTimeInterval(-86_400),
+            updatedAt: now.addingTimeInterval(-86_400)
+        )
+        let firstOccurrence = demoOccurrence(reminder: first, id: "01989f00-0000-7000-8000-000000000020", now: now)
+        let secondOccurrence = demoOccurrence(reminder: second, id: "01989f00-0000-7000-8000-000000000021", now: now)
+        let created = demoEvent(
+            id: "01989f00-0000-7000-8000-000000000030",
+            reminder: first,
+            action: "reminder.created",
+            actor: claude,
+            serverTime: now.addingTimeInterval(-7_200),
+            sourceExcerpt: String(localized: "Remind me to prepare the agent workflow review")
+        )
+        let changed = demoEvent(
+            id: "01989f00-0000-7000-8000-000000000031",
+            reminder: first,
+            action: "reminder.updated",
+            actor: fabian,
+            serverTime: now.addingTimeInterval(-1_800),
+            sourceExcerpt: nil
+        )
+        let secondCreated = demoEvent(
+            id: "01989f00-0000-7000-8000-000000000032",
+            reminder: second,
+            action: "reminder.created",
+            actor: Actor(
+                id: "01989f00-0000-7000-8000-000000000003",
+                kind: .harness,
+                displayName: "Codex",
+                harness: "codex",
+                deviceName: "MacBook Pro"
+            ),
+            serverTime: now.addingTimeInterval(-86_400),
+            sourceExcerpt: String(localized: "Remind me to renew the backup restore test")
+        )
+        try await database.apply(
+            detail: ReminderDetail(
+                reminder: first,
+                comments: [
+                    Comment(
+                        id: "01989f00-0000-7000-8000-000000000040",
+                        reminderID: first.id,
+                        body: String(localized: "Focus on the complete cross-agent history."),
+                        actor: fabian,
+                        revision: 1,
+                        createdAt: now.addingTimeInterval(-1_200),
+                        updatedAt: now.addingTimeInterval(-1_200)
+                    ),
+                ],
+                occurrences: [firstOccurrence],
+                history: [created, changed]
+            ),
+            cursor: nil
+        )
+        try await database.apply(
+            detail: ReminderDetail(
+                reminder: second,
+                comments: [],
+                occurrences: [secondOccurrence],
+                history: [secondCreated]
+            ),
+            cursor: nil
+        )
+    }
+
+    private func demoOccurrence(reminder: Reminder, id: String, now: Date) -> Occurrence {
+        let schedule = reminder.schedule!
+        return Occurrence(
+            id: id,
+            reminderID: reminder.id,
+            localDate: schedule.localDate,
+            localTime: schedule.localTime,
+            timeZone: schedule.timeZone,
+            timeZoneMode: schedule.mode,
+            prewarningMinutes: schedule.prewarningMinutes,
+            scheduledAt: Self.date(schedule: schedule),
+            status: .pending,
+            completedAt: nil,
+            snoozedUntil: nil,
+            revision: 1,
+            createdAt: reminder.createdAt,
+            updatedAt: now
+        )
+    }
+
+    private func demoEvent(
+        id: String,
+        reminder: Reminder,
+        action: String,
+        actor: Actor,
+        serverTime: Date,
+        sourceExcerpt: String?
+    ) -> AuditEvent {
+        AuditEvent(
+            id: id,
+            reminderID: reminder.id,
+            action: action,
+            actor: actor,
+            serverTime: serverTime,
+            clientTime: serverTime,
+            source: actor.kind == .harness ? "mcp" : "ios",
+            sourceExcerpt: sourceExcerpt,
+            changedFields: action == "reminder.created" ? ["title", "description", "schedule"] : ["schedule"],
+            revision: reminder.revision,
+            correlationID: id,
+            clientRequestID: id,
+            previousHash: nil,
+            hash: "demo",
+            signature: "demo"
+        )
+    }
+
+    private static let demoReminderIDs = [
+        "01989f00-0000-7000-8000-000000000010",
+        "01989f00-0000-7000-8000-000000000011",
+    ]
 
     private func reloadActors() async {
         guard let api, session?.actor.kind == .owner else { return }
@@ -475,6 +694,10 @@ final class AppModel {
                 history: detail.history
             )
             try await database.apply(detail: detail, cursor: nil)
+            if isDemo {
+                await reloadCache()
+                return
+            }
             let requestID = UUIDv7.generate().uuidString.lowercased()
             let body: Data
             let path: String
