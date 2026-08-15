@@ -98,7 +98,7 @@ func runRevoke(args []string, stdout io.Writer, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if err := installer.Uninstall(profile.Harness); err != nil {
+		if err := installer.Uninstall(profile.Harness); err != nil && !errors.Is(err, statectl.ErrManualInstallation) {
 			return err
 		}
 	}
@@ -111,7 +111,7 @@ func runPair(args []string, stdout io.Writer, stderr io.Writer) error {
 	flags.SetOutput(stderr)
 	serverURL := flags.String("server", "", "State server base URL")
 	code := flags.String("code", "", "one-time pairing code")
-	harness := flags.String("harness", "", "codex, claude-code, or opencode")
+	harness := flags.String("harness", "", "agent label, for example codex, claude-code, opencode or pi")
 	profileName := flags.String("profile", "", "local profile name, defaults to harness")
 	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
 	install := flags.Bool("install", true, "install global MCP config and agent rules")
@@ -137,7 +137,13 @@ func runPair(args []string, stdout io.Writer, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if err := installer.Install(*harness, profile.Name); err != nil {
+		switch err := installer.Install(*harness, profile.Name); {
+		case err == nil:
+		case errors.Is(err, statectl.ErrManualInstallation):
+			if _, err := fmt.Fprint(stdout, installer.ManualInstructions(*harness, profile.Name)); err != nil {
+				return err
+			}
+		default:
 			return fmt.Errorf("profile paired but harness installation failed: %w", err)
 		}
 	}
@@ -212,7 +218,7 @@ func runDoctor(args []string, stdout io.Writer, stderr io.Writer) error {
 func runInstall(args []string, stdout io.Writer, stderr io.Writer) error {
 	flags := flag.NewFlagSet("statectl install", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	harness := flags.String("harness", "", "codex, claude-code, or opencode")
+	harness := flags.String("harness", "", "agent label, for example codex, claude-code, opencode or pi")
 	profileName := flags.String("profile", "", "statectl profile name")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -224,7 +230,12 @@ func runInstall(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := installer.Install(*harness, *profileName); err != nil {
+	switch err := installer.Install(*harness, *profileName); {
+	case err == nil:
+	case errors.Is(err, statectl.ErrManualInstallation):
+		_, err := fmt.Fprint(stdout, installer.ManualInstructions(*harness, *profileName))
+		return err
+	default:
 		return err
 	}
 	_, err = fmt.Fprintf(stdout, "installed State for %s\n", *harness)
@@ -234,7 +245,7 @@ func runInstall(args []string, stdout io.Writer, stderr io.Writer) error {
 func runUninstall(args []string, stdout io.Writer, stderr io.Writer) error {
 	flags := flag.NewFlagSet("statectl uninstall", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	harness := flags.String("harness", "", "codex, claude-code, or opencode")
+	harness := flags.String("harness", "", "agent label, for example codex, claude-code, opencode or pi")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -268,7 +279,7 @@ func runUnpair(args []string, stdout io.Writer, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if err := installer.Uninstall(profile.Harness); err != nil {
+		if err := installer.Uninstall(profile.Harness); err != nil && !errors.Is(err, statectl.ErrManualInstallation) {
 			return err
 		}
 	}

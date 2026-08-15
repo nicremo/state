@@ -1,6 +1,7 @@
 package statectl
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,4 +98,48 @@ func readText(t *testing.T, path string) string {
 		t.Fatalf("ReadFile(%s) error = %v", path, err)
 	}
 	return string(contents)
+}
+
+func TestInstallerReportsManualInstallationForUnknownHarness(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	paths := InstallPaths{
+		CodexConfig: filepath.Join(directory, "codex", "config.toml"),
+		CodexRules:  filepath.Join(directory, "codex", "AGENTS.md"),
+	}
+	installer := NewInstaller(paths, "/usr/local/bin/statectl", nil)
+
+	if err := installer.Install("pi", "pi"); !errors.Is(err, ErrManualInstallation) {
+		t.Fatalf("Install() error = %v, want ErrManualInstallation", err)
+	}
+	if err := installer.Uninstall("pi"); !errors.Is(err, ErrManualInstallation) {
+		t.Fatalf("Uninstall() error = %v, want ErrManualInstallation", err)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatalf("ReadDir() error = %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("unknown harness must not create files, found %d entries", len(entries))
+	}
+
+	instructions := installer.ManualInstructions("pi", "pi")
+	for _, fragment := range []string{"pi", "/usr/local/bin/statectl", "\"mcp\"", "--profile"} {
+		if !strings.Contains(instructions, fragment) {
+			t.Fatalf("manual instructions miss %q:\n%s", fragment, instructions)
+		}
+	}
+}
+
+func TestInstallerRejectsInvalidHarnessLabels(t *testing.T) {
+	t.Parallel()
+
+	installer := NewInstaller(InstallPaths{}, "/usr/local/bin/statectl", nil)
+	for _, harness := range []string{"", "Codex", "claude code", "codex_cli"} {
+		err := installer.Install(harness, "profile")
+		if err == nil || errors.Is(err, ErrManualInstallation) {
+			t.Fatalf("Install(%q) error = %v, want a validation error", harness, err)
+		}
+	}
 }

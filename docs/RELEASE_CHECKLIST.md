@@ -26,13 +26,15 @@ Complete these settings in App Store Connect before App Review. They are not inf
 
 `bundle exec fastlane ios build` archives with `-allowProvisioningUpdates`, so Xcode creates the missing developer portal resources itself. A verified run on August 15, 2026 produced a signed App Store IPA and resolved all of the following:
 
-1. App ID `com.fabincrm.state` with Push Notifications, App Attest and the keychain group.
+1. App ID `com.fabincrm.state` with Push Notifications, App Attest, Time Sensitive Notifications and the keychain group.
 2. App ID `com.fabincrm.state.notificationservice`.
 3. App group `group.com.fabincrm.state` on both App IDs.
 4. App Store provisioning profiles for both bundle identifiers.
 5. Signing identity `Apple Distribution: Fabian Bitzer (5DKU7FFK4X)`.
 
-The exported entitlements were `aps-environment: production`, `com.apple.developer.devicecheck.appattest-environment: production`, `com.apple.security.application-groups: group.com.fabincrm.state`, `beta-reports-active: true` and `get-task-allow: false`.
+The exported entitlements were `aps-environment: production`, `com.apple.developer.devicecheck.appattest-environment: production`, `com.apple.developer.usernotifications.time-sensitive: true`, `com.apple.security.application-groups: group.com.fabincrm.state`, `beta-reports-active: true` and `get-task-allow: false`.
+
+Time Sensitive Notifications needs no Apple approval. Critical Alerts does. If reminders should ever pierce Do Not Disturb entirely, request that entitlement first and only then add `com.apple.developer.usernotifications.critical-alerts` and the `.criticalAlert` authorization option, otherwise signing fails.
 
 If the export fails with `Copy failed`, check `rsync`. Xcode packages the IPA with `/usr/bin/rsync`, which is openrsync, and openrsync starts its server process through `PATH`. A Homebrew rsync 3.x that shadows it aborts with `--extended-attributes: unknown option`. The build lane already pins Apple's rsync for the duration of the archive.
 

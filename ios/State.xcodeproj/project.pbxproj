@@ -21,6 +21,7 @@
 		479055869CC0FC054779E56E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8E6B844029635B1CC04B9E40 /* PrivacyInfo.xcprivacy */; };
 		5038B093F736157AE986F748 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B260373D5854890462B580B1 /* APIClient.swift */; };
 		56E28BB30E886ACDC0A34484 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A95BED5A46CC435F7A6B7E /* SyncEngine.swift */; };
+		61B3DC6AFE76B63F8BE3F55D /* HarnessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F45C19CFDD1BE98ECD5882 /* HarnessCatalog.swift */; };
 		61E352C20C59C014B9B5A130 /* StateRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D6CC896460A70110EF5362 /* StateRootView.swift */; };
 		656A443223F52DA2BFC071CF /* StateDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95434DB52CE79EC0ACBCA873 /* StateDatabase.swift */; };
 		657BE7BC07589A53E444F263 /* PushEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3FF11D16348C43C9D86F1D /* PushEnvelope.swift */; };
@@ -35,6 +36,7 @@
 		AC816DB6CC17F748F4D10A1D /* PushRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7761E726011D22475832A98 /* PushRegistrationService.swift */; };
 		BD398F99C8710A54B8CB7270 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F808B6F2B8A329996C25508 /* AppModel.swift */; };
 		BFC44BF26E2878133DBAB89F /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49E24CB265A5E0785289B0DB /* OnboardingView.swift */; };
+		C10D681C9E4FCC0C231CE373 /* HarnessCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D06FBE82110384711CA15F1 /* HarnessCatalogTests.swift */; };
 		CEC16552BAB58CE1347A6132 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 78A5CF91662D6EEDD28F9B1E /* GRDB */; };
 		E1D6F26BE43800FFF44F5652 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BBB357F0392F998BB99044C /* MainTabView.swift */; };
 		EB0B572FBA71649C79BFBF29 /* StateScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = C27E6B9D51CED9A367DD60F3 /* StateScreenshots.swift */; };
@@ -87,6 +89,7 @@
 /* Begin PBXFileReference section */
 		00EBED32EA6304F9ADF2D84B /* StateApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateApp.swift; sourceTree = "<group>"; };
 		018038764FE0FC5AA2A1718D /* StateTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateTheme.swift; sourceTree = "<group>"; };
+		0D06FBE82110384711CA15F1 /* HarnessCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessCatalogTests.swift; sourceTree = "<group>"; };
 		2E09C1F897A91393A521BAED /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		37E22432DA6BAAD47D855756 /* NotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCoordinator.swift; sourceTree = "<group>"; };
 		3BDAFF6318988EE63851DFD1 /* StateAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateAppDelegate.swift; sourceTree = "<group>"; };
@@ -96,6 +99,7 @@
 		596270393A6CEA01AD29FA15 /* UUIDv7.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UUIDv7.swift; sourceTree = "<group>"; };
 		5FA25B43007EB3C718B4BD00 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		6395893E6E8D9F4870E9D30C /* StateTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		67F45C19CFDD1BE98ECD5882 /* HarnessCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessCatalog.swift; sourceTree = "<group>"; };
 		7BBB357F0392F998BB99044C /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		7F808B6F2B8A329996C25508 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		8BD4050889C2AD09C3EDFA81 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -173,6 +177,7 @@
 		4249F22F1B166DEBA82AFDF7 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				67F45C19CFDD1BE98ECD5882 /* HarnessCatalog.swift */,
 				E5DC5696C6332BF15523978F /* Models.swift */,
 			);
 			path = Models;
@@ -190,6 +195,7 @@
 			isa = PBXGroup;
 			children = (
 				B330D47D344AF973FD64CD46 /* DatabaseTests.swift */,
+				0D06FBE82110384711CA15F1 /* HarnessCatalogTests.swift */,
 				8E9E35C98AD7FCDC965ADA7C /* PushEnvelopeTests.swift */,
 				EEA74FBAC0A4D8299F73D22A /* SyncEngineTests.swift */,
 				A53151A5538CF22AA06C2F59 /* UUIDv7Tests.swift */,
@@ -478,6 +484,7 @@
 				5038B093F736157AE986F748 /* APIClient.swift in Sources */,
 				F0AB0F334034910139CA33AD /* ActivityView.swift in Sources */,
 				BD398F99C8710A54B8CB7270 /* AppModel.swift in Sources */,
+				61B3DC6AFE76B63F8BE3F55D /* HarnessCatalog.swift in Sources */,
 				E1D6F26BE43800FFF44F5652 /* MainTabView.swift in Sources */,
 				A963E01C464A6B13F1742981 /* Models.swift in Sources */,
 				96FDC642DAF2CB21D922A85C /* NotificationCoordinator.swift in Sources */,
@@ -514,6 +521,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F624CB13CFF06570A79128A3 /* DatabaseTests.swift in Sources */,
+				C10D681C9E4FCC0C231CE373 /* HarnessCatalogTests.swift in Sources */,
 				119FEB1330F4F2CF49FC1B19 /* PushEnvelopeTests.swift in Sources */,
 				0EC25D57FC4F6CF2D6FA9FF8 /* SyncEngineTests.swift in Sources */,
 				16B7841A2AD057191FD575E2 /* UUIDv7Tests.swift in Sources */,

@@ -4,10 +4,23 @@ import UIKit
 
 struct SettingsView: View {
     @Bindable var model: AppModel
-    @State private var harness = "codex"
+    @Binding var opensNotificationSettings: Bool
+    @State private var harnessSelection = "codex"
+    @State private var customHarness = ""
     @State private var harnessName = "Codex on Mac"
     @State private var pairingCode: PairingCode?
     @State private var confirmsDisconnect = false
+
+    private var harness: String {
+        harnessSelection == HarnessCatalog.customTag
+            ? HarnessCatalog.normalize(customHarness)
+            : harnessSelection
+    }
+
+    private var canCreatePairingCode: Bool {
+        HarnessCatalog.isValid(harness)
+            && !harnessName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         NavigationStack {
@@ -37,10 +50,21 @@ struct SettingsView: View {
 
                 if model.session?.actor.kind == .owner {
                     Section("Connect an agent") {
-                        Picker("Harness", selection: $harness) {
-                            Text("Codex").tag("codex")
-                            Text("Claude Code").tag("claude-code")
-                            Text("OpenCode").tag("opencode")
+                        Picker("Harness", selection: $harnessSelection) {
+                            ForEach(HarnessCatalog.presets, id: \.id) { preset in
+                                Text(preset.label).tag(preset.id)
+                            }
+                            Text("Other").tag(HarnessCatalog.customTag)
+                        }
+                        if harnessSelection == HarnessCatalog.customTag {
+                            TextField("Harness identifier", text: $customHarness)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                            if !customHarness.isEmpty, !HarnessCatalog.isValid(harness) {
+                                Text("Use 2 to 32 characters: lower case letters, digits and inner hyphens.")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
                         }
                         TextField("Agent name", text: $harnessName)
                         Button {
@@ -54,6 +78,7 @@ struct SettingsView: View {
                         } label: {
                             Label("Create one-time code", systemImage: "link.badge.plus")
                         }
+                        .disabled(!canCreatePairingCode)
 
                         if let pairingCode {
                             VStack(alignment: .leading, spacing: 10) {
@@ -70,6 +95,11 @@ struct SettingsView: View {
                                 } label: {
                                     Label("Copy statectl command", systemImage: "doc.on.doc")
                                 }
+                                if !HarnessCatalog.hasShippedIntegration(harness) {
+                                    Text("statectl stores the credential and prints the MCP server entry for this agent. Add it to that agent's own configuration.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             .padding(.vertical, 4)
                         }
@@ -85,6 +115,9 @@ struct SettingsView: View {
                     } label: {
                         Label("Delivery and privacy", systemImage: "bell.badge")
                     }
+                }
+                .navigationDestination(isPresented: $opensNotificationSettings) {
+                    NotificationSettingsView()
                 }
 
                 Section("About") {

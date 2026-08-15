@@ -95,6 +95,9 @@ func TestChallengeRegistrationAndEncryptedDelivery(t *testing.T) {
 		t.Fatalf("payload = %s", encodedPayload)
 	}
 	var decodedPayload struct {
+		APS struct {
+			InterruptionLevel string `json:"interruption-level"`
+		} `json:"aps"`
 		State struct {
 			Envelope pushcrypto.Envelope `json:"envelope"`
 		} `json:"state"`
@@ -104,6 +107,9 @@ func TestChallengeRegistrationAndEncryptedDelivery(t *testing.T) {
 	}
 	if !bytes.Equal(decodedPayload.State.Envelope.Ciphertext, envelope.Ciphertext) {
 		t.Fatalf("notification envelope = %#v", decodedPayload.State.Envelope)
+	}
+	if decodedPayload.APS.InterruptionLevel != "time-sensitive" {
+		t.Fatalf("reminder push must break through Focus, interruption-level = %q", decodedPayload.APS.InterruptionLevel)
 	}
 	if !strings.Contains(encodedPayload, "Neue Erinnerung") || !strings.Contains(encodedPayload, "New reminder") {
 		t.Fatalf("payload lacks generic localized fallback: %s", encodedPayload)
