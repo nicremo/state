@@ -343,7 +343,7 @@ func (manager *Manager) CreatePairingCode(ctx context.Context, actor state.Actor
 		actorKind = state.ActorKindHarness
 	}
 	validDevice := actorKind == state.ActorKindDevice && request.Harness == "" && strings.TrimSpace(request.DeviceName) != ""
-	validAgent := actorKind == state.ActorKindHarness && validHarness(request.Harness)
+	validAgent := actorKind == state.ActorKindHarness && state.ValidHarness(request.Harness)
 	if (!validDevice && !validAgent) || strings.TrimSpace(request.DisplayName) == "" {
 		return PairingCode{}, state.ErrInvalidInput
 	}
@@ -683,15 +683,6 @@ func hashSecret(secret string) string {
 
 func normalizePairingCode(code string) string {
 	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(code), "-", ""))
-}
-
-func validHarness(harness string) bool {
-	switch harness {
-	case "codex", "claude-code", "opencode":
-		return true
-	default:
-		return false
-	}
 }
 
 func formatTime(value time.Time) string {

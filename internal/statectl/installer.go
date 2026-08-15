@@ -10,12 +10,19 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nicremo/state/internal/state"
 )
 
 const (
 	ConfigBlockStart = "# statectl:state:start"
 	ConfigBlockEnd   = "# statectl:state:end"
 )
+
+// ErrManualInstallation reports a valid harness that statectl does not know how
+// to configure. Pairing still succeeds and the caller prints the MCP server
+// definition so the operator can paste it into that agent's own configuration.
+var ErrManualInstallation = errors.New("harness has no shipped configuration path")
 
 type InstallPaths struct {
 	CodexConfig    string
@@ -55,8 +62,11 @@ func DefaultInstallPaths() (InstallPaths, error) {
 }
 
 func (installer *Installer) Install(harness string, profile string) error {
-	if installer.executable == "" || profile == "" || !validHarness(harness) {
+	if installer.executable == "" || profile == "" || !state.ValidHarness(harness) {
 		return errors.New("invalid harness installation")
+	}
+	if !state.KnownHarness(harness) {
+		return fmt.Errorf("%s: %w", harness, ErrManualInstallation)
 	}
 	configPath, rulesPath := installer.pathsFor(harness)
 	if configPath == "" || rulesPath == "" {
@@ -90,8 +100,11 @@ func (installer *Installer) Install(harness string, profile string) error {
 }
 
 func (installer *Installer) Uninstall(harness string) error {
-	if !validHarness(harness) {
+	if !state.ValidHarness(harness) {
 		return errors.New("invalid harness")
+	}
+	if !state.KnownHarness(harness) {
+		return fmt.Errorf("%s: %w", harness, ErrManualInstallation)
 	}
 	configPath, rulesPath := installer.pathsFor(harness)
 	existingConfig, err := readOptional(configPath)
@@ -118,6 +131,43 @@ func (installer *Installer) Uninstall(harness string) error {
 		return err
 	}
 	return installer.writeIfChanged(rulesPath, existingRules, RemoveRuleBlock(existingRules), 0o600)
+}
+
+// ManualInstructions renders the MCP server definition and the agent rules for
+// a harness that statectl does not configure itself. The operator pastes the
+// definition into that agent's own configuration file.
+func (installer *Installer) ManualInstructions(harness string, profile string) string {
+	command := installer.executable
+	if command == "" {
+		command = "statectl"
+	}
+	definition, err := encodeJSONObject(map[string]any{
+		"mcpServers": map[string]any{
+			"state": map[string]any{
+				"command": command,
+				"args":    []string{"mcp", "--profile", profile},
+			},
+		},
+	})
+	if err != nil {
+		definition = ""
+	}
+	return strings.Join([]string{
+		"statectl has no shipped configuration for " + harness + ".",
+		"The credential is stored and the profile is ready. Add this MCP server",
+		"to that agent yourself:",
+		"",
+		strings.TrimRight(definition, "\n"),
+		"",
+		"Agents that expect a command line instead of JSON use:",
+		"",
+		"  " + command + " mcp --profile " + profile,
+		"",
+		"Then add these rules to that agent's instruction file:",
+		"",
+		DefaultAgentRules(),
+		"",
+	}, "\n")
 }
 
 func (installer *Installer) pathsFor(harness string) (string, string) {

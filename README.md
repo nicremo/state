@@ -77,7 +77,15 @@ statectl pair \
   --profile codex
 ```
 
-Supported harness values are `codex`, `claude-code` and `opencode`. `statectl` stores the credential in the operating system keychain, backs up the existing global configuration and installs a marked rule block. The rule requests a limited briefing at session start and records explicit reminder intent only after the server confirms persistence.
+Run that command once per agent. Every pairing creates its own actor with its own credential, so any number of agents can stay connected at the same time and each one appears separately in the audit history.
+
+A harness value is any label of two to thirty-two characters made of lower case letters, digits and inner hyphens. `codex`, `claude-code` and `opencode` ship with a full integration: `statectl` stores the credential in the operating system keychain, backs up the existing global configuration and installs a marked rule block. The rule requests a limited briefing at session start and records explicit reminder intent only after the server confirms persistence.
+
+Any other label, `pi` for example, pairs exactly the same way. `statectl` stores the credential and prints the MCP server entry plus the agent rules instead of writing them, so you add them to that agent's own configuration:
+
+```bash
+statectl pair --server https://state.example.com --code ONE_TIME_CODE --harness pi
+```
 
 Useful commands:
 

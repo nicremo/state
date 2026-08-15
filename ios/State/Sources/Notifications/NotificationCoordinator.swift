@@ -3,6 +3,17 @@ import UserNotifications
 
 @MainActor
 final class NotificationCoordinator {
+    // Reminders must survive Focus modes, so State asks for the time sensitive
+    // permission alongside the standard alert options. The settings option adds
+    // a link from the iOS notification settings back into the app.
+    static let authorizationOptions: UNAuthorizationOptions = [
+        .alert,
+        .badge,
+        .sound,
+        .timeSensitive,
+        .providesAppNotificationSettings,
+    ]
+
     private let center: UNUserNotificationCenter
 
     init(center: UNUserNotificationCenter = .current()) {
@@ -11,7 +22,7 @@ final class NotificationCoordinator {
 
     func activate(model: AppModel) async {
         do {
-            let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            let granted = try await center.requestAuthorization(options: Self.authorizationOptions)
             guard granted else { return }
             UIApplication.shared.registerForRemoteNotifications()
             await refresh(model: model)
@@ -36,6 +47,8 @@ final class NotificationCoordinator {
                 ? reminder.description ?? ""
                 : String(localized: "A reminder is due.")
             content.sound = .default
+            content.interruptionLevel = .timeSensitive
+            content.relevanceScore = 1
             content.categoryIdentifier = StateNotificationAction.category
             content.threadIdentifier = reminder.id
             content.userInfo = [

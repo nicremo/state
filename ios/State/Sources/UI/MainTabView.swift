@@ -1,21 +1,38 @@
 import SwiftUI
 
+enum StateTab: Hashable {
+    case today
+    case planned
+    case activity
+    case settings
+}
+
 struct MainTabView: View {
     @Bindable var model: AppModel
+    @State private var selection: StateTab = .today
+    @State private var opensNotificationSettings = false
 
     var body: some View {
-        TabView {
+        TabView(selection: $selection) {
             ReminderCollectionView(model: model, mode: .today)
                 .tabItem { Label(String(localized: "Today"), systemImage: "sun.max.fill") }
+                .tag(StateTab.today)
 
             ReminderCollectionView(model: model, mode: .planned)
                 .tabItem { Label(String(localized: "Planned"), systemImage: "calendar") }
+                .tag(StateTab.planned)
 
             ActivityView(model: model)
                 .tabItem { Label(String(localized: "Activity"), systemImage: "clock.arrow.circlepath") }
+                .tag(StateTab.activity)
 
-            SettingsView(model: model)
+            SettingsView(model: model, opensNotificationSettings: $opensNotificationSettings)
                 .tabItem { Label(String(localized: "Settings"), systemImage: "gearshape") }
+                .tag(StateTab.settings)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .stateOpenNotificationSettings)) { _ in
+            selection = .settings
+            opensNotificationSettings = true
         }
     }
 }

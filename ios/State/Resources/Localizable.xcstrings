@@ -60,6 +60,7 @@
     "Frequency" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Häufigkeit" } } } },
     "Focus on the complete cross-agent history." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Konzentriere dich auf den vollständigen agentenübergreifenden Verlauf." } } } },
     "Harness" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Harness" } } } },
+    "Harness identifier" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Harness-Kennung" } } } },
     "How delivery works" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "So funktioniert die Zustellung" } } } },
     "If decryption fails, State shows generic notification text." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Falls die Entschlüsselung fehlschlägt, zeigt State einen allgemeinen Benachrichtigungstext." } } } },
     "Identity" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Identität" } } } },
@@ -86,6 +87,7 @@
     "One-time pairing code" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Einmaliger Kopplungscode" } } } },
     "Origin: %@" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Herkunft: %@" } } } },
     "Open iOS notification settings" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "iOS-Benachrichtigungseinstellungen öffnen" } } } },
+    "Other" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Andere" } } } },
     "Pending" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Offen" } } } },
     "Planned" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Geplant" } } } },
     "Prepare agent workflow review" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Agenten-Workflow prüfen" } } } },
@@ -132,12 +134,14 @@
     "Unknown" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Unbekannt" } } } },
     "Upcoming reminders are secured locally on this iPhone." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Anstehende Erinnerungen werden lokal auf diesem iPhone abgesichert." } } } },
     "Use server version" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Serverversion verwenden" } } } },
+    "Use 2 to 32 characters: lower case letters, digits and inner hyphens." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Nutze 2 bis 32 Zeichen: Kleinbuchstaben, Ziffern und Bindestriche im Wortinneren." } } } },
     "Version" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Version" } } } },
     "Verify the encrypted archive and restore it into an empty volume." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Prüfe das verschlüsselte Archiv und stelle es in einem leeren Volume wieder her." } } } },
     "Weekly" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Wöchentlich" } } } },
     "Yearly" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Jährlich" } } } },
     "Your agents remember. You stay in control." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Deine Agenten erinnern sich. Du behältst die Kontrolle." } } } },
-    "Your name" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Dein Name" } } } }
+    "Your name" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Dein Name" } } } },
+    "statectl stores the credential and prints the MCP server entry for this agent. Add it to that agent's own configuration." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "statectl speichert die Zugangsdaten und gibt den MCP-Server-Eintrag für diesen Agenten aus. Trage ihn in dessen eigene Konfiguration ein." } } } }
   },
   "version" : "1.0"
 }

@@ -36,7 +36,7 @@ func NewPairService(config *ConfigStore, secrets SecretStore, httpClient *http.C
 }
 
 func (service *PairService) Pair(ctx context.Context, request PairRequest) (Profile, error) {
-	if service.config == nil || service.secrets == nil || request.ProfileName == "" || request.Code == "" || !validHarness(request.Harness) {
+	if service.config == nil || service.secrets == nil || request.ProfileName == "" || request.Code == "" || !state.ValidHarness(request.Harness) {
 		return Profile{}, state.ErrInvalidInput
 	}
 	serverURL := strings.TrimRight(strings.TrimSpace(request.ServerURL), "/")
@@ -185,13 +185,4 @@ func responseStatusError(action string, response *http.Response) error {
 		responseError.Code = "request_failed"
 	}
 	return fmt.Errorf("%s failed with status %d and code %s", action, response.StatusCode, responseError.Code)
-}
-
-func validHarness(harness string) bool {
-	switch harness {
-	case "codex", "claude-code", "opencode":
-		return true
-	default:
-		return false
-	}
 }
