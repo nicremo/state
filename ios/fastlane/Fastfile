@@ -1,9 +1,32 @@
 require "fileutils"
+require "tmpdir"
 
 default_platform(:ios)
 
 IOS_ROOT = File.expand_path("..", __dir__)
 PROJECT_PATH = File.join(IOS_ROOT, "State.xcodeproj")
+
+# The Xcode project is generated from project.yml, so no tracked file may carry
+# a build number. The archive receives it as a build setting override instead.
+# The UTC default stays below 2^32 so App Store Connect accepts every component.
+def state_build_number
+  ENV.fetch("BUILD_NUMBER", Time.now.utc.strftime("%y%m%d%H%M"))
+end
+
+# Xcode packages the IPA with /usr/bin/rsync, which is openrsync. openrsync
+# starts its server process through PATH, so a Homebrew rsync 3.x that shadows
+# it fails the export with "--extended-attributes: unknown option". Put Apple's
+# rsync in front for the duration of the block and leave the rest of PATH alone.
+def with_apple_rsync
+  original_path = ENV["PATH"]
+  shim = File.join(Dir.tmpdir, "state-fastlane-toolshim")
+  FileUtils.mkdir_p(shim)
+  FileUtils.ln_sf("/usr/bin/rsync", File.join(shim, "rsync"))
+  ENV["PATH"] = "#{shim}:#{original_path}"
+  yield
+ensure
+  ENV["PATH"] = original_path
+end
 
 platform :ios do
   before_all do
@@ -12,9 +35,12 @@ platform :ios do
 
   private_lane :connect_api_key do
     app_store_connect_api_key(
-      key_id: ENV.fetch("ASC_KEY_ID"),
-      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
-      key_filepath: ENV.fetch("ASC_KEY_PATH"),
+      key_id: ENV.fetch("ASC_KEY_ID", "7VDX9Z6S8W"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID", "d9828ae8-0a79-465a-baff-a89d22b0bd39"),
+      key_filepath: ENV.fetch(
+        "ASC_KEY_PATH",
+        File.expand_path("~/.appstoreconnect/private_keys/AuthKey_7VDX9Z6S8W.p8")
+      ),
       duration: 1_200,
       in_house: false
     )
@@ -37,12 +63,21 @@ platform :ios do
   desc "Create the App Store Connect application if it does not exist"
   lane :create_app do
     produce(
-      api_key: connect_api_key,
+      username: ENV.fetch("FASTLANE_USER"),
       app_identifier: "com.fabincrm.state",
       app_name: "State: Agent Context",
       language: "en-US",
       sku: ENV.fetch("STATE_APP_SKU", "state-agent-context-ios")
     )
+  end
+
+  desc "Verify App Store Connect access and the State app record"
+  lane :asc_status do
+    connect_api_key
+    app = Spaceship::ConnectAPI::App.find("com.fabincrm.state")
+    UI.user_error!("State is not registered in App Store Connect. Run `fastlane ios create_app` first.") unless app
+
+    UI.success("App Store Connect ready: #{app.name} (#{app.bundle_id})")
   end
 
   desc "Run unit and UI tests"
@@ -58,19 +93,19 @@ platform :ios do
 
   desc "Create a signed App Store archive"
   lane :build do
-    increment_build_number(
-      xcodeproj: PROJECT_PATH,
-      build_number: ENV.fetch("BUILD_NUMBER", Time.now.utc.strftime("%Y%m%d%H%M"))
-    )
-    build_app(
-      project: PROJECT_PATH,
-      scheme: "State",
-      clean: true,
-      export_method: "app-store",
-      output_directory: File.join(IOS_ROOT, "build"),
-      output_name: "State.ipa",
-      xcargs: "-allowProvisioningUpdates"
-    )
+    build_number = state_build_number
+    UI.message("Archiving State with CURRENT_PROJECT_VERSION=#{build_number}")
+    with_apple_rsync do
+      build_app(
+        project: PROJECT_PATH,
+        scheme: "State",
+        clean: true,
+        export_method: "app-store",
+        output_directory: File.join(IOS_ROOT, "build"),
+        output_name: "State.ipa",
+        xcargs: "-allowProvisioningUpdates CURRENT_PROJECT_VERSION=#{build_number}"
+      )
+    end
   end
 
   desc "Upload an internal TestFlight build"

@@ -14,8 +14,10 @@ relay_data/
 xcuserdata/
 fastlane/report.xml
 fastlane/Preview.html
+fastlane/test_output/
 ios/fastlane/report.xml
 ios/fastlane/Preview.html
+ios/fastlane/test_output/
 fastlane/screenshots/
 ios/screenshots/
 *.mobileprovision
