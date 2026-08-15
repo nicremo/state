@@ -31,6 +31,14 @@ Verify the local release toolchain and run all tests
 
 Create the App Store Connect application if it does not exist
 
+### ios asc_status
+
+```sh
+[bundle exec] fastlane ios asc_status
+```
+
+Verify App Store Connect access and the State app record
+
 ### ios test
 
 ```sh
