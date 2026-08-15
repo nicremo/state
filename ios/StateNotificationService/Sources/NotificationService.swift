@@ -14,6 +14,10 @@ final class NotificationService: UNNotificationServiceExtension {
             contentHandler(request.content)
             return
         }
+        // The relay already marks reminder pushes as time sensitive. Restate it
+        // here so a mutated payload keeps breaking through Focus modes.
+        content.interruptionLevel = .timeSensitive
+        content.relevanceScore = 1
         do {
             let state = try statePayload(from: request.content.userInfo)
             guard

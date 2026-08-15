@@ -5,6 +5,7 @@ extension Notification.Name {
     static let stateRemoteSync = Notification.Name("state.remote-sync")
     static let stateNotificationAction = Notification.Name("state.notification-action")
     static let stateAPNSToken = Notification.Name("state.apns-token")
+    static let stateOpenNotificationSettings = Notification.Name("state.open-notification-settings")
 }
 
 enum StateNotificationAction {
@@ -71,6 +72,15 @@ final class StateAppDelegate: NSObject, UIApplicationDelegate, @preconcurrency U
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         [.banner, .list, .sound]
+    }
+
+    // Answers the "Notification Settings" entry that iOS shows because State
+    // requests providesAppNotificationSettings.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        openSettingsFor notification: UNNotification?
+    ) {
+        NotificationCenter.default.post(name: .stateOpenNotificationSettings, object: nil)
     }
 
     func userNotificationCenter(

@@ -362,6 +362,9 @@ func notificationPayload(routeID string, kind string, envelope pushcrypto.Envelo
 		aps["mutable-content"] = 1
 		aps["sound"] = "default"
 		aps["category"] = "STATE_REMINDER"
+		// A reminder that a Focus mode silences is a reminder that failed.
+		aps["interruption-level"] = "time-sensitive"
+		aps["relevance-score"] = 1
 		aps["alert"] = map[string]string{
 			"title": "State",
 			"body":  "New reminder",
