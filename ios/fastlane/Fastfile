@@ -4,8 +4,19 @@ require "tmpdir"
 
 default_platform(:ios)
 
-IOS_ROOT = File.expand_path("..", __dir__)
+# fastlane evaluates this file with a relative path, so __dir__ is ".". That
+# works until an action changes the working directory: deliver runs from the
+# iOS project root, where "./metadata" no longer exists. Expanding once at load
+# time, while the working directory is still this folder, keeps every asset
+# path valid no matter where an action runs from. `fastlane ios paths` prints
+# the resolved values.
+FASTLANE_DIR = File.expand_path(__dir__)
+IOS_ROOT = File.expand_path("..", FASTLANE_DIR)
 PROJECT_PATH = File.join(IOS_ROOT, "State.xcodeproj")
+METADATA_PATH = File.join(FASTLANE_DIR, "metadata")
+SCREENSHOTS_PATH = File.join(FASTLANE_DIR, "screenshots")
+AGE_RATING_PATH = File.join(FASTLANE_DIR, "age_rating.json")
+PRIVACY_DETAILS_PATH = File.join(FASTLANE_DIR, "app_privacy_details.json")
 
 BUNDLE_ID = "com.fabincrm.state"
 APP_NAME = "State: Agent Context"
@@ -82,7 +93,7 @@ end
 # is the reviewed source of truth behind the answers entered by hand, so it must
 # stay honest about what the server and the optional relay actually process.
 def validate_privacy_declaration!
-  path = File.join(__dir__, "app_privacy_details.json")
+  path = PRIVACY_DETAILS_PATH
   declaration = JSON.parse(File.read(path))
   UI.user_error!("Empty privacy declaration: #{path}") if declaration.empty?
 
@@ -188,6 +199,17 @@ platform :ios do
     validate_privacy_declaration!
   end
 
+  desc "Print the resolved release asset paths"
+  lane :paths do
+    UI.message("cwd:         #{Dir.pwd}")
+    UI.message("FASTLANE_DIR #{FASTLANE_DIR}")
+    UI.message("IOS_ROOT     #{IOS_ROOT}")
+    UI.message("METADATA     #{METADATA_PATH} exists=#{Dir.exist?(METADATA_PATH)}")
+    UI.message("SCREENSHOTS  #{SCREENSHOTS_PATH} exists=#{Dir.exist?(SCREENSHOTS_PATH)}")
+    UI.message("AGE_RATING   #{AGE_RATING_PATH} exists=#{File.exist?(AGE_RATING_PATH)}")
+    UI.message("PRIVACY      #{PRIVACY_DETAILS_PATH} exists=#{File.exist?(PRIVACY_DETAILS_PATH)}")
+  end
+
   desc "Run unit and UI tests"
   lane :test do
     scan(
@@ -240,7 +262,7 @@ platform :ios do
     )
     Dir.glob(File.join(IOS_ROOT, "screenshots", "{de-DE,en-US}", "iPhone 16 Pro Max-*.png")).each do |source|
       locale = File.basename(File.dirname(source))
-      destination = File.join(__dir__, "screenshots", locale)
+      destination = File.join(SCREENSHOTS_PATH, locale)
       FileUtils.mkdir_p(destination)
       FileUtils.cp(source, destination)
     end
@@ -252,9 +274,9 @@ platform :ios do
     deliver(
       api_key: connect_api_key,
       app_identifier: BUNDLE_ID,
-      metadata_path: File.join(__dir__, "metadata"),
-      screenshots_path: File.join(__dir__, "screenshots"),
-      app_rating_config_path: File.join(__dir__, "age_rating.json"),
+      metadata_path: METADATA_PATH,
+      screenshots_path: SCREENSHOTS_PATH,
+      app_rating_config_path: AGE_RATING_PATH,
       languages: METADATA_LANGUAGES,
       skip_binary_upload: true,
       skip_screenshots: false,
@@ -292,9 +314,9 @@ platform :ios do
       api_key: connect_api_key,
       app_identifier: BUNDLE_ID,
       ipa: File.join(IOS_ROOT, "build/State.ipa"),
-      metadata_path: File.join(__dir__, "metadata"),
-      screenshots_path: File.join(__dir__, "screenshots"),
-      app_rating_config_path: File.join(__dir__, "age_rating.json"),
+      metadata_path: METADATA_PATH,
+      screenshots_path: SCREENSHOTS_PATH,
+      app_rating_config_path: AGE_RATING_PATH,
       languages: METADATA_LANGUAGES,
       submit_for_review: true,
       automatic_release: false,
