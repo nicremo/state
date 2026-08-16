@@ -12,6 +12,16 @@ This checklist separates repository preparation from the App Store Connect decis
 - The build number never touches a tracked file. `ios/project.yml` keeps `CURRENT_PROJECT_VERSION: 1`, both `Info.plist` files keep `$(CURRENT_PROJECT_VERSION)`, and `fastlane ios build` passes the real value through `xcargs`. Override it with `BUILD_NUMBER=...`, otherwise a UTC `yymmddHHMM` stamp is used. That format stays below the App Store Connect limit of 2^32 per version component.
 - The app declares `ITSAppUsesNonExemptEncryption` as false. The account holder must confirm that export classification before App Store submission.
 
+## Credentials
+
+This repository is public and open source, so it carries no Apple account of any kind. Every account specific value comes from `ios/fastlane/.env`, which fastlane loads automatically and git ignores. Copy `ios/fastlane/.env.example` and fill it in:
+
+```bash
+cp ios/fastlane/.env.example ios/fastlane/.env
+```
+
+A lane that needs a value you have not set stops with the variable name and what it is for, rather than failing somewhere inside Apple's API. Anyone forking State supplies their own account here; nothing is shared.
+
 ## The one step that needs an Apple ID
 
 The App Store Connect API cannot create an app record. Asked to, it answers `The resource 'apps' does not allow 'CREATE'. Allowed operations are: GET_COLLECTION, GET_INSTANCE, UPDATE`. Only the App Store Connect web session can, so `create_app` falls back to `produce`, which needs an Apple ID and a two-factor confirmation:
@@ -30,12 +40,20 @@ Run it from a terminal that can answer the prompt. If the record already exists 
 3. Pricing: `fastlane ios pricing` sets State to free with Germany as the base territory and does nothing if a free price is already active.
 4. Availability: still manual. Which storefronts State is sold in is a product and legal decision, not an automation default.
 5. Export Compliance: `submission_info_defaults` in the Fastfile now answers the whole questionnaire consistently with `ITSAppUsesNonExemptEncryption=false` in `Info.plist`. Before submitting, confirm that answer is right: State does more than plain HTTPS, it builds its own encrypted push envelopes and signs the audit chain, even though it does so through Apple's CryptoKit. If that turns out to need a different answer, change the plist and `submission_info_defaults` together, never one alone.
-6. App Review contact: App Store Connect requires a first name, last name, email and phone number as soon as a build is attached, and rejects the whole metadata upload without them. `deliver` sends them from `app_review_information` in the Fastfile. The name and email default to values already public in this repository's history; the phone number is deliberately not stored here because the repository is public, so every metadata run needs it in the environment:
+6. App Review contact: App Store Connect requires a first name, last name, email and phone number as soon as a build is attached, and rejects the whole metadata upload without them. `deliver` sends them from `app_review_information` in the Fastfile. The name and email default to values already public in this repository's history; the phone number is deliberately not stored here because the repository is public. Put it in `ios/fastlane/.env` as `ASC_REVIEW_PHONE`:
 
 ```bash
 cd ios
-ASC_REVIEW_PHONE="+49..." bundle exec fastlane ios metadata
+bundle exec fastlane ios metadata
 ```
+
+## Verifying the listing
+
+`bundle exec fastlane ios audit` reads every field back out of App Store Connect rather than trusting an upload log. Two faults already shipped past a green log: a placeholder App Store icon because no build was selected for the version, and duplicated screenshots. Run it before every submission.
+
+It checks the version state and its build, the categories, the app info localizations, per locale metadata and screenshot counts against the files on disk, pricing, territory availability, the App Review contact and the TestFlight groups with their tester counts.
+
+Two things it cannot check, and says so instead of assuming: the App Privacy questionnaire has no App Store Connect API at all and has to be entered by hand from `ios/fastlane/app_privacy_details.json`, and export compliance is answered at submission time.
 
 ## Store assets
 
