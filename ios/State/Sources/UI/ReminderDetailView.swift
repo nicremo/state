@@ -7,55 +7,26 @@ struct ReminderDetailView: View {
     @State private var comment = ""
     @State private var showsEditor = false
     @State private var confirmsArchive = false
+    @State private var completionFeedback = 0
 
     var body: some View {
         Group {
             if let detail {
                 List {
-                    Section {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(detail.reminder.title)
-                                .font(.title2.bold())
-                                .foregroundStyle(StateTheme.graphite)
-                            if let description = detail.reminder.description, !description.isEmpty {
-                                Text(markdown: description)
-                                    .foregroundStyle(.secondary)
-                            }
-                            HStack {
-                                if let schedule = detail.reminder.schedule {
-                                    Label(StateDateFormatter.label(for: schedule), systemImage: "calendar")
-                                } else {
-                                    Label(String(localized: "No date"), systemImage: "calendar.badge.minus")
-                                }
-                                Spacer()
-                                Text(
-                                    String.localizedStringWithFormat(
-                                        String(localized: "Revision %lld"),
-                                        detail.reminder.revision
-                                    )
-                                )
-                                    .font(.caption.monospaced())
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .font(.subheadline)
-                        }
-                        .padding(.vertical, 8)
-                    }
+                    header(detail.reminder)
 
                     if !detail.occurrences.isEmpty {
                         Section("Occurrences") {
                             ForEach(detail.occurrences) { occurrence in
                                 OccurrenceRow(occurrence: occurrence) {
+                                    completionFeedback += 1
                                     Task {
                                         await model.completeOccurrence(id: occurrence.id)
                                         await reload()
                                     }
-                                } onSnooze: {
+                                } onSnooze: { until in
                                     Task {
-                                        await model.snoozeOccurrence(
-                                            id: occurrence.id,
-                                            until: Date().addingTimeInterval(10 * 60)
-                                        )
+                                        await model.snoozeOccurrence(id: occurrence.id, until: until)
                                         await reload()
                                     }
                                 }
@@ -63,59 +34,37 @@ struct ReminderDetailView: View {
                         }
                     }
 
-                    Section("Comments") {
-                        if detail.comments.isEmpty {
-                            Text("No comments yet")
-                                .foregroundStyle(.secondary)
-                        }
-                        ForEach(detail.comments) { item in
-                            VStack(alignment: .leading, spacing: 7) {
-                                Text(markdown: item.body)
-                                HStack {
-                                    OriginBadge(actor: item.actor)
-                                    Spacer()
-                                    Text(item.createdAt, format: .dateTime.day().month().year().hour().minute())
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        HStack(alignment: .bottom) {
-                            TextField("Add context", text: $comment, axis: .vertical)
-                                .lineLimit(1...5)
-                            Button {
-                                let body = comment.trimmingCharacters(in: .whitespacesAndNewlines)
-                                guard !body.isEmpty else { return }
-                                comment = ""
-                                Task {
-                                    await model.addComment(reminderID: reminderID, body: body)
-                                    await reload()
-                                }
-                            } label: {
-                                Image(systemName: "arrow.up.circle.fill")
-                                    .font(.title2)
-                            }
-                            .disabled(comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            .accessibilityLabel("Add comment")
-                        }
-                    }
+                    commentSection(detail)
 
                     Section("Complete history") {
                         ForEach(detail.history.reversed()) { event in
                             AuditEventRow(event: event)
+                                .listRowInsets(
+                                    EdgeInsets(
+                                        top: StateTheme.Space.inner,
+                                        leading: StateTheme.Space.block,
+                                        bottom: StateTheme.Space.inner,
+                                        trailing: StateTheme.Space.block
+                                    )
+                                )
                         }
                     }
                 }
                 .listStyle(.insetGrouped)
+                .stateBackground()
+                .animation(StateTheme.contentChange, value: detail.occurrences.map(\.status))
                 .refreshable {
                     await model.synchronize()
                     await reload()
                 }
             } else {
                 ProgressView()
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(StateTheme.warmBackground)
             }
         }
+        .sensoryFeedback(.success, trigger: completionFeedback)
         .navigationTitle("Details")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -150,36 +99,176 @@ struct ReminderDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private func header(_ reminder: Reminder) -> some View {
+        Section {
+            VStack(alignment: .leading, spacing: StateTheme.Space.inner) {
+                Text(reminder.title)
+                    .font(.title2.bold())
+                    .foregroundStyle(StateTheme.graphite)
+
+                if let description = reminder.description, !description.isEmpty {
+                    Text(markdown: description)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: StateTheme.Space.inner) {
+                    if let schedule = reminder.schedule {
+                        MetaLabel(
+                            text: StateDateFormatter.label(for: schedule),
+                            systemImage: "calendar"
+                        )
+                    } else {
+                        MetaLabel(
+                            text: String(localized: "No date"),
+                            systemImage: "calendar.badge.minus"
+                        )
+                    }
+                    if let recurrence = reminder.recurrence {
+                        MetaLabel(text: label(for: recurrence), systemImage: "repeat")
+                    }
+                    Spacer(minLength: StateTheme.Space.tight)
+                    Text(verbatim: "r\(reminder.revision)")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                        .accessibilityLabel(
+                            String.localizedStringWithFormat(
+                                String(localized: "Revision %lld"),
+                                reminder.revision
+                            )
+                        )
+                }
+                .padding(.top, StateTheme.Space.hairline)
+            }
+            .padding(.vertical, StateTheme.Space.snug)
+        }
+    }
+
+    @ViewBuilder
+    private func commentSection(_ detail: ReminderDetail) -> some View {
+        Section("Comments") {
+            if detail.comments.isEmpty {
+                Text("No comments yet")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(detail.comments) { item in
+                VStack(alignment: .leading, spacing: StateTheme.Space.group) {
+                    Text(markdown: item.body)
+                        .font(.callout)
+                    HStack(spacing: StateTheme.Space.inner) {
+                        OriginBadge(actor: item.actor)
+                        Spacer(minLength: StateTheme.Space.tight)
+                        Text(item.createdAt, format: .dateTime.day().month().hour().minute())
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.vertical, StateTheme.Space.tight)
+            }
+            HStack(alignment: .bottom, spacing: StateTheme.Space.inner) {
+                TextField("Add context", text: $comment, axis: .vertical)
+                    .font(.callout)
+                    .lineLimit(1...5)
+                Button {
+                    let body = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !body.isEmpty else { return }
+                    comment = ""
+                    Task {
+                        await model.addComment(reminderID: reminderID, body: body)
+                        await reload()
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(canSend ? StateTheme.accent : Color.secondary)
+                .disabled(!canSend)
+                .animation(StateTheme.stateChange, value: canSend)
+                .accessibilityLabel("Add comment")
+            }
+        }
+    }
+
+    private var canSend: Bool {
+        !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func label(for recurrence: RecurrenceRule) -> String {
+        switch recurrence.frequency {
+        case .daily: String(localized: "Daily")
+        case .weekly: String(localized: "Weekly")
+        case .monthly: String(localized: "Monthly")
+        case .yearly: String(localized: "Yearly")
+        }
+    }
+
     private func reload() async {
         detail = await model.reminderDetail(id: reminderID)
     }
 }
 
+/// One generated due date. Completing is the primary act, so it sits on a
+/// checkbox at the leading edge with a full touch target of its own; snoozing
+/// is a choice between times and therefore a menu, not a second button
+/// competing for the same row.
 private struct OccurrenceRow: View {
     let occurrence: Occurrence
     let onComplete: () -> Void
-    let onSnooze: () -> Void
+    let onSnooze: (Date) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label(dateLabel, systemImage: statusIcon)
-                Spacer()
+        HStack(spacing: StateTheme.Space.group) {
+            Button(action: onComplete) {
+                Image(systemName: statusIcon)
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(statusColor)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(occurrence.status == .completed)
+            .accessibilityLabel(String(localized: "Mark as complete"))
+
+            VStack(alignment: .leading, spacing: StateTheme.Space.hairline) {
+                Text(dateLabel)
+                    .font(.subheadline)
+                    .foregroundStyle(StateTheme.graphite)
                 Text(statusLabel)
-                    .font(.caption.weight(.semibold))
+                    .font(.caption)
                     .foregroundStyle(statusColor)
             }
+
+            Spacer(minLength: StateTheme.Space.inner)
+
             if occurrence.status != .completed {
-                HStack {
-                    Button("Complete", action: onComplete)
-                        .buttonStyle(.borderedProminent)
-                    Button("Snooze 10 minutes", action: onSnooze)
-                        .buttonStyle(.bordered)
+                Menu {
+                    Button("10 minutes") { onSnooze(Date().addingTimeInterval(10 * 60)) }
+                    Button("1 hour") { onSnooze(Date().addingTimeInterval(60 * 60)) }
+                    Button("Tomorrow morning") { onSnooze(Self.tomorrowMorning()) }
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.body)
+                        .foregroundStyle(StateTheme.accent)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
-                .controlSize(.small)
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "Snooze"))
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, -StateTheme.Space.snug)
+    }
+
+    private static func tomorrowMorning() -> Date {
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow)
+            ?? Date().addingTimeInterval(12 * 60 * 60)
     }
 
     private var dateLabel: String {
@@ -197,15 +286,25 @@ private struct OccurrenceRow: View {
         switch occurrence.status {
         case .pending: "circle"
         case .completed: "checkmark.circle.fill"
-        case .snoozed: "clock.badge"
+        case .snoozed: "clock.badge.fill"
         }
     }
 
     private var statusLabel: String {
         switch occurrence.status {
-        case .pending: String(localized: "Pending")
-        case .completed: String(localized: "Completed")
-        case .snoozed: String(localized: "Snoozed")
+        case .pending:
+            String(localized: "Pending")
+        case .completed:
+            String(localized: "Completed")
+        case .snoozed:
+            if let until = occurrence.snoozedUntil {
+                String(
+                    format: String(localized: "Snoozed until %@"),
+                    until.formatted(date: .omitted, time: .shortened)
+                )
+            } else {
+                String(localized: "Snoozed")
+            }
         }
     }
 
@@ -218,42 +317,80 @@ private struct OccurrenceRow: View {
     }
 }
 
+/// One entry of the audit chain. In the activity feed the reminder title leads,
+/// because the reader is scanning across reminders. Inside a reminder the
+/// action leads, because the subject is already known.
 struct AuditEventRow: View {
     let event: AuditEvent
+    var title: String?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(spacing: 0) {
-                Circle()
-                    .fill(StateTheme.accent)
-                    .frame(width: 9, height: 9)
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.25))
-                    .frame(width: 1, height: 62)
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                Text(actionLabel)
-                    .font(.subheadline.weight(.semibold))
-                HStack {
+        HStack(alignment: .top, spacing: StateTheme.Space.group) {
+            marker
+
+            VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
+                HStack(alignment: .firstTextBaseline, spacing: StateTheme.Space.inner) {
+                    Text(title ?? actionLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(StateTheme.graphite)
+                        .lineLimit(2)
+                    Spacer(minLength: StateTheme.Space.tight)
+                    Text(event.serverTime, format: .dateTime.day().month().hour().minute())
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .layoutPriority(1)
+                }
+
+                HStack(spacing: StateTheme.Space.inner) {
+                    if title != nil {
+                        Text(actionLabel)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     OriginBadge(actor: event.actor)
-                    Text(event.serverTime, format: .dateTime.day().month().year().hour().minute())
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
-                if !event.changedFields.isEmpty {
-                    Text(event.changedFields.joined(separator: ", "))
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                }
+
                 if let excerpt = event.sourceExcerpt, !excerpt.isEmpty {
                     Text(verbatim: "“\(excerpt)”")
                         .font(.caption)
+                        .italic()
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
+                }
+
+                if !event.changedFields.isEmpty {
+                    Text(event.changedFields.joined(separator: " · "))
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
                 }
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// Names the kind of change at a glance, so the feed is scannable without
+    /// reading a single label.
+    private var marker: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(StateTheme.accent)
+            .frame(width: 26, height: 26)
+            .background(StateTheme.accentSoft, in: Circle())
+    }
+
+    private var symbol: String {
+        switch event.action {
+        case "reminder.created": "plus"
+        case "reminder.updated": "pencil"
+        case "reminder.archived": "archivebox"
+        case "reminder.restored": "arrow.uturn.backward"
+        case "comment.added": "text.bubble"
+        case "occurrence.completed": "checkmark"
+        case "occurrence.snoozed": "clock"
+        case "conflict.resolved": "arrow.triangle.merge"
+        default: "circle"
+        }
     }
 
     private var actionLabel: String {
@@ -271,7 +408,7 @@ struct AuditEventRow: View {
     }
 }
 
-private extension Text {
+extension Text {
     init(markdown: String) {
         if let attributed = try? AttributedString(markdown: markdown) {
             self.init(attributed)

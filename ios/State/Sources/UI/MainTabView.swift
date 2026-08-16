@@ -24,6 +24,7 @@ struct MainTabView: View {
 
             ActivityView(model: model)
                 .tabItem { Label(String(localized: "Activity"), systemImage: "clock.arrow.circlepath") }
+                .badge(model.conflicts.count)
                 .tag(StateTab.activity)
 
             SettingsView(model: model, opensNotificationSettings: $opensNotificationSettings)
@@ -54,46 +55,59 @@ struct ReminderCollectionView: View {
     let mode: ReminderCollectionMode
     @State private var search = ""
     @State private var showsEditor = false
+    @State private var path: [String] = []
+    @State private var createdReminderID: String?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if filteredReminders.isEmpty {
-                    ContentUnavailableView(
-                        search.isEmpty ? String(localized: "Nothing pending") : String(localized: "No results"),
-                        systemImage: search.isEmpty ? "checkmark.circle" : "magnifyingglass",
-                        description: Text(search.isEmpty
-                            ? String(localized: "Agent and app reminders appear here.")
-                            : String(localized: "Try a different search term."))
-                    )
+                    emptyState
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(StateTheme.warmBackground.ignoresSafeArea())
                 } else {
-                    List(filteredReminders) { reminder in
-                        NavigationLink {
-                            ReminderDetailView(model: model, reminderID: reminder.id)
-                        } label: {
-                            ReminderRow(
-                                reminder: reminder,
-                                latestEvent: model.activity.first { $0.reminderID == reminder.id }
+                    List {
+                        ForEach(filteredReminders) { reminder in
+                            NavigationLink(value: reminder.id) {
+                                ReminderRow(
+                                    reminder: reminder,
+                                    latestEvent: model.activity.first { $0.reminderID == reminder.id }
+                                )
+                            }
+                            .listRowInsets(
+                                EdgeInsets(
+                                    top: StateTheme.Space.group,
+                                    leading: StateTheme.Space.block,
+                                    bottom: StateTheme.Space.group,
+                                    trailing: StateTheme.Space.block
+                                )
                             )
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                Task { await model.archiveReminder(reminder, archived: true) }
-                            } label: {
-                                Label(String(localized: "Archive"), systemImage: "archivebox")
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    Task { await model.archiveReminder(reminder, archived: true) }
+                                } label: {
+                                    Label(String(localized: "Archive"), systemImage: "archivebox")
+                                }
                             }
                         }
                     }
                     .listStyle(.insetGrouped)
+                    .stateBackground()
+                    .animation(StateTheme.contentChange, value: filteredReminders.map(\.id))
                     .refreshable { await model.synchronize() }
                 }
             }
             .navigationTitle(mode.title)
+            .navigationDestination(for: String.self) { reminderID in
+                ReminderDetailView(model: model, reminderID: reminderID)
+            }
             .searchable(text: $search, prompt: String(localized: "Search reminders"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if model.isSyncing {
                         ProgressView()
+                            .controlSize(.small)
+                            .transition(.opacity)
                             .accessibilityLabel(String(localized: "Synchronizing"))
                     }
                 }
@@ -105,12 +119,46 @@ struct ReminderCollectionView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showsEditor) {
-                ReminderEditorView { draft in
-                    await model.createReminder(draft)
+            .animation(StateTheme.stateChange, value: model.isSyncing)
+            .sheet(
+                isPresented: $showsEditor,
+                onDismiss: revealCreatedReminder,
+                content: {
+                    ReminderEditorView { draft in
+                        createdReminderID = await model.createReminder(draft)
+                    }
                 }
-            }
+            )
         }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if search.isEmpty {
+            ContentUnavailableView {
+                Label(String(localized: "Nothing pending"), systemImage: "checkmark.circle")
+            } description: {
+                Text("Reminders you or your agents create appear here.")
+            } actions: {
+                Button {
+                    showsEditor = true
+                } label: {
+                    Text("New reminder")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        } else {
+            ContentUnavailableView.search(text: search)
+        }
+    }
+
+    /// Opening the new reminder proves it exists. Without it a reminder that
+    /// belongs to the other tab, an undated one for example, looks exactly like
+    /// nothing happened.
+    private func revealCreatedReminder() {
+        guard let createdReminderID else { return }
+        path = [createdReminderID]
+        self.createdReminderID = nil
     }
 
     private var filteredReminders: [Reminder] {
@@ -136,7 +184,7 @@ struct ReminderRow: View {
     let latestEvent: AuditEvent?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
             Text(reminder.title)
                 .font(.headline)
                 .foregroundStyle(StateTheme.graphite)
@@ -149,23 +197,38 @@ struct ReminderRow: View {
                     .lineLimit(2)
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: StateTheme.Space.inner) {
                 if let schedule = reminder.schedule {
-                    Label(StateDateFormatter.label(for: schedule), systemImage: "calendar")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    MetaLabel(
+                        text: StateDateFormatter.rowLabel(for: schedule),
+                        systemImage: isOverdue ? "exclamationmark.circle" : "calendar",
+                        tint: isOverdue ? .orange : .secondary
+                    )
                 }
                 if let actor = latestEvent?.actor {
                     OriginBadge(actor: actor)
                 }
-                Spacer(minLength: 0)
+                Spacer(minLength: StateTheme.Space.tight)
                 Text(verbatim: "r\(reminder.revision)")
-                    .font(.caption2.monospaced())
+                    .font(.caption2.monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
+            .padding(.top, StateTheme.Space.hairline)
         }
-        .padding(.vertical, 5)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("reminder-\(reminder.id)")
+    }
+
+    /// A due date in the past that nobody has acted on deserves a warmer color
+    /// than the same date after completion.
+    private var isOverdue: Bool {
+        guard
+            reminder.status == .active,
+            let schedule = reminder.schedule,
+            let date = StateDateFormatter.date(from: schedule)
+        else {
+            return false
+        }
+        return date < Date()
     }
 }

@@ -1,147 +1,2196 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "1 day before" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "1 Tag vorher" } } } },
-    "1 hour before" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "1 Stunde vorher" } } } },
-    "10 minutes before" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "10 Minuten vorher" } } } },
-    "A reminder is due." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Eine Erinnerung ist fällig." } } } },
-    "About" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Über State" } } } },
-    "Activity" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Aktivität" } } } },
-    "Add comment" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Kommentar hinzufügen" } } } },
-    "Add context" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Kontext hinzufügen" } } } },
-    "Advance notice" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Vorwarnzeit" } } } },
-    "Agent and app reminders appear here." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnerungen von Agenten und der App erscheinen hier." } } } },
-    "Agent name" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Agentenname" } } } },
-    "Agents" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Agenten" } } } },
-    "All resolved" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Alles gelöst" } } } },
-    "Allowed" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erlaubt" } } } },
-    "Archive" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Archivieren" } } } },
-    "Archive this reminder?" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Diese Erinnerung archivieren?" } } } },
-    "At due time" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Zur Fälligkeit" } } } },
-    "Bootstrap token" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Bootstrap-Token" } } } },
-    "Cancel" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Abbrechen" } } } },
-    "Changed fields: %@" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Geänderte Felder: %@" } } } },
-    "Checking" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Wird geprüft" } } } },
-    "Check the MCP result and add the final notes." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Prüfe das MCP-Ergebnis und ergänze die abschließenden Notizen." } } } },
-    "Claude Code" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Claude Code" } } } },
-    "Comment added" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Kommentar hinzugefügt" } } } },
-    "Comments" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Kommentare" } } } },
-    "Complete" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erledigen" } } } },
-    "Complete history" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Vollständiger Verlauf" } } } },
-    "Completed" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erledigt" } } } },
-    "Conflict resolved" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Konflikt gelöst" } } } },
-    "Conflicts" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Konflikte" } } } },
-    "Connect" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Verbinden" } } } },
-    "Connect an agent" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Agent verbinden" } } } },
-    "Connect your server" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Eigenen Server verbinden" } } } },
-    "Connection" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Verbindung" } } } },
-    "Copy statectl command" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "statectl-Befehl kopieren" } } } },
-    "Credentials stay in the iOS Keychain. Reminder data remains on your own server." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Zugangsdaten bleiben im iOS-Schlüsselbund. Erinnerungsdaten bleiben auf deinem eigenen Server." } } } },
-    "Create one-time code" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Einmalcode erstellen" } } } },
-    "Daily" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Täglich" } } } },
-    "Date" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Datum" } } } },
-    "Denied" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Verweigert" } } } },
-    "Description" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Beschreibung" } } } },
-    "Delivery and privacy" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Zustellung und Datenschutz" } } } },
-    "Details" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Details" } } } },
-    "Device name" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Gerätename" } } } },
-    "Devices" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Geräte" } } } },
-    "Disconnect" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Trennen" } } } },
-    "Disconnect this device" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Dieses Gerät trennen" } } } },
-    "Disconnect this device?" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Dieses Gerät trennen?" } } } },
-    "Done" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Fertig" } } } },
-    "Edit" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Bearbeiten" } } } },
-    "Edit reminder" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnerung bearbeiten" } } } },
-    "Every human, device, agent and system change will appear here." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Jede Änderung durch Menschen, Geräte, Agenten und das System erscheint hier." } } } },
-    "Expires" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Läuft ab" } } } },
-    "Explore demo" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Demo ansehen" } } } },
-    "First owner setup" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Ersteinrichtung des Besitzers" } } } },
-    "Fixed location time" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Feste Ortszeit" } } } },
-    "Frequency" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Häufigkeit" } } } },
-    "Focus on the complete cross-agent history." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Konzentriere dich auf den vollständigen agentenübergreifenden Verlauf." } } } },
-    "Harness" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Harness" } } } },
-    "Harness identifier" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Harness-Kennung" } } } },
-    "How delivery works" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "So funktioniert die Zustellung" } } } },
-    "If decryption fails, State shows generic notification text." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Falls die Entschlüsselung fehlschlägt, zeigt State einen allgemeinen Benachrichtigungstext." } } } },
-    "Identity" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Identität" } } } },
-    "Keep my version" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Meine Version behalten" } } } },
-    "Last synchronized" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Zuletzt synchronisiert" } } } },
-    "License" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Lizenz" } } } },
-    "Local demo" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Lokale Demo" } } } },
-    "Monthly" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Monatlich" } } } },
-    "Moves with me" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Zieht mit mir um" } } } },
-    "Never" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Nie" } } } },
-    "New reminder" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Neue Erinnerung" } } } },
-    "No activity yet" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Noch keine Aktivität" } } } },
-    "No comments yet" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Noch keine Kommentare" } } } },
-    "No date" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Kein Datum" } } } },
-    "No results" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Keine Ergebnisse" } } } },
-    "None connected" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Keine verbunden" } } } },
-    "Not requested" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Nicht angefragt" } } } },
-    "Nothing pending" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Nichts offen" } } } },
-    "Notifications" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Benachrichtigungen" } } } },
-    "Occurrences" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Vorkommnisse" } } } },
-    "Occurrence completed" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Vorkommnis erledigt" } } } },
-    "Occurrence snoozed" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Vorkommnis schlummert" } } } },
-    "OK" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "OK" } } } },
-    "One-time pairing code" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Einmaliger Kopplungscode" } } } },
-    "Origin: %@" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Herkunft: %@" } } } },
-    "Open iOS notification settings" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "iOS-Benachrichtigungseinstellungen öffnen" } } } },
-    "Other" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Andere" } } } },
-    "Pending" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Offen" } } } },
-    "Planned" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Geplant" } } } },
-    "Prepare agent workflow review" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Agenten-Workflow prüfen" } } } },
-    "Reminder" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnerung" } } } },
-    "Reminder archived" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnerung archiviert" } } } },
-    "Reminder changed" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnerung geändert" } } } },
-    "Reminder conflict" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnerungskonflikt" } } } },
-    "Reminder created" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnerung erstellt" } } } },
-    "Reminder restored" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnerung wiederhergestellt" } } } },
-    "Remind me to prepare the agent workflow review" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnere mich daran, den Agenten-Workflow zu prüfen" } } } },
-    "Remind me to renew the backup restore test" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnere mich daran, den Backup-Wiederherstellungstest zu erneuern" } } } },
-    "Repeat" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Wiederholen" } } } },
-    "Renew VPS backup test" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "VPS-Backup-Test erneuern" } } } },
-    "Resolve conflicts (%lld)" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Konflikte lösen (%lld)" } } } },
-    "Revision %lld" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Revision %lld" } } } },
-    "Revoke access" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Zugriff widerrufen" } } } },
-    "Save" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Speichern" } } } },
-    "Scan pairing code" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Kopplungscode scannen" } } } },
-    "Scan pairing QR code" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Kopplungs-QR-Code scannen" } } } },
-    "Schedule" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Planung" } } } },
-    "Search reminders" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Erinnerungen durchsuchen" } } } },
-    "Server" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Server" } } } },
-    "Server URL" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Server-URL" } } } },
-    "Set a date" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Datum festlegen" } } } },
-    "Settings" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Einstellungen" } } } },
-    "Snooze 1 hour" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "1 Stunde schlummern" } } } },
-    "Snooze 10 minutes" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "10 Minuten schlummern" } } } },
-    "Snoozed" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Schlummert" } } } },
-    "Source code" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Quellcode" } } } },
-    "Specific time" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Bestimmte Uhrzeit" } } } },
-    "State could not complete the action" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "State konnte die Aktion nicht abschließen" } } } },
-    "Status" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Status" } } } },
-    "Synchronize now" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Jetzt synchronisieren" } } } },
-    "Synchronizing" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Wird synchronisiert" } } } },
-    "System permission" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Systemberechtigung" } } } },
-    "The relay receives only encrypted reminder packages and an opaque route." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Der Relay empfängt nur verschlüsselte Erinnerungspakete und eine opake Route." } } } },
-    "The server data remains intact. This device loses its stored credential." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Serverdaten bleiben erhalten. Dieses Gerät verliert seine gespeicherte Berechtigung." } } } },
-    "This is not a valid State pairing code." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Dies ist kein gültiger State-Kopplungscode." } } } },
-    "Time zone" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Zeitzone" } } } },
-    "Time zone behavior" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Zeitzonenverhalten" } } } },
-    "Title" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Titel" } } } },
-    "Today" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Heute" } } } },
-    "Try a different search term." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Versuche einen anderen Suchbegriff." } } } },
-    "Unknown" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Unbekannt" } } } },
-    "Upcoming reminders are secured locally on this iPhone." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Anstehende Erinnerungen werden lokal auf diesem iPhone abgesichert." } } } },
-    "Use server version" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Serverversion verwenden" } } } },
-    "Use 2 to 32 characters: lower case letters, digits and inner hyphens." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Nutze 2 bis 32 Zeichen: Kleinbuchstaben, Ziffern und Bindestriche im Wortinneren." } } } },
-    "Version" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Version" } } } },
-    "Verify the encrypted archive and restore it into an empty volume." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Prüfe das verschlüsselte Archiv und stelle es in einem leeren Volume wieder her." } } } },
-    "Weekly" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Wöchentlich" } } } },
-    "Yearly" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Jährlich" } } } },
-    "Your agents remember. You stay in control." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Deine Agenten erinnern sich. Du behältst die Kontrolle." } } } },
-    "Your name" : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "Dein Name" } } } },
-    "statectl stores the credential and prints the MCP server entry for this agent. Add it to that agent's own configuration." : { "localizations" : { "de" : { "stringUnit" : { "state" : "translated", "value" : "statectl speichert die Zugangsdaten und gibt den MCP-Server-Eintrag für diesen Agenten aus. Trage ihn in dessen eigene Konfiguration ein." } } } }
+  "sourceLanguage": "en",
+  "strings": {
+    "%@ Agent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Agent"
+          }
+        }
+      }
+    },
+    "1 day before": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Tag vorher"
+          }
+        }
+      }
+    },
+    "1 hour": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Stunde"
+          }
+        }
+      }
+    },
+    "1 hour before": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Stunde vorher"
+          }
+        }
+      }
+    },
+    "10 minutes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10 Minuten"
+          }
+        }
+      }
+    },
+    "10 minutes before": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10 Minuten vorher"
+          }
+        }
+      }
+    },
+    "A Mac, a Linux box or a small VPS. One binary, no database to install.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Mac, eine Linux-Kiste oder ein kleiner VPS. Eine Binärdatei, keine Datenbank zu installieren."
+          }
+        }
+      }
+    },
+    "A reminder is due.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Erinnerung ist fällig."
+          }
+        }
+      }
+    },
+    "A reminder survives the session it was created in.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Erinnerung überlebt die Sitzung, in der sie entstanden ist."
+          }
+        }
+      }
+    },
+    "A reminder that cannot interrupt you is only a list entry. State schedules its alerts on this iPhone and marks them time sensitive, so they get through Focus modes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Erinnerung, die dich nicht unterbrechen darf, ist nur ein Listeneintrag. State plant seine Hinweise auf diesem iPhone und markiert sie als zeitkritisch, damit sie durch Fokus-Modi kommen."
+          }
+        }
+      }
+    },
+    "About": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Über State"
+          }
+        }
+      }
+    },
+    "Activity": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktivität"
+          }
+        }
+      }
+    },
+    "Add comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar hinzufügen"
+          }
+        }
+      }
+    },
+    "Add context": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontext hinzufügen"
+          }
+        }
+      }
+    },
+    "Advance notice": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorwarnzeit"
+          }
+        }
+      }
+    },
+    "Agent and app reminders appear here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerungen von Agenten und der App erscheinen hier."
+          }
+        }
+      }
+    },
+    "Agent name": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agentenname"
+          }
+        }
+      }
+    },
+    "Agents": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agenten"
+          }
+        }
+      }
+    },
+    "Alerts are scheduled locally": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hinweise werden lokal geplant"
+          }
+        }
+      }
+    },
+    "All resolved": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles gelöst"
+          }
+        }
+      }
+    },
+    "Allow notifications": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Benachrichtigungen erlauben"
+          }
+        }
+      }
+    },
+    "Allowed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erlaubt"
+          }
+        }
+      }
+    },
+    "Archive": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivieren"
+          }
+        }
+      }
+    },
+    "Archive this reminder?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Erinnerung archivieren?"
+          }
+        }
+      }
+    },
+    "At due time": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zur Fälligkeit"
+          }
+        }
+      }
+    },
+    "Bootstrap token": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bootstrap-Token"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbrechen"
+          }
+        }
+      }
+    },
+    "Changed fields: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geänderte Felder: %@"
+          }
+        }
+      }
+    },
+    "Check the MCP result and add the final notes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prüfe das MCP-Ergebnis und ergänze die abschließenden Notizen."
+          }
+        }
+      }
+    },
+    "Checking": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird geprüft"
+          }
+        }
+      }
+    },
+    "Choose First setup on the connection screen and paste it there. This iPhone becomes the owner and stores its credential in the iOS Keychain.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle auf dem Verbindungsbildschirm Ersteinrichtung und setze ihn dort ein. Dieses iPhone wird Besitzer und legt seinen Zugang im iOS-Schlüsselbund ab."
+          }
+        }
+      }
+    },
+    "Claude Code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code"
+          }
+        }
+      }
+    },
+    "Codex, Claude Code and OpenCode are configured automatically. Any other agent pairs the same way and statectl prints the MCP entry for you to paste.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex, Claude Code und OpenCode werden automatisch eingerichtet. Jeder andere Agent koppelt genauso, statectl gibt dir dafür den MCP-Eintrag zum Einsetzen aus."
+          }
+        }
+      }
+    },
+    "Codex, Claude Code and OpenCode write reminders into State. You see every one of them on your iPhone, with the exact wording that caused it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex, Claude Code und OpenCode schreiben Erinnerungen nach State. Du siehst jede einzelne auf deinem iPhone, mit dem Wortlaut, der sie ausgelöst hat."
+          }
+        }
+      }
+    },
+    "Comment added": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar hinzugefügt"
+          }
+        }
+      }
+    },
+    "Comments": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentare"
+          }
+        }
+      }
+    },
+    "Complete": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erledigen"
+          }
+        }
+      }
+    },
+    "Complete history": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vollständiger Verlauf"
+          }
+        }
+      }
+    },
+    "Completed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erledigt"
+          }
+        }
+      }
+    },
+    "Conflict resolved": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konflikt gelöst"
+          }
+        }
+      }
+    },
+    "Conflicts": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konflikte"
+          }
+        }
+      }
+    },
+    "Connect": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbinden"
+          }
+        }
+      }
+    },
+    "Connect an agent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent verbinden"
+          }
+        }
+      }
+    },
+    "Connect this iPhone to your own server.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbinde dieses iPhone mit deinem eigenen Server."
+          }
+        }
+      }
+    },
+    "Connect this iPhone to your server first.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbinde dieses iPhone zuerst mit deinem Server."
+          }
+        }
+      }
+    },
+    "Connect your server": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigenen Server verbinden"
+          }
+        }
+      }
+    },
+    "Connected": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbunden"
+          }
+        }
+      }
+    },
+    "Connection": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbindung"
+          }
+        }
+      }
+    },
+    "Continue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter"
+          }
+        }
+      }
+    },
+    "Copied": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiert"
+          }
+        }
+      }
+    },
+    "Copy": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopieren"
+          }
+        }
+      }
+    },
+    "Copy statectl command": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "statectl-Befehl kopieren"
+          }
+        }
+      }
+    },
+    "Create a one time code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einmal-Code erstellen"
+          }
+        }
+      }
+    },
+    "Create one-time code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einmalcode erstellen"
+          }
+        }
+      }
+    },
+    "Created in State on an already paired device, under Settings.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird in State auf einem bereits gekoppelten Gerät unter Einstellungen erzeugt."
+          }
+        }
+      }
+    },
+    "Credentials stay in the iOS Keychain. Reminder data remains on your own server.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugangsdaten bleiben im iOS-Schlüsselbund. Erinnerungsdaten bleiben auf deinem eigenen Server."
+          }
+        }
+      }
+    },
+    "Daily": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Täglich"
+          }
+        }
+      }
+    },
+    "Date": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datum"
+          }
+        }
+      }
+    },
+    "Delivery and privacy": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zustellung und Datenschutz"
+          }
+        }
+      }
+    },
+    "Denied": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verweigert"
+          }
+        }
+      }
+    },
+    "Description": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beschreibung"
+          }
+        }
+      }
+    },
+    "Details": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        }
+      }
+    },
+    "Device name": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gerätename"
+          }
+        }
+      }
+    },
+    "Devices": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geräte"
+          }
+        }
+      }
+    },
+    "Disconnect": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trennen"
+          }
+        }
+      }
+    },
+    "Disconnect this device": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Gerät trennen"
+          }
+        }
+      }
+    },
+    "Disconnect this device?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Gerät trennen?"
+          }
+        }
+      }
+    },
+    "Documentation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dokumentation"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fertig"
+          }
+        }
+      }
+    },
+    "Edit": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeiten"
+          }
+        }
+      }
+    },
+    "Edit reminder": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerung bearbeiten"
+          }
+        }
+      }
+    },
+    "Enter the server address": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serveradresse eintragen"
+          }
+        }
+      }
+    },
+    "Every agent gets its own credential, so the history keeps them apart and revoking one leaves the others alone.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Agent bekommt einen eigenen Zugang. Deshalb hält der Verlauf sie auseinander, und ein Entzug trifft nur diesen einen."
+          }
+        }
+      }
+    },
+    "Every change is on the record": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Änderung ist belegt"
+          }
+        }
+      }
+    },
+    "Every human, device, agent and system change will appear here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Änderung durch Menschen, Geräte, Agenten und das System erscheint hier."
+          }
+        }
+      }
+    },
+    "Expires": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Läuft ab"
+          }
+        }
+      }
+    },
+    "Expires %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Läuft ab %@"
+          }
+        }
+      }
+    },
+    "Explore demo": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demo ansehen"
+          }
+        }
+      }
+    },
+    "First owner setup": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersteinrichtung des Besitzers"
+          }
+        }
+      }
+    },
+    "First setup": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersteinrichtung"
+          }
+        }
+      }
+    },
+    "Fixed location time": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feste Ortszeit"
+          }
+        }
+      }
+    },
+    "Focus on the complete cross-agent history.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konzentriere dich auf den vollständigen agentenübergreifenden Verlauf."
+          }
+        }
+      }
+    },
+    "Frequency": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Häufigkeit"
+          }
+        }
+      }
+    },
+    "Harness": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Harness"
+          }
+        }
+      }
+    },
+    "Harness identifier": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Harness-Kennung"
+          }
+        }
+      }
+    },
+    "How delivery works": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So funktioniert die Zustellung"
+          }
+        }
+      }
+    },
+    "How to connect": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Art der Verbindung"
+          }
+        }
+      }
+    },
+    "Identity": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Identität"
+          }
+        }
+      }
+    },
+    "If decryption fails, State shows generic notification text.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falls die Entschlüsselung fehlschlägt, zeigt State einen allgemeinen Benachrichtigungstext."
+          }
+        }
+      }
+    },
+    "In Settings, under Connect an agent, pick the agent and tap Create one time code. The code is valid for a short while and for exactly one pairing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In den Einstellungen unter Agent verbinden den Agenten auswählen und Einmal-Code erstellen antippen. Der Code gilt kurz und für genau eine Kopplung."
+          }
+        }
+      }
+    },
+    "It is the one time secret that makes the first person the owner.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das einmalige Geheimnis, das die erste Person zum Besitzer macht."
+          }
+        }
+      }
+    },
+    "Keep my version": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Version behalten"
+          }
+        }
+      }
+    },
+    "Last synchronized": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuletzt synchronisiert"
+          }
+        }
+      }
+    },
+    "Last synchronized %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuletzt synchronisiert %@"
+          }
+        }
+      }
+    },
+    "Let State reach you": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lass State dich erreichen"
+          }
+        }
+      }
+    },
+    "License": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lizenz"
+          }
+        }
+      }
+    },
+    "Local demo": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale Demo"
+          }
+        }
+      }
+    },
+    "Look around without a server": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Server umsehen"
+          }
+        }
+      }
+    },
+    "Mark as complete": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als erledigt markieren"
+          }
+        }
+      }
+    },
+    "Memory for your coding agents": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gedächtnis für deine Coding-Agents"
+          }
+        }
+      }
+    },
+    "Monthly": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monatlich"
+          }
+        }
+      }
+    },
+    "Moves with me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zieht mit mir um"
+          }
+        }
+      }
+    },
+    "Never": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie"
+          }
+        }
+      }
+    },
+    "New reminder": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Erinnerung"
+          }
+        }
+      }
+    },
+    "No activity yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Aktivität"
+          }
+        }
+      }
+    },
+    "No comments yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Kommentare"
+          }
+        }
+      }
+    },
+    "No date": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Datum"
+          }
+        }
+      }
+    },
+    "No results": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Ergebnisse"
+          }
+        }
+      }
+    },
+    "No server yet? Start here": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch kein Server? Hier starten"
+          }
+        }
+      }
+    },
+    "None connected": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine verbunden"
+          }
+        }
+      }
+    },
+    "Not now": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jetzt nicht"
+          }
+        }
+      }
+    },
+    "Not requested": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht angefragt"
+          }
+        }
+      }
+    },
+    "Nothing gets lost": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts geht verloren"
+          }
+        }
+      }
+    },
+    "Nothing pending": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts offen"
+          }
+        }
+      }
+    },
+    "Notifications": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Benachrichtigungen"
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "Occurrence completed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorkommnis erledigt"
+          }
+        }
+      }
+    },
+    "Occurrence snoozed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorkommnis schlummert"
+          }
+        }
+      }
+    },
+    "Occurrences": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorkommnisse"
+          }
+        }
+      }
+    },
+    "On your Mac or Windows machine, paired with one command.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf deinem Mac oder Windows-Rechner, gekoppelt mit einem einzigen Befehl."
+          }
+        }
+      }
+    },
+    "On your Mac or Windows machine. Every agent gets its own credential and shows up separately in the history.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf deinem Mac oder Windows-Rechner. Jeder Agent bekommt einen eigenen Zugang und taucht getrennt im Verlauf auf."
+          }
+        }
+      }
+    },
+    "One binary on a machine you control. It keeps the audit chain.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Binärdatei auf einer Maschine, die dir gehört. Sie führt die Audit-Kette."
+          }
+        }
+      }
+    },
+    "One-time pairing code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einmaliger Kopplungscode"
+          }
+        }
+      }
+    },
+    "Open iOS notification settings": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS-Benachrichtigungseinstellungen öffnen"
+          }
+        }
+      }
+    },
+    "Origin: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herkunft: %@"
+          }
+        }
+      }
+    },
+    "Other": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Andere"
+          }
+        }
+      }
+    },
+    "Pairing code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopplungscode"
+          }
+        }
+      }
+    },
+    "Paste the bootstrap token once": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bootstrap-Token einmal einsetzen"
+          }
+        }
+      }
+    },
+    "Pending": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offen"
+          }
+        }
+      }
+    },
+    "Planned": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geplant"
+          }
+        }
+      }
+    },
+    "Prepare agent workflow review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agenten-Workflow prüfen"
+          }
+        }
+      }
+    },
+    "Print the bootstrap token": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bootstrap-Token ausgeben"
+          }
+        }
+      }
+    },
+    "Printed once by your server with state-server bootstrap-token. It makes this iPhone the owner.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Server gibt ihn einmal mit state-server bootstrap-token aus. Er macht dieses iPhone zum Besitzer."
+          }
+        }
+      }
+    },
+    "Read the full documentation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vollständige Dokumentation lesen"
+          }
+        }
+      }
+    },
+    "Reads offline, queues your changes, notifies you when something is due.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liest offline, reiht deine Änderungen ein und meldet sich, wenn etwas fällig ist."
+          }
+        }
+      }
+    },
+    "Remind me to prepare the agent workflow review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnere mich daran, den Agenten-Workflow zu prüfen"
+          }
+        }
+      }
+    },
+    "Remind me to renew the backup restore test": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnere mich daran, den Backup-Wiederherstellungstest zu erneuern"
+          }
+        }
+      }
+    },
+    "Reminder": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerung"
+          }
+        }
+      }
+    },
+    "Reminder archived": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerung archiviert"
+          }
+        }
+      }
+    },
+    "Reminder changed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerung geändert"
+          }
+        }
+      }
+    },
+    "Reminder conflict": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerungskonflikt"
+          }
+        }
+      }
+    },
+    "Reminder created": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerung erstellt"
+          }
+        }
+      }
+    },
+    "Reminder restored": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerung wiederhergestellt"
+          }
+        }
+      }
+    },
+    "Reminders you or your agents create appear here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerungen von dir oder deinen Agenten erscheinen hier."
+          }
+        }
+      }
+    },
+    "Remote push stays encrypted": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push bleibt verschlüsselt"
+          }
+        }
+      }
+    },
+    "Renew VPS backup test": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VPS-Backup-Test erneuern"
+          }
+        }
+      }
+    },
+    "Repeat": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiederholen"
+          }
+        }
+      }
+    },
+    "Resolve conflicts (%lld)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konflikte lösen (%lld)"
+          }
+        }
+      }
+    },
+    "Revision %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revision %lld"
+          }
+        }
+      }
+    },
+    "Revoke access": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugriff widerrufen"
+          }
+        }
+      }
+    },
+    "Run one command per agent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Befehl pro Agent ausführen"
+          }
+        }
+      }
+    },
+    "Sample data, nothing leaves this iPhone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beispieldaten, nichts verlässt dieses iPhone"
+          }
+        }
+      }
+    },
+    "Save": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speichern"
+          }
+        }
+      }
+    },
+    "Scan pairing QR code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopplungs-QR-Code scannen"
+          }
+        }
+      }
+    },
+    "Scan pairing code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopplungscode scannen"
+          }
+        }
+      }
+    },
+    "Schedule": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Planung"
+          }
+        }
+      }
+    },
+    "Search reminders": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerungen durchsuchen"
+          }
+        }
+      }
+    },
+    "Server": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        }
+      }
+    },
+    "Server URL": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server-URL"
+          }
+        }
+      }
+    },
+    "Server address": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serveradresse"
+          }
+        }
+      }
+    },
+    "Set a date": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datum festlegen"
+          }
+        }
+      }
+    },
+    "Set up the server, pair this iPhone, connect your agents.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server einrichten, iPhone koppeln, Agenten verbinden."
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen"
+          }
+        }
+      }
+    },
+    "Skip": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Überspringen"
+          }
+        }
+      }
+    },
+    "Snooze": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schlummern"
+          }
+        }
+      }
+    },
+    "Snooze 1 hour": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Stunde schlummern"
+          }
+        }
+      }
+    },
+    "Snooze 10 minutes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10 Minuten schlummern"
+          }
+        }
+      }
+    },
+    "Snoozed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schlummert"
+          }
+        }
+      }
+    },
+    "Snoozed until %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schlummert bis %@"
+          }
+        }
+      }
+    },
+    "Source code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quellcode"
+          }
+        }
+      }
+    },
+    "Source code on GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quellcode auf GitHub"
+          }
+        }
+      }
+    },
+    "Specific time": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestimmte Uhrzeit"
+          }
+        }
+      }
+    },
+    "Start State on a machine you control": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "State auf einer Maschine starten, die dir gehört"
+          }
+        }
+      }
+    },
+    "State could not complete the action": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "State konnte die Aktion nicht abschließen"
+          }
+        }
+      }
+    },
+    "State is a memory your coding agents write into and you own.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "State ist ein Gedächtnis, in das deine Coding-Agents schreiben und das dir gehört."
+          }
+        }
+      }
+    },
+    "State needs a server of your own. Your agents and this iPhone both talk to it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "State braucht einen eigenen Server. Deine Agenten und dieses iPhone sprechen beide mit ihm."
+          }
+        }
+      }
+    },
+    "State talks to a server you run. Nothing goes anywhere else.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "State spricht mit einem Server, den du betreibst. Sonst geht nichts irgendwohin."
+          }
+        }
+      }
+    },
+    "Status": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status"
+          }
+        }
+      }
+    },
+    "Step 1 · Run the server": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schritt 1 · Server starten"
+          }
+        }
+      }
+    },
+    "Step 2 · Connect this iPhone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schritt 2 · Dieses iPhone verbinden"
+          }
+        }
+      }
+    },
+    "Step 3 · Connect your agents": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schritt 3 · Agenten verbinden"
+          }
+        }
+      }
+    },
+    "Synchronize now": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jetzt synchronisieren"
+          }
+        }
+      }
+    },
+    "Synchronizing": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird synchronisiert"
+          }
+        }
+      }
+    },
+    "System permission": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Systemberechtigung"
+          }
+        }
+      }
+    },
+    "The QR code is a shortcut for the same two values. Anything that prints a State pairing QR code, your server's setup output for instance, can be scanned instead of typing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der QR-Code ist eine Abkürzung für dieselben zwei Werte. Alles, was einen State-Kopplungscode als QR ausgibt, etwa die Einrichtungsausgabe deines Servers, kann gescannt statt getippt werden."
+          }
+        }
+      }
+    },
+    "The full HTTPS address of your server, for example https://state.example.com.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die vollständige HTTPS-Adresse deines Servers, zum Beispiel https://state.example.com."
+          }
+        }
+      }
+    },
+    "The full guide covers deployment, backups, notification delivery and how to revoke an agent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die vollständige Anleitung behandelt Betrieb, Backups, Zustellung von Benachrichtigungen und den Entzug eines Agenten."
+          }
+        }
+      }
+    },
+    "The relay receives only encrypted reminder packages and an opaque route.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Relay empfängt nur verschlüsselte Erinnerungspakete und eine opake Route."
+          }
+        }
+      }
+    },
+    "The server and this iPhone changed the same reminder.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server und dieses iPhone haben dieselbe Erinnerung geändert."
+          }
+        }
+      }
+    },
+    "The server data remains intact. This device loses its stored credential.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Serverdaten bleiben erhalten. Dieses Gerät verliert seine gespeicherte Berechtigung."
+          }
+        }
+      }
+    },
+    "The shared relay never sees your reminder text.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das geteilte Relay sieht deinen Erinnerungstext nie."
+          }
+        }
+      }
+    },
+    "They fire even while your server is unreachable.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sie kommen auch dann, wenn dein Server nicht erreichbar ist."
+          }
+        }
+      }
+    },
+    "This iPhone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses iPhone"
+          }
+        }
+      }
+    },
+    "This is not a valid State pairing code.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dies ist kein gültiger State-Kopplungscode."
+          }
+        }
+      }
+    },
+    "Three pieces, one memory": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drei Teile, ein Gedächtnis"
+          }
+        }
+      }
+    },
+    "Time zone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeitzone"
+          }
+        }
+      }
+    },
+    "Time zone behavior": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeitzonenverhalten"
+          }
+        }
+      }
+    },
+    "Title": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titel"
+          }
+        }
+      }
+    },
+    "Today": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute"
+          }
+        }
+      }
+    },
+    "Tomorrow": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Morgen"
+          }
+        }
+      }
+    },
+    "Tomorrow morning": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Morgen früh"
+          }
+        }
+      }
+    },
+    "Try a different search term.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versuche einen anderen Suchbegriff."
+          }
+        }
+      }
+    },
+    "Unknown": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbekannt"
+          }
+        }
+      }
+    },
+    "Upcoming reminders are secured locally on this iPhone.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anstehende Erinnerungen werden lokal auf diesem iPhone abgesichert."
+          }
+        }
+      }
+    },
+    "Use 2 to 32 characters: lower case letters, digits and inner hyphens.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nutze 2 bis 32 Zeichen: Kleinbuchstaben, Ziffern und Bindestriche im Wortinneren."
+          }
+        }
+      }
+    },
+    "Use server version": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serverversion verwenden"
+          }
+        }
+      }
+    },
+    "Verify the encrypted archive and restore it into an empty volume.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prüfe das verschlüsselte Archiv und stelle es in einem leeren Volume wieder her."
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version"
+          }
+        }
+      }
+    },
+    "Weekly": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wöchentlich"
+          }
+        }
+      }
+    },
+    "Who changed what, when, and on whose instruction.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer was wann geändert hat und auf wessen Anweisung."
+          }
+        }
+      }
+    },
+    "Yearly": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jährlich"
+          }
+        }
+      }
+    },
+    "Yesterday": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestern"
+          }
+        }
+      }
+    },
+    "You run the server. Your agents write reminders through it. This iPhone reads them, works offline and alerts you when something is due.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du betreibst den Server. Deine Agenten schreiben Erinnerungen hinein. Dieses iPhone liest sie, arbeitet offline und meldet sich, wenn etwas fällig ist."
+          }
+        }
+      }
+    },
+    "Your State server": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein State-Server"
+          }
+        }
+      }
+    },
+    "Your agents": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Agenten"
+          }
+        }
+      }
+    },
+    "Your agents remember. You stay in control.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Agenten erinnern sich. Du behältst die Kontrolle."
+          }
+        }
+      }
+    },
+    "Your name": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Name"
+          }
+        }
+      }
+    },
+    "Your server, your data": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Server, deine Daten"
+          }
+        }
+      }
+    },
+    "statectl stores the credential and prints the MCP server entry for this agent. Add it to that agent's own configuration.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "statectl speichert die Zugangsdaten und gibt den MCP-Server-Eintrag für diesen Agenten aus. Trage ihn in dessen eigene Konfiguration ein."
+          }
+        }
+      }
+    }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }
