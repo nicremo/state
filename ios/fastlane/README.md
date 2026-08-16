@@ -71,6 +71,14 @@ Delete every screenshot on the editable version
 
 Attach the newest processed build to the editable version
 
+### ios audit
+
+```sh
+[bundle exec] fastlane ios audit
+```
+
+Audit what App Store Connect actually holds for this version
+
 ### ios store_assets
 
 ```sh
