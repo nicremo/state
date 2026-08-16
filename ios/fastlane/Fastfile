@@ -219,6 +219,22 @@ platform :ios do
     rescue StandardError => error
       UI.message("No live App Store build yet (#{error.message})")
     end
+
+    # A build is only installable once Apple finishes processing it, and a
+    # tester only ever sees it through a group, so report both. Without this,
+    # "uploaded" reads as "ready to install on a phone", which it is not.
+    app = state_app!
+    Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-uploadedDate", limit: 5).each do |build|
+      UI.message("Build #{build.version}: #{build.processing_state}")
+    end
+    groups = app.get_beta_groups
+    if groups.empty?
+      UI.important("No TestFlight group yet, so nobody can install the build. Add internal testers in App Store Connect.")
+    else
+      groups.each do |group|
+        UI.message("TestFlight group #{group.name} (#{group.is_internal_group ? 'internal' : 'external'})")
+      end
+    end
   end
 
   desc "Validate the local App Store privacy declaration"

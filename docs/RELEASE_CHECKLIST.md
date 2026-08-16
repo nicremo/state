@@ -70,9 +70,11 @@ If the export fails with `Copy failed`, check `rsync`. Xcode packages the IPA wi
 2. Run `FASTLANE_USER=your-apple-id bundle exec fastlane ios create_app`, then `bundle exec fastlane ios asc_status`. This creates the App Store Connect record after the main App ID exists. The App Store Connect API cannot create an app record, so `create_app` needs an interactive Apple ID sign-in including two-factor confirmation. Run it from a terminal that can answer that prompt.
 3. Run `bundle exec fastlane ios metadata` to upload the localized listing and screenshots.
 4. Run `bundle exec fastlane ios beta` to upload an internal build.
-5. Add Fabian as an internal tester in App Store Connect and install that exact TestFlight build on a physical iPhone.
-6. Pair the iPhone with the production State server, create a reminder through MCP, edit it offline in the app, sync, and verify the full activity history.
-7. Verify local notification scheduling while the VPS is unavailable. Verify APNs only after production APNs credentials and the permanent relay domain are enabled.
+5. Run `bundle exec fastlane ios builds`. It reports the processing state and the TestFlight groups. A build only becomes installable at `VALID`, and with no group at all nobody can install it however valid it is, so both lines have to look right before anyone reaches for a phone.
+6. Add an internal TestFlight group in App Store Connect and put Fabian in it. Internal groups take App Store Connect users, and the App Store Connect API does not create them, so this is done in the web interface.
+7. Install that exact TestFlight build on a physical iPhone.
+8. Pair the iPhone with the production State server, create a reminder through MCP, edit it offline in the app, sync, and verify the full activity history.
+9. Verify local notification scheduling while the VPS is unavailable. Verify APNs only after production APNs credentials and the permanent relay domain are enabled.
 
 ## Before public App Review
 
