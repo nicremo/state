@@ -55,6 +55,14 @@ Print the latest TestFlight and App Store build numbers
 
 Validate the local App Store privacy declaration
 
+### ios paths
+
+```sh
+[bundle exec] fastlane ios paths
+```
+
+Print the resolved release asset paths
+
 ### ios test
 
 ```sh
