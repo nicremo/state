@@ -39,6 +39,22 @@ Create the App Store Connect application if it does not exist
 
 Verify App Store Connect access and the State app record
 
+### ios builds
+
+```sh
+[bundle exec] fastlane ios builds
+```
+
+Print the latest TestFlight and App Store build numbers
+
+### ios privacy
+
+```sh
+[bundle exec] fastlane ios privacy
+```
+
+Validate the local App Store privacy declaration
+
 ### ios test
 
 ```sh
@@ -77,7 +93,7 @@ Capture deterministic German and English 6.9-inch screenshots
 [bundle exec] fastlane ios metadata
 ```
 
-Upload localized metadata and screenshots
+Upload localized metadata, age rating and screenshots
 
 ### ios review
 
@@ -102,6 +118,22 @@ Build, upload, update metadata and submit
 ```
 
 Report the latest live App Store version
+
+### ios review_status
+
+```sh
+[bundle exec] fastlane ios review_status
+```
+
+Print the App Store version and review submission state
+
+### ios pricing
+
+```sh
+[bundle exec] fastlane ios pricing
+```
+
+Make State a free app with Germany as the base territory
 
 ----
 
