@@ -78,6 +78,79 @@ def state_app!
   app
 end
 
+# Number of screenshots that should end up in App Store Connect per locale.
+def expected_screenshot_counts
+  Dir.children(SCREENSHOTS_PATH).each_with_object({}) do |locale, counts|
+    directory = File.join(SCREENSHOTS_PATH, locale)
+    next unless File.directory?(directory)
+    count = Dir.glob(File.join(directory, "*.png")).length
+    counts[locale] = count if count > 0
+  end
+end
+
+def delete_all_screenshots!(version)
+  removed = 0
+  version.get_app_store_version_localizations.each do |localization|
+    localization.get_app_screenshot_sets.each do |set|
+      removed += set.app_screenshots.length
+      set.delete!
+    end
+  end
+  removed
+end
+
+# deliver reliably lands more screenshots than there are files: 6 in a set of 4,
+# every run, with or without its own overwrite. It appears to retry an upload
+# whose first attempt actually succeeded. Names are unique per set, so drop
+# everything after the first of each name.
+def prune_duplicate_screenshots!(version)
+  removed = 0
+  version.get_app_store_version_localizations.each do |localization|
+    localization.get_app_screenshot_sets.each do |set|
+      seen = {}
+      set.app_screenshots.each do |screenshot|
+        if seen[screenshot.file_name]
+          screenshot.delete!
+          removed += 1
+        else
+          seen[screenshot.file_name] = true
+        end
+      end
+    end
+  end
+  UI.message("Removed #{removed} duplicate screenshots") if removed > 0
+  removed
+end
+
+# deliver's overwrite_screenshots has repeatedly left an extra copy behind, and
+# a duplicated screenshot is only visible on the product page. Count what landed
+# and fail loudly rather than shipping a listing nobody checked.
+def verify_screenshot_counts!(version)
+  expected = expected_screenshot_counts
+  actual = Hash.new(0)
+  version.get_app_store_version_localizations.each do |localization|
+    localization.get_app_screenshot_sets.each do |set|
+      actual[localization.locale] += set.app_screenshots.length
+    end
+  end
+
+  mismatched = expected.reject { |locale, count| actual[locale] == count }
+  if mismatched.empty?
+    UI.success("Screenshots verified: #{expected.map { |l, c| "#{l} #{c}" }.join(', ')}")
+    return
+  end
+  details = mismatched.map { |locale, count| "#{locale} has #{actual[locale]}, expected #{count}" }
+  UI.user_error!("App Store Connect screenshots are wrong: #{details.join('; ')}. Run `fastlane ios reset_screenshots` and upload again.")
+end
+
+def editable_app_store_version!
+  version = state_app!.get_app_store_versions(
+    filter: { platform: Spaceship::ConnectAPI::Platform::IOS }
+  ).find { |candidate| candidate.version_string == MARKETING_VERSION }
+  UI.user_error!("No App Store version #{MARKETING_VERSION}. Run `fastlane ios ensure_version`.") if version.nil?
+  version
+end
+
 # State declares no non-exempt encryption in Info.plist. These answers must say
 # the same thing, otherwise App Review gets two contradictory statements. Change
 # both together, never one alone.
@@ -247,6 +320,112 @@ platform :ios do
     end
   end
 
+  # A VALID build is still installable by nobody until a group exists and a
+  # tester sits in it. Internal groups take App Store Connect users, so the
+  # tester here has to already be a user on the account.
+  desc "Create the internal TestFlight group and put the owner in it"
+  lane :testflight_group do
+    app = state_app!
+    name = ENV.fetch("TESTFLIGHT_GROUP", "Internal")
+    group = app.get_beta_groups.find { |candidate| candidate.name == name }
+    if group.nil?
+      # Not create_beta_group: it always sends publicLinkLimitEnabled, which
+      # Apple rejects for an internal group (fastlane issue 29556). Post the
+      # attributes an internal group actually accepts.
+      Spaceship::ConnectAPI.test_flight_request_client.post("v1/betaGroups", {
+        data: {
+          type: "betaGroups",
+          attributes: {
+            name: name,
+            isInternalGroup: true,
+            hasAccessToAllBuilds: true
+          },
+          relationships: {
+            app: { data: { type: "apps", id: app.id } }
+          }
+        }
+      })
+      group = app.get_beta_groups.find { |candidate| candidate.name == name }
+      UI.user_error!("Created the group but could not read it back.") if group.nil?
+      UI.success("Created internal TestFlight group #{name}")
+    else
+      UI.success("Internal TestFlight group #{name} already exists")
+    end
+
+    email = ENV.fetch("ASC_REVIEW_EMAIL", "fb200386@gmail.com")
+    already = (group.beta_testers || []).any? { |tester| tester.email == email }
+    if already
+      UI.success("#{email} is already a tester in #{name}")
+      next
+    end
+
+    # Not post_bulk_beta_tester_assignments: Apple removed the
+    # v1/bulkBetaTesterAssignments endpoint it posts to. This sends a real
+    # TestFlight invitation.
+    Spaceship::ConnectAPI.post_beta_tester_assignment(
+      beta_group_ids: [group.id],
+      attributes: {
+        email: email,
+        firstName: ENV.fetch("ASC_REVIEW_FIRST_NAME", "Fabian"),
+        lastName: ENV.fetch("ASC_REVIEW_LAST_NAME", "Bitzer")
+      }
+    )
+    UI.success("Invited #{email} to #{name}")
+  end
+
+  # deliver's overwrite_screenshots left duplicates behind across repeated
+  # uploads, so clear the sets outright before uploading again.
+  desc "Delete every screenshot on the editable version"
+  lane :reset_screenshots do
+    removed = delete_all_screenshots!(editable_app_store_version!)
+    UI.success("Removed #{removed} screenshots. Run `fastlane ios metadata` to upload a clean set.")
+  end
+
+  # The App Store icon and the product page both come from the build selected
+  # for the version. Uploading to TestFlight does not select it.
+  desc "Attach the newest processed build to the editable version"
+  lane :select_build do
+    app = state_app!
+    version = editable_app_store_version!
+    build = Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-uploadedDate", limit: 10)
+                                        .find { |candidate| candidate.processing_state == "VALID" }
+    UI.user_error!("No processed build to attach. Check `fastlane ios builds`.") if build.nil?
+
+    version.select_build(build_id: build.id)
+    UI.success("Attached build #{build.version} to version #{version.version_string}")
+  end
+
+  # What App Store Connect actually holds, rather than what the last upload
+  # claimed. Duplicate screenshot sets and a version with no build attached both
+  # look fine in an upload log and wrong on the product page.
+  desc "Report the screenshots and the build attached to the editable version"
+  lane :store_assets do
+    app = state_app!
+    version = app.get_app_store_versions(
+      filter: { platform: Spaceship::ConnectAPI::Platform::IOS }
+    ).find { |candidate| candidate.version_string == MARKETING_VERSION }
+    UI.user_error!("No App Store version #{MARKETING_VERSION}") if version.nil?
+
+    build = begin
+      version.get_build
+    rescue StandardError
+      nil
+    end
+    if build
+      UI.success("Version #{version.version_string} has build #{build.version} attached")
+    else
+      UI.important("Version #{version.version_string} has no build attached, so the App Store icon stays a placeholder")
+    end
+
+    version.get_app_store_version_localizations.each do |localization|
+      localization.get_app_screenshot_sets.each do |set|
+        count = set.app_screenshots.length
+        marker = count > 4 ? "  <-- more than four, likely duplicated" : ""
+        UI.message("#{localization.locale} #{set.screenshot_display_type}: #{count}#{marker}")
+      end
+    end
+  end
+
   desc "Validate the local App Store privacy declaration"
   lane :privacy do
     validate_privacy_declaration!
@@ -325,6 +504,11 @@ platform :ios do
   lane :metadata do
     state_app!
     ensure_version
+    version = editable_app_store_version!
+    # Always start from an empty set. deliver's own overwrite has left extra
+    # copies behind more than once, and duplicates only show on the store page.
+    removed = delete_all_screenshots!(version)
+    UI.message("Cleared #{removed} existing screenshots") if removed > 0
     review_contact = app_review_information
     unless review_contact
       UI.important(
@@ -343,11 +527,16 @@ platform :ios do
       languages: METADATA_LANGUAGES,
       skip_binary_upload: true,
       skip_screenshots: false,
-      overwrite_screenshots: true,
+      # The lane already cleared the sets. Leaving deliver's own overwrite on
+      # made it race its delete against its upload and land 10 or 11 where 8
+      # were expected, every single run.
+      overwrite_screenshots: false,
       run_precheck_before_submit: false,
       submit_for_review: false,
       force: true
     )
+    prune_duplicate_screenshots!(editable_app_store_version!)
+    verify_screenshot_counts!(editable_app_store_version!)
     validate_privacy_declaration!
   end
 
@@ -446,6 +635,60 @@ platform :ios do
     versions.each do |version|
       UI.message("Version #{version.version_string}: #{version.app_store_state}")
     end
+  end
+
+  # Availability is separate from pricing: a free app with no territory
+  # availability is sold nowhere. Nothing warns about that.
+  desc "Make State available in every App Store territory"
+  lane :availability do
+    app = state_app!
+    client = Spaceship::ConnectAPI.tunes_request_client
+
+    begin
+      existing = client.get("v2/apps/#{app.id}/appAvailabilityV2")
+      if existing.body.dig("data", "id")
+        UI.success("App availability is already configured.")
+        next
+      end
+    rescue Spaceship::UnexpectedResponse => error
+      raise unless error.message.include?("does not exist") ||
+                   error.message.include?("NOT_FOUND") ||
+                   error.message.include?("404")
+    end
+
+    territories = []
+    cursor = nil
+    loop do
+      params = { limit: 200 }
+      params[:cursor] = cursor unless cursor.nil?
+      response = client.get("v1/territories", params)
+      territories += response.body.fetch("data").map { |territory| territory.fetch("id") }
+      cursor = response.body.dig("links", "next")&.[](/cursor=([^&]+)/, 1)
+      break if cursor.nil?
+    end
+    UI.message("Fetched #{territories.length} territories")
+
+    client.post("v2/appAvailabilities", {
+      data: {
+        type: "appAvailabilities",
+        attributes: { availableInNewTerritories: true },
+        relationships: {
+          app: { data: { type: "apps", id: app.id } },
+          territoryAvailabilities: {
+            data: territories.map { |id| { type: "territoryAvailabilities", id: "${t-#{id}}" } }
+          }
+        }
+      },
+      included: territories.map do |id|
+        {
+          type: "territoryAvailabilities",
+          id: "${t-#{id}}",
+          attributes: { available: true },
+          relationships: { territory: { data: { type: "territories", id: id } } }
+        }
+      end
+    })
+    UI.success("State is available in #{territories.length} territories, including new ones.")
   end
 
   desc "Make State a free app with Germany as the base territory"

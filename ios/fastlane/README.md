@@ -47,6 +47,38 @@ Verify App Store Connect access and the State app record
 
 Print the latest TestFlight and App Store build numbers
 
+### ios testflight_group
+
+```sh
+[bundle exec] fastlane ios testflight_group
+```
+
+Create the internal TestFlight group and put the owner in it
+
+### ios reset_screenshots
+
+```sh
+[bundle exec] fastlane ios reset_screenshots
+```
+
+Delete every screenshot on the editable version
+
+### ios select_build
+
+```sh
+[bundle exec] fastlane ios select_build
+```
+
+Attach the newest processed build to the editable version
+
+### ios store_assets
+
+```sh
+[bundle exec] fastlane ios store_assets
+```
+
+Report the screenshots and the build attached to the editable version
+
 ### ios privacy
 
 ```sh
@@ -142,6 +174,14 @@ Make the editable App Store version match the binary marketing version
 ```
 
 Print the App Store version and review submission state
+
+### ios availability
+
+```sh
+[bundle exec] fastlane ios availability
+```
+
+Make State available in every App Store territory
 
 ### ios pricing
 
