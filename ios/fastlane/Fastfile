@@ -96,24 +96,34 @@ def submission_info_defaults
   }
 end
 
-# App Review needs a contact once a build is attached. The name and address are
-# already public in the repository history, the phone number is not, so it comes
-# from the environment and never gets committed.
+# App Review needs a contact once a build is attached, and App Store Connect
+# rejects an incomplete one outright. The name and address are already public in
+# the repository history, the phone number is not, so it comes from the
+# environment and never gets committed. Returns nil when it is missing.
 def app_review_information
-  phone = ENV["ASC_REVIEW_PHONE"]
-  if phone.nil? || phone.strip.empty?
-    UI.user_error!(
-      "App Review needs a contact phone number and this repository is public, so it is not stored here. " \
-      "Run the lane with ASC_REVIEW_PHONE=\"+49...\" set."
-    )
-  end
+  phone = ENV["ASC_REVIEW_PHONE"].to_s.strip
+  return nil if phone.empty?
+
   {
     first_name: ENV.fetch("ASC_REVIEW_FIRST_NAME", "Fabian"),
     last_name: ENV.fetch("ASC_REVIEW_LAST_NAME", "Bitzer"),
     email_address: ENV.fetch("ASC_REVIEW_EMAIL", "fb200386@gmail.com"),
-    phone_number: phone.strip,
+    phone_number: phone,
     notes: File.read(File.join(METADATA_PATH, "review_information", "notes.txt")).strip
   }
+end
+
+# deliver always reads review information out of the metadata folder, and an
+# incomplete contact fails the entire upload, screenshots included. Without a
+# phone number, hand deliver a copy of the metadata that simply has no review
+# information in it, so everything else still reaches App Store Connect.
+def metadata_path_without_review_information
+  staged = Dir.mktmpdir("state-metadata")
+  Dir.children(METADATA_PATH).each do |entry|
+    next if entry == "review_information"
+    FileUtils.cp_r(File.join(METADATA_PATH, entry), staged)
+  end
+  staged
 end
 
 # The privacy nutrition label is not uploaded by any fastlane action. This file
@@ -315,13 +325,21 @@ platform :ios do
   lane :metadata do
     state_app!
     ensure_version
+    review_contact = app_review_information
+    unless review_contact
+      UI.important(
+        "No ASC_REVIEW_PHONE set, so the App Review contact is left untouched and this listing " \
+        "cannot be submitted yet. Everything else still uploads. Rerun with " \
+        "ASC_REVIEW_PHONE=\"+49...\" to complete it."
+      )
+    end
     deliver(
       api_key: connect_api_key,
       app_identifier: BUNDLE_ID,
-      metadata_path: METADATA_PATH,
+      metadata_path: review_contact ? METADATA_PATH : metadata_path_without_review_information,
       screenshots_path: SCREENSHOTS_PATH,
       app_rating_config_path: AGE_RATING_PATH,
-      app_review_information: app_review_information,
+      app_review_information: review_contact,
       languages: METADATA_LANGUAGES,
       skip_binary_upload: true,
       skip_screenshots: false,
