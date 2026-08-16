@@ -35,3 +35,11 @@ ios/screenshots/
 *.key
 *.crt
 .secrets/
+
+# Local development only, never part of this public repository.
+# agent-logs/ records how the state came about, docs/local/ what came out of it.
+# CLAUDE.md and AGENTS.md exist solely to carry the local agent logging rule.
+agent-logs/
+docs/local/
+CLAUDE.md
+AGENTS.md
