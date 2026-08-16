@@ -127,6 +127,14 @@ Build, upload, update metadata and submit
 
 Report the latest live App Store version
 
+### ios ensure_version
+
+```sh
+[bundle exec] fastlane ios ensure_version
+```
+
+Make the editable App Store version match the binary marketing version
+
 ### ios review_status
 
 ```sh
