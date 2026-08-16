@@ -339,26 +339,33 @@ platform :ios do
       schedule = client.get("v1/apps/#{app.id}/appPriceSchedule")
       schedule_id = schedule.body.dig("data", "id")
       unless schedule_id.nil?
-        manual_prices = client.get(
-          "v1/appPriceSchedules/#{schedule_id}/manualPrices",
-          { include: "appPricePoint,territory", limit: 200 }
-        )
-        free_points = manual_prices.body.fetch("included", []).each_with_object({}) do |item, result|
-          next unless item.fetch("type") == "appPricePoints"
-          result[item.fetch("id")] = item.dig("attributes", "customerPrice").to_f
+        # A brand new app reports a schedule id that has no schedule behind it
+        # yet, so this lookup has to tolerate the resource being absent.
+        begin
+          manual_prices = client.get(
+            "v1/appPriceSchedules/#{schedule_id}/manualPrices",
+            { include: "appPricePoint,territory", limit: 200 }
+          )
+          free_points = manual_prices.body.fetch("included", []).each_with_object({}) do |item, result|
+            next unless item.fetch("type") == "appPricePoints"
+            result[item.fetch("id")] = item.dig("attributes", "customerPrice").to_f
+          end
+          already_free = manual_prices.body.fetch("data", []).any? do |price|
+            next false unless price.dig("attributes", "endDate").nil?
+            point_id = price.dig("relationships", "appPricePoint", "data", "id")
+            free_points[point_id]&.zero?
+          end
+          if already_free
+            UI.success("State is already priced as free.")
+            next
+          end
+        rescue Spaceship::UnexpectedResponse => error
+          raise unless error.message.include?("does not exist") || error.message.include?("NOT_FOUND")
         end
-        already_free = manual_prices.body.fetch("data", []).any? do |price|
-          next false unless price.dig("attributes", "endDate").nil?
-          point_id = price.dig("relationships", "appPricePoint", "data", "id")
-          free_points[point_id]&.zero?
-        end
-        if already_free
-          UI.success("State is already priced as free.")
-          next
-        end
+        UI.message("No active free price yet. Creating the price schedule.")
       end
     rescue Spaceship::UnexpectedResponse => error
-      raise unless error.message.include?("404") || error.message.include?("NOT_FOUND")
+      raise unless error.message.include?("does not exist") || error.message.include?("404") || error.message.include?("NOT_FOUND")
     end
 
     price_points = client.get(
