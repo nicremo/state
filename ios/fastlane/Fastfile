@@ -89,6 +89,26 @@ def submission_info_defaults
   }
 end
 
+# App Review needs a contact once a build is attached. The name and address are
+# already public in the repository history, the phone number is not, so it comes
+# from the environment and never gets committed.
+def app_review_information
+  phone = ENV["ASC_REVIEW_PHONE"]
+  if phone.nil? || phone.strip.empty?
+    UI.user_error!(
+      "App Review needs a contact phone number and this repository is public, so it is not stored here. " \
+      "Run the lane with ASC_REVIEW_PHONE=\"+49...\" set."
+    )
+  end
+  {
+    first_name: ENV.fetch("ASC_REVIEW_FIRST_NAME", "Fabian"),
+    last_name: ENV.fetch("ASC_REVIEW_LAST_NAME", "Bitzer"),
+    email_address: ENV.fetch("ASC_REVIEW_EMAIL", "fb200386@gmail.com"),
+    phone_number: phone.strip,
+    notes: File.read(File.join(METADATA_PATH, "review_information", "notes.txt")).strip
+  }
+end
+
 # The privacy nutrition label is not uploaded by any fastlane action. This file
 # is the reviewed source of truth behind the answers entered by hand, so it must
 # stay honest about what the server and the optional relay actually process.
@@ -277,6 +297,7 @@ platform :ios do
       metadata_path: METADATA_PATH,
       screenshots_path: SCREENSHOTS_PATH,
       app_rating_config_path: AGE_RATING_PATH,
+      app_review_information: app_review_information,
       languages: METADATA_LANGUAGES,
       skip_binary_upload: true,
       skip_screenshots: false,
