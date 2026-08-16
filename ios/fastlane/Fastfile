@@ -24,6 +24,13 @@ APP_SKU = ENV.fetch("STATE_APP_SKU", "state-agent-context-ios")
 MARKETING_VERSION = "1.0.0"
 METADATA_LANGUAGES = ["de-DE", "en-US"].freeze
 BASE_TERRITORY = "DEU"
+EDITABLE_VERSION_STATES = %w[
+  PREPARE_FOR_SUBMISSION
+  DEVELOPER_REJECTED
+  REJECTED
+  METADATA_REJECTED
+  WAITING_FOR_REVIEW
+].freeze
 
 ASC_KEY_ID = ENV.fetch("ASC_KEY_ID", "7VDX9Z6S8W")
 ASC_ISSUER_ID = ENV.fetch("ASC_ISSUER_ID", "d9828ae8-0a79-465a-baff-a89d22b0bd39")
@@ -291,6 +298,7 @@ platform :ios do
   desc "Upload localized metadata, age rating and screenshots"
   lane :metadata do
     state_app!
+    ensure_version
     deliver(
       api_key: connect_api_key,
       app_identifier: BUNDLE_ID,
@@ -356,6 +364,39 @@ platform :ios do
     )
     version = lane_context[SharedValues::LATEST_VERSION]
     UI.message("Live State version: #{version}, build #{build}")
+  end
+
+  # App Store Connect only offers a build to a version record whose version
+  # string matches the binary. produce creates "1.0" while the binary carries
+  # MARKETING_VERSION, so without this the build cannot be selected at all.
+  desc "Make the editable App Store version match the binary marketing version"
+  lane :ensure_version do
+    app = state_app!
+    versions = app.get_app_store_versions(
+      filter: { platform: Spaceship::ConnectAPI::Platform::IOS }
+    )
+    if versions.any? { |version| version.version_string == MARKETING_VERSION }
+      UI.success("App Store version #{MARKETING_VERSION} already exists.")
+      next
+    end
+
+    editable = versions.find { |version| EDITABLE_VERSION_STATES.include?(version.app_store_state) }
+    if editable
+      UI.message("Renaming version #{editable.version_string} to #{MARKETING_VERSION}")
+      editable.update(attributes: { versionString: MARKETING_VERSION })
+      UI.success("App Store version is now #{MARKETING_VERSION}")
+      next
+    end
+
+    Spaceship::ConnectAPI.post_app_store_version(
+      app_id: app.id,
+      attributes: {
+        versionString: MARKETING_VERSION,
+        platform: Spaceship::ConnectAPI::Platform::IOS,
+        releaseType: "AFTER_APPROVAL"
+      }
+    )
+    UI.success("Created App Store version #{MARKETING_VERSION}")
   end
 
   desc "Print the App Store version and review submission state"
