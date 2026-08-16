@@ -1,0 +1,23 @@
+[
+  {
+    "category": "USER_CONTENT",
+    "data_types": ["OTHER_USER_CONTENT"],
+    "purposes": ["APP_FUNCTIONALITY"],
+    "data_protections": ["DATA_LINKED_TO_YOU"],
+    "note": "Reminder titles, descriptions, comments and the source excerpt that caused a write. These leave the device for the State server the owner operates. The optional shared relay receives this content only as an encrypted package it cannot read."
+  },
+  {
+    "category": "IDENTIFIERS",
+    "data_types": ["USER_ID", "DEVICE_ID"],
+    "purposes": ["APP_FUNCTIONALITY"],
+    "data_protections": ["DATA_LINKED_TO_YOU"],
+    "note": "Actor identifier, device label and the opaque relay route used to address encrypted notifications. The relay stores the APNs token encrypted at rest."
+  },
+  {
+    "category": "CONTACT_INFO",
+    "data_types": ["NAME"],
+    "purposes": ["APP_FUNCTIONALITY"],
+    "data_protections": ["DATA_LINKED_TO_YOU"],
+    "note": "Owner display name and device name are free text the owner enters during pairing so the audit history can attribute every change."
+  }
+]
