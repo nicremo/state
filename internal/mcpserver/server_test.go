@@ -148,6 +148,42 @@ func TestMCPServerRejectsMissingBearerToken(t *testing.T) {
 func newTestMCPHandler(t *testing.T) (http.Handler, string) {
 	t.Helper()
 
+	fixture := newTestMCPFixture(t)
+	return fixture.handler, fixture.pairHarness(t, "claude-code", "Claude Code", "MacBook")
+}
+
+// testMCPFixture is a booted server plus the owner credential, so a test can
+// pair as many agents as it needs.
+type testMCPFixture struct {
+	handler http.Handler
+	auth    *stateauth.Manager
+	state   *state.Service
+	owner   state.Actor
+}
+
+// pairHarness creates a one-time code as the owner and exchanges it, which is
+// exactly what statectl does. It returns the agent's bearer token.
+func (fixture testMCPFixture) pairHarness(t *testing.T, harness string, displayName string, deviceName string) string {
+	t.Helper()
+
+	pairing, err := fixture.auth.CreatePairingCode(context.Background(), fixture.owner, stateauth.PairingCodeRequest{
+		Harness:     harness,
+		DisplayName: displayName,
+		DeviceName:  deviceName,
+	})
+	if err != nil {
+		t.Fatalf("CreatePairingCode(%s) error = %v", harness, err)
+	}
+	credential, err := fixture.auth.ExchangePairingCode(context.Background(), pairing.Code)
+	if err != nil {
+		t.Fatalf("ExchangePairingCode(%s) error = %v", harness, err)
+	}
+	return credential.Token
+}
+
+func newTestMCPFixture(t *testing.T) testMCPFixture {
+	t.Helper()
+
 	app := pocketbase.NewWithConfig(pocketbase.Config{
 		DefaultDataDir:   t.TempDir(),
 		HideStartBanner:  true,
@@ -187,24 +223,13 @@ func newTestMCPHandler(t *testing.T) (http.Handler, string) {
 	if err != nil {
 		t.Fatalf("Authenticate(owner) error = %v", err)
 	}
-	pairing, err := authManager.CreatePairingCode(context.Background(), owner, stateauth.PairingCodeRequest{
-		Harness:     "claude-code",
-		DisplayName: "Claude Code",
-		DeviceName:  "MacBook",
-	})
-	if err != nil {
-		t.Fatalf("CreatePairingCode() error = %v", err)
-	}
-	harnessCredential, err := authManager.ExchangePairingCode(context.Background(), pairing.Code)
-	if err != nil {
-		t.Fatalf("ExchangePairingCode() error = %v", err)
-	}
+	stateService := state.NewService(repository)
 	handler := NewHandler(Config{
 		Auth:    authManager,
-		State:   state.NewService(repository),
+		State:   stateService,
 		Version: "test-version",
 	})
-	return handler, harnessCredential.Token
+	return testMCPFixture{handler: handler, auth: authManager, state: stateService, owner: owner}
 }
 
 type bearerTransport struct {
