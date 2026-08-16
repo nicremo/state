@@ -395,6 +395,149 @@ platform :ios do
     UI.success("Attached build #{build.version} to version #{version.version_string}")
   end
 
+  # Reads every field back out of App Store Connect instead of trusting an
+  # upload log. Two faults already slipped through a green log, so a check that
+  # only reports what it expected to find is worth nothing here.
+  desc "Audit what App Store Connect actually holds for this version"
+  lane :audit do
+    app = state_app!
+    version = editable_app_store_version!
+    problems = []
+
+    UI.header("Version")
+    UI.message("#{version.version_string}: #{version.app_store_state}")
+    build = begin
+      version.get_build
+    rescue StandardError
+      nil
+    end
+    if build
+      UI.success("Build #{build.version} attached")
+    else
+      problems << "no build attached to the version"
+    end
+
+    UI.header("App information")
+    info = app.fetch_edit_app_info
+    if info.nil?
+      problems << "no editable app info"
+    else
+      primary = info.primary_category&.id
+      secondary = info.secondary_category&.id
+      UI.message("Primary category: #{primary || 'MISSING'}")
+      UI.message("Secondary category: #{secondary || 'none'}")
+      problems << "no primary category" if primary.nil?
+
+      info.get_app_info_localizations.each do |localization|
+        missing = []
+        missing << "name" if localization.name.to_s.empty?
+        missing << "subtitle" if localization.subtitle.to_s.empty?
+        missing << "privacy policy URL" if localization.privacy_policy_url.to_s.empty?
+        if missing.empty?
+          UI.success("#{localization.locale}: name, subtitle and privacy policy URL present")
+        else
+          problems << "#{localization.locale} app info is missing #{missing.join(', ')}"
+        end
+      end
+    end
+
+    UI.header("Localized version metadata and screenshots")
+    shipped_before = app.get_app_store_versions(
+      filter: { platform: Spaceship::ConnectAPI::Platform::IOS }
+    ).any? { |candidate| candidate.app_store_state == "READY_FOR_SALE" }
+    expected = expected_screenshot_counts
+    seen_locales = []
+    version.get_app_store_version_localizations.each do |localization|
+      seen_locales << localization.locale
+      missing = []
+      missing << "description" if localization.description.to_s.empty?
+      missing << "keywords" if localization.keywords.to_s.empty?
+      missing << "support URL" if localization.support_url.to_s.empty?
+      missing << "promotional text" if localization.promotional_text.to_s.empty?
+      # App Store Connect has no "What's New" on a first release.
+      missing << "release notes" if shipped_before && localization.whats_new.to_s.empty?
+      problems << "#{localization.locale} is missing #{missing.join(', ')}" unless missing.empty?
+
+      shots = localization.get_app_screenshot_sets.sum { |set| set.app_screenshots.length }
+      want = expected[localization.locale]
+      if want && shots != want
+        problems << "#{localization.locale} has #{shots} screenshots, expected #{want}"
+      end
+      UI.message("#{localization.locale}: #{shots} screenshots, missing #{missing.empty? ? 'nothing' : missing.join(', ')}")
+    end
+    expected.each_key do |locale|
+      problems << "#{locale} has no version localization" unless seen_locales.include?(locale)
+    end
+
+    UI.header("Pricing and availability")
+    client = Spaceship::ConnectAPI.tunes_request_client
+    begin
+      schedule = client.get("v1/apps/#{app.id}/appPriceSchedule")
+      problems << "no price schedule" if schedule.body.dig("data", "id").nil?
+      UI.message("Price schedule present")
+    rescue StandardError => error
+      problems << "price schedule unreadable: #{error.message}"
+    end
+    begin
+      availability = client.get("v1/apps/#{app.id}/appAvailabilityV2")
+      if availability.body.dig("data", "id")
+        UI.message("Availability configured, new territories: #{availability.body.dig('data', 'attributes', 'availableInNewTerritories')}")
+      else
+        problems << "no availability configured, the app would be sold nowhere"
+      end
+    rescue StandardError => error
+      problems << "availability unreadable: #{error.message}"
+    end
+
+    UI.header("App Review")
+    detail = begin
+      version.fetch_app_store_review_detail
+    rescue StandardError
+      nil
+    end
+    if detail.nil?
+      problems << "no App Review detail"
+    else
+      missing = []
+      missing << "first name" if detail.contact_first_name.to_s.empty?
+      missing << "last name" if detail.contact_last_name.to_s.empty?
+      missing << "email" if detail.contact_email.to_s.empty?
+      missing << "phone" if detail.contact_phone.to_s.empty?
+      missing << "notes" if detail.notes.to_s.empty?
+      if missing.empty?
+        UI.success("Contact and notes complete")
+      else
+        problems << "App Review detail is missing #{missing.join(', ')}"
+      end
+    end
+
+    UI.header("TestFlight")
+    groups = app.get_beta_groups
+    if groups.empty?
+      problems << "no TestFlight group, so nobody can install a build"
+    else
+      groups.each do |group|
+        # group.beta_testers is nil unless the relationship was included, so
+        # reading it directly reports every group as empty.
+        testers = client.get("v1/betaGroups/#{group.id}/betaTesters").body.fetch("data").length
+        UI.message("#{group.name}: #{group.is_internal_group ? 'internal' : 'external'}, #{testers} testers")
+        problems << "TestFlight group #{group.name} has no testers" if testers.zero?
+      end
+    end
+
+    UI.header("Result")
+    # The privacy nutrition label has no App Store Connect API at all, so no
+    # audit can confirm it. Naming it here keeps it from being forgotten.
+    UI.important("Not auditable: the App Privacy questionnaire has no API. Enter it by hand from app_privacy_details.json.")
+    UI.important("Not auditable: export compliance is answered at submission time.")
+    if problems.empty?
+      UI.success("Everything this can check is in place.")
+    else
+      problems.each { |problem| UI.error("MISSING: #{problem}") }
+      UI.user_error!("#{problems.length} problems in App Store Connect")
+    end
+  end
+
   # What App Store Connect actually holds, rather than what the last upload
   # claimed. Duplicate screenshot sets and a version with no build attached both
   # look fine in an upload log and wrong on the product page.
@@ -645,7 +788,7 @@ platform :ios do
     client = Spaceship::ConnectAPI.tunes_request_client
 
     begin
-      existing = client.get("v2/apps/#{app.id}/appAvailabilityV2")
+      existing = client.get("v1/apps/#{app.id}/appAvailabilityV2")
       if existing.body.dig("data", "id")
         UI.success("App availability is already configured.")
         next
