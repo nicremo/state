@@ -30,7 +30,23 @@ Run it from a terminal that can answer the prompt. If the record already exists 
 3. Pricing: `fastlane ios pricing` sets State to free with Germany as the base territory and does nothing if a free price is already active.
 4. Availability: still manual. Which storefronts State is sold in is a product and legal decision, not an automation default.
 5. Export Compliance: `submission_info_defaults` in the Fastfile now answers the whole questionnaire consistently with `ITSAppUsesNonExemptEncryption=false` in `Info.plist`. Before submitting, confirm that answer is right: State does more than plain HTTPS, it builds its own encrypted push envelopes and signs the audit chain, even though it does so through Apple's CryptoKit. If that turns out to need a different answer, change the plist and `submission_info_defaults` together, never one alone.
-6. App Review contact: enter the support contact details and keep the included demo-mode review instructions.
+6. App Review contact: App Store Connect requires a first name, last name, email and phone number as soon as a build is attached, and rejects the whole metadata upload without them. `deliver` sends them from `app_review_information` in the Fastfile. The name and email default to values already public in this repository's history; the phone number is deliberately not stored here because the repository is public, so every metadata run needs it in the environment:
+
+```bash
+cd ios
+ASC_REVIEW_PHONE="+49..." bundle exec fastlane ios metadata
+```
+
+## Store assets
+
+Screenshots live in `ios/fastlane/screenshots/{de-DE,en-US}` and cover both device classes App Review needs while `TARGETED_DEVICE_FAMILY` is `1,2`:
+
+- iPhone 6.9 inch at 1320x2868, captured on a 6.9 inch simulator and composed into marketing frames with Higgsfield image to image.
+- iPad 13 inch at 2064x2752, captured on an iPad Pro 13 inch simulator and composed by `ios/fastlane/compose_ipad_frames.py`.
+
+Both sets show the untouched app capture inside the frame. Only the backdrop, the device shell and the headline are added, so the screenshots still represent what the app does. Regenerate the iPad set with `python3 ios/fastlane/compose_ipad_frames.py` after changing the captures.
+
+The App Store icon comes from the uploaded build, not from a separate upload. It stays a placeholder in App Store Connect until the first build finishes processing.
 
 ## Developer portal and signing
 
