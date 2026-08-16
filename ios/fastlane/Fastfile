@@ -1,10 +1,24 @@
 require "fileutils"
+require "json"
 require "tmpdir"
 
 default_platform(:ios)
 
 IOS_ROOT = File.expand_path("..", __dir__)
 PROJECT_PATH = File.join(IOS_ROOT, "State.xcodeproj")
+
+BUNDLE_ID = "com.fabincrm.state"
+APP_NAME = "State: Agent Context"
+APP_SKU = ENV.fetch("STATE_APP_SKU", "state-agent-context-ios")
+MARKETING_VERSION = "1.0.0"
+METADATA_LANGUAGES = ["de-DE", "en-US"].freeze
+BASE_TERRITORY = "DEU"
+
+ASC_KEY_ID = ENV.fetch("ASC_KEY_ID", "7VDX9Z6S8W")
+ASC_ISSUER_ID = ENV.fetch("ASC_ISSUER_ID", "d9828ae8-0a79-465a-baff-a89d22b0bd39")
+ASC_KEY_PATH = File.expand_path(
+  ENV.fetch("ASC_KEY_PATH", "~/.appstoreconnect/private_keys/AuthKey_7VDX9Z6S8W.p8")
+)
 
 # The Xcode project is generated from project.yml, so no tracked file may carry
 # a build number. The archive receives it as a build setting override instead.
@@ -28,6 +42,61 @@ ensure
   ENV["PATH"] = original_path
 end
 
+# Authenticates Spaceship for the raw App Store Connect endpoints that no
+# fastlane action wraps. The API key alone is enough, no Apple ID password and
+# no two-factor prompt.
+def connect_api!
+  Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(
+    key_id: ASC_KEY_ID,
+    issuer_id: ASC_ISSUER_ID,
+    filepath: ASC_KEY_PATH
+  )
+end
+
+def state_app!
+  connect_api!
+  app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+  UI.user_error!("#{BUNDLE_ID} is not in App Store Connect. Run `fastlane ios create_app` first.") if app.nil?
+  app
+end
+
+# State declares no non-exempt encryption in Info.plist. These answers must say
+# the same thing, otherwise App Review gets two contradictory statements. Change
+# both together, never one alone.
+def submission_info_defaults
+  {
+    add_id_info_uses_idfa: false,
+    export_compliance_uses_encryption: false,
+    export_compliance_encryption_updated: false,
+    export_compliance_app_uses_encryption: false,
+    export_compliance_is_exempt: false,
+    export_compliance_contains_third_party_cryptography: false,
+    export_compliance_contains_proprietary_cryptography: false,
+    export_compliance_available_on_french_store: true,
+    content_rights_contains_third_party_content: false,
+    content_rights_has_rights: true
+  }
+end
+
+# The privacy nutrition label is not uploaded by any fastlane action. This file
+# is the reviewed source of truth behind the answers entered by hand, so it must
+# stay honest about what the server and the optional relay actually process.
+def validate_privacy_declaration!
+  path = File.join(__dir__, "app_privacy_details.json")
+  declaration = JSON.parse(File.read(path))
+  UI.user_error!("Empty privacy declaration: #{path}") if declaration.empty?
+
+  declaration.each_with_index do |entry, index|
+    category = entry["category"]
+    UI.user_error!("Privacy entry #{index} has no category: #{path}") if category.nil? || category.empty?
+    %w[data_types purposes data_protections note].each do |key|
+      value = entry[key]
+      UI.user_error!("Privacy entry #{index} (#{category}) has no #{key}: #{path}") if value.nil? || value.empty?
+    end
+  end
+  UI.success("Privacy declaration validated: #{declaration.length} categories.")
+end
+
 platform :ios do
   before_all do
     sh("xcodegen generate --spec #{File.join(IOS_ROOT, 'project.yml')} --project #{IOS_ROOT}")
@@ -35,12 +104,9 @@ platform :ios do
 
   private_lane :connect_api_key do
     app_store_connect_api_key(
-      key_id: ENV.fetch("ASC_KEY_ID", "7VDX9Z6S8W"),
-      issuer_id: ENV.fetch("ASC_ISSUER_ID", "d9828ae8-0a79-465a-baff-a89d22b0bd39"),
-      key_filepath: ENV.fetch(
-        "ASC_KEY_PATH",
-        File.expand_path("~/.appstoreconnect/private_keys/AuthKey_7VDX9Z6S8W.p8")
-      ),
+      key_id: ASC_KEY_ID,
+      issuer_id: ASC_ISSUER_ID,
+      key_filepath: ASC_KEY_PATH,
       duration: 1_200,
       in_house: false
     )
@@ -60,24 +126,66 @@ platform :ios do
     )
   end
 
+  # The App Store Connect API cannot create an app record. Asked to, it answers
+  # "The resource 'apps' does not allow 'CREATE'. Allowed operations are:
+  # GET_COLLECTION, GET_INSTANCE, UPDATE". Only the App Store Connect web
+  # session can, which is what produce drives, so this one lane needs an Apple
+  # ID and a two-factor confirmation. Every other lane runs on the API key.
   desc "Create the App Store Connect application if it does not exist"
   lane :create_app do
+    connect_api!
+    existing = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    if existing
+      UI.success("App Store Connect app already exists: #{existing.name} (id #{existing.id})")
+      next
+    end
+
+    apple_id = ENV["FASTLANE_USER"]
+    if apple_id.nil? || apple_id.empty?
+      UI.user_error!(
+        "#{BUNDLE_ID} has no App Store Connect record and the API cannot create one. " \
+        "Run this from a terminal that can answer a two-factor prompt: " \
+        "FASTLANE_USER=<apple-id> bundle exec fastlane ios create_app"
+      )
+    end
+
     produce(
-      username: ENV.fetch("FASTLANE_USER"),
-      app_identifier: "com.fabincrm.state",
-      app_name: "State: Agent Context",
+      username: apple_id,
+      app_identifier: BUNDLE_ID,
+      app_name: APP_NAME,
       language: "en-US",
-      sku: ENV.fetch("STATE_APP_SKU", "state-agent-context-ios")
+      sku: APP_SKU
     )
+    UI.success("Created the App Store Connect record for #{BUNDLE_ID}")
   end
 
   desc "Verify App Store Connect access and the State app record"
   lane :asc_status do
-    connect_api_key
-    app = Spaceship::ConnectAPI::App.find("com.fabincrm.state")
-    UI.user_error!("State is not registered in App Store Connect. Run `fastlane ios create_app` first.") unless app
+    app = state_app!
+    UI.success("App Store Connect ready: #{app.name} (#{app.bundle_id}, id #{app.id})")
+  end
 
-    UI.success("App Store Connect ready: #{app.name} (#{app.bundle_id})")
+  desc "Print the latest TestFlight and App Store build numbers"
+  lane :builds do
+    api_key = connect_api_key
+    testflight_build = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      version: nil,
+      initial_build_number: 0
+    )
+    UI.message("Latest TestFlight build: #{testflight_build}")
+    begin
+      live_build = app_store_build_number(api_key: api_key, app_identifier: BUNDLE_ID, live: true)
+      UI.message("Latest App Store build: #{live_build}")
+    rescue StandardError => error
+      UI.message("No live App Store build yet (#{error.message})")
+    end
+  end
+
+  desc "Validate the local App Store privacy declaration"
+  lane :privacy do
+    validate_privacy_declaration!
   end
 
   desc "Run unit and UI tests"
@@ -138,49 +246,61 @@ platform :ios do
     end
   end
 
-  desc "Upload localized metadata and screenshots"
+  desc "Upload localized metadata, age rating and screenshots"
   lane :metadata do
+    state_app!
     deliver(
       api_key: connect_api_key,
-      app_identifier: "com.fabincrm.state",
+      app_identifier: BUNDLE_ID,
       metadata_path: File.join(__dir__, "metadata"),
       screenshots_path: File.join(__dir__, "screenshots"),
+      app_rating_config_path: File.join(__dir__, "age_rating.json"),
+      languages: METADATA_LANGUAGES,
       skip_binary_upload: true,
       skip_screenshots: false,
+      overwrite_screenshots: true,
+      run_precheck_before_submit: false,
+      submit_for_review: false,
       force: true
     )
+    validate_privacy_declaration!
   end
 
   desc "Submit the uploaded build for App Review"
   lane :review do
+    state_app!
+    validate_privacy_declaration!
     deliver(
       api_key: connect_api_key,
-      app_identifier: "com.fabincrm.state",
+      app_identifier: BUNDLE_ID,
       submit_for_review: true,
       automatic_release: false,
       phased_release: false,
       force: true,
-      submission_information: {
-        add_id_info_uses_idfa: false,
-        export_compliance_uses_encryption: true,
-        export_compliance_is_exempt: true
-      }
+      run_precheck_before_submit: true,
+      precheck_include_in_app_purchases: false,
+      submission_information: submission_info_defaults
     )
   end
 
   desc "Build, upload, update metadata and submit"
   lane :release do
+    state_app!
+    validate_privacy_declaration!
     build
     upload_to_app_store(
       api_key: connect_api_key,
-      app_identifier: "com.fabincrm.state",
+      app_identifier: BUNDLE_ID,
       ipa: File.join(IOS_ROOT, "build/State.ipa"),
       metadata_path: File.join(__dir__, "metadata"),
       screenshots_path: File.join(__dir__, "screenshots"),
+      app_rating_config_path: File.join(__dir__, "age_rating.json"),
+      languages: METADATA_LANGUAGES,
       submit_for_review: true,
       automatic_release: false,
       phased_release: false,
-      force: true
+      force: true,
+      submission_information: submission_info_defaults
     )
   end
 
@@ -188,10 +308,90 @@ platform :ios do
   lane :live_check do
     build = app_store_build_number(
       api_key: connect_api_key,
-      app_identifier: "com.fabincrm.state",
+      app_identifier: BUNDLE_ID,
       live: true
     )
     version = lane_context[SharedValues::LATEST_VERSION]
     UI.message("Live State version: #{version}, build #{build}")
+  end
+
+  desc "Print the App Store version and review submission state"
+  lane :review_status do
+    app = state_app!
+    versions = app.get_app_store_versions(
+      filter: { platform: Spaceship::ConnectAPI::Platform::IOS }
+    )
+    if versions.empty?
+      UI.message("No App Store version records yet.")
+      next
+    end
+    versions.each do |version|
+      UI.message("Version #{version.version_string}: #{version.app_store_state}")
+    end
+  end
+
+  desc "Make State a free app with Germany as the base territory"
+  lane :pricing do
+    app = state_app!
+    client = Spaceship::ConnectAPI.tunes_request_client
+
+    begin
+      schedule = client.get("v1/apps/#{app.id}/appPriceSchedule")
+      schedule_id = schedule.body.dig("data", "id")
+      unless schedule_id.nil?
+        manual_prices = client.get(
+          "v1/appPriceSchedules/#{schedule_id}/manualPrices",
+          { include: "appPricePoint,territory", limit: 200 }
+        )
+        free_points = manual_prices.body.fetch("included", []).each_with_object({}) do |item, result|
+          next unless item.fetch("type") == "appPricePoints"
+          result[item.fetch("id")] = item.dig("attributes", "customerPrice").to_f
+        end
+        already_free = manual_prices.body.fetch("data", []).any? do |price|
+          next false unless price.dig("attributes", "endDate").nil?
+          point_id = price.dig("relationships", "appPricePoint", "data", "id")
+          free_points[point_id]&.zero?
+        end
+        if already_free
+          UI.success("State is already priced as free.")
+          next
+        end
+      end
+    rescue Spaceship::UnexpectedResponse => error
+      raise unless error.message.include?("404") || error.message.include?("NOT_FOUND")
+    end
+
+    price_points = client.get(
+      "v1/apps/#{app.id}/appPricePoints",
+      { filter: { territory: BASE_TERRITORY }, include: "territory", limit: 200 }
+    )
+    free_point = price_points.body.fetch("data").find do |point|
+      point.dig("attributes", "customerPrice").to_f.zero?
+    end
+    UI.user_error!("No free price point for #{BASE_TERRITORY}.") if free_point.nil?
+
+    placeholder = "${free-price}"
+    client.post("v1/appPriceSchedules", {
+      data: {
+        type: "appPriceSchedules",
+        attributes: {},
+        relationships: {
+          app: { data: { type: "apps", id: app.id } },
+          baseTerritory: { data: { type: "territories", id: BASE_TERRITORY } },
+          manualPrices: { data: [{ type: "appPrices", id: placeholder }] }
+        }
+      },
+      included: [
+        {
+          type: "appPrices",
+          id: placeholder,
+          attributes: { startDate: nil, endDate: nil },
+          relationships: {
+            appPricePoint: { data: { type: "appPricePoints", id: free_point.fetch("id") } }
+          }
+        }
+      ]
+    })
+    UI.success("State is now a free app with #{BASE_TERRITORY} as the base territory.")
   end
 end

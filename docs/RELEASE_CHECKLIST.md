@@ -12,15 +12,25 @@ This checklist separates repository preparation from the App Store Connect decis
 - The build number never touches a tracked file. `ios/project.yml` keeps `CURRENT_PROJECT_VERSION: 1`, both `Info.plist` files keep `$(CURRENT_PROJECT_VERSION)`, and `fastlane ios build` passes the real value through `xcargs`. Override it with `BUILD_NUMBER=...`, otherwise a UTC `yymmddHHMM` stamp is used. That format stays below the App Store Connect limit of 2^32 per version component.
 - The app declares `ITSAppUsesNonExemptEncryption` as false. The account holder must confirm that export classification before App Store submission.
 
+## The one step that needs an Apple ID
+
+The App Store Connect API cannot create an app record. Asked to, it answers `The resource 'apps' does not allow 'CREATE'. Allowed operations are: GET_COLLECTION, GET_INSTANCE, UPDATE`. Only the App Store Connect web session can, so `create_app` falls back to `produce`, which needs an Apple ID and a two-factor confirmation:
+
+```bash
+cd ios
+FASTLANE_USER=your-apple-id bundle exec fastlane ios create_app
+```
+
+Run it from a terminal that can answer the prompt. If the record already exists the lane detects that through the API key alone and does nothing. Every other lane runs on the API key with no interactive login.
+
 ## App Store Connect decisions
 
-Complete these settings in App Store Connect before App Review. They are not inferred or submitted by Fastlane.
-
-1. App Privacy: answer the questionnaire using `PRIVACY.md` and the actual relay deployment. A self-hosted server controlled only by the customer and the optional shared relay have different disclosure implications. Confirm the final answers with the person responsible for the service and privacy information.
-2. Age Rating: complete the Apple questionnaire from the actual feature set. State has reminders, notes and agent context, but the rating still needs an account-holder attestation.
-3. Pricing and Availability: set the app to Free and select the intended storefronts. Worldwide availability is a product and legal decision, not an automation default.
-4. Export Compliance: confirm the current plist declaration and review lane fields. State uses platform cryptography for transport and encrypted notifications, so do not submit the declaration without checking Apple's current questionnaire.
-5. App Review contact: enter the support contact details and keep the included demo-mode review instructions.
+1. Age Rating: automated. `ios/fastlane/age_rating.json` holds the answers and `fastlane ios metadata` uploads them through `deliver`. Every content category is `NONE`, and messaging, user generated content, advertising and unrestricted web access are all false, because State shows only the owner's own reminders from the owner's own server. Revisit the file if that stops being true.
+2. App Privacy: `ios/fastlane/app_privacy_details.json` is the reviewed declaration and `fastlane ios privacy` validates it, but no fastlane action uploads the privacy nutrition label. Enter it by hand from that file and keep the two in step. The draft declares reminder content, identifiers and the owner's chosen display name, all linked to the user, all for app functionality, no tracking. The account holder still has to confirm how a self-hosted server and the optional shared relay should be represented.
+3. Pricing: `fastlane ios pricing` sets State to free with Germany as the base territory and does nothing if a free price is already active.
+4. Availability: still manual. Which storefronts State is sold in is a product and legal decision, not an automation default.
+5. Export Compliance: `submission_info_defaults` in the Fastfile now answers the whole questionnaire consistently with `ITSAppUsesNonExemptEncryption=false` in `Info.plist`. Before submitting, confirm that answer is right: State does more than plain HTTPS, it builds its own encrypted push envelopes and signs the audit chain, even though it does so through Apple's CryptoKit. If that turns out to need a different answer, change the plist and `submission_info_defaults` together, never one alone.
+6. App Review contact: enter the support contact details and keep the included demo-mode review instructions.
 
 ## Developer portal and signing
 
