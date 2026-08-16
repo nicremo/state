@@ -18,6 +18,15 @@ fastlane/test_output/
 ios/fastlane/report.xml
 ios/fastlane/Preview.html
 ios/fastlane/test_output/
+fastlane/.env
+fastlane/.env.*
+!fastlane/.env.example
+ios/fastlane/.env
+ios/fastlane/.env.*
+!ios/fastlane/.env.example
+ios/fastlane/metadata/review_information/*.txt
+!ios/fastlane/metadata/review_information/notes.txt
+*.xcarchive
 fastlane/screenshots/
 ios/screenshots/
 *.mobileprovision

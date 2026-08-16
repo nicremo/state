@@ -35,7 +35,7 @@ func TestAPNSDispatcherSendsTokenAuthenticatedNotification(t *testing.T) {
 	now := time.Date(2026, time.August, 11, 20, 0, 0, 0, time.UTC)
 	dispatcher, err := NewAPNSDispatcher(APNSConfig{
 		TeamID:        "5DKU7FFK4X",
-		KeyID:         "7VDX9Z6S8W",
+		KeyID:         "TESTKEYID1",
 		Topic:         "com.fabincrm.state",
 		PrivateKey:    privateKey,
 		HTTPClient:    server.Client(),
@@ -85,7 +85,7 @@ func TestAPNSDispatcherReturnsTypedFailure(t *testing.T) {
 	t.Cleanup(server.Close)
 	dispatcher, err := NewAPNSDispatcher(APNSConfig{
 		TeamID:        "5DKU7FFK4X",
-		KeyID:         "7VDX9Z6S8W",
+		KeyID:         "TESTKEYID1",
 		Topic:         "com.fabincrm.state",
 		PrivateKey:    privateKey,
 		HTTPClient:    server.Client(),
