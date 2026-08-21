@@ -22,6 +22,38 @@ import (
 
 var ErrAuditKeyMismatch = errors.New("audit signing key does not match stored public key")
 
+// The audit table DDL, its immutability triggers and its reminder index are
+// shared between ensureSchema (fresh databases) and migrateAuditReminderNullable
+// (legacy rebuild), so both paths produce byte-identical objects.
+const stateAuditEventsTableStatement = `CREATE TABLE IF NOT EXISTS state_audit_events (
+	sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+	id TEXT NOT NULL UNIQUE,
+	reminder_id TEXT NULL REFERENCES state_reminders(id),
+	action TEXT NOT NULL,
+	revision INTEGER NOT NULL,
+	client_request_id TEXT NOT NULL UNIQUE,
+	previous_hash TEXT NOT NULL,
+	hash TEXT NOT NULL UNIQUE,
+	signature TEXT NOT NULL,
+	server_time TEXT NOT NULL,
+	event_json TEXT NOT NULL CHECK(json_valid(event_json))
+) STRICT`
+
+const stateAuditEventsReminderIndexStatement = `CREATE INDEX IF NOT EXISTS state_audit_events_reminder_sequence_idx
+	ON state_audit_events(reminder_id, sequence)`
+
+const stateAuditEventsNoUpdateTriggerStatement = `CREATE TRIGGER IF NOT EXISTS state_audit_events_no_update
+	BEFORE UPDATE ON state_audit_events
+	BEGIN
+		SELECT RAISE(ABORT, 'state audit events are immutable');
+	END`
+
+const stateAuditEventsNoDeleteTriggerStatement = `CREATE TRIGGER IF NOT EXISTS state_audit_events_no_delete
+	BEFORE DELETE ON state_audit_events
+	BEGIN
+		SELECT RAISE(ABORT, 'state audit events are immutable');
+	END`
+
 type PocketBaseRepository struct {
 	app        core.App
 	signingKey ed25519.PrivateKey
@@ -279,6 +311,11 @@ func (repository *PocketBaseRepository) SearchReminders(_ context.Context, query
 	seen := make(map[string]struct{})
 	result := make([]state.Reminder, 0)
 	for _, row := range rows {
+		if row.ReminderID == "" {
+			// Project, policy and runner audit documents are not linked to a
+			// reminder and cannot be resolved into one.
+			continue
+		}
 		if _, exists := seen[row.ReminderID]; exists {
 			continue
 		}
@@ -613,19 +650,7 @@ func (repository *PocketBaseRepository) ensureSchema() error {
 			ON state_occurrences(reminder_id, local_date, local_time)`,
 		`CREATE INDEX IF NOT EXISTS state_occurrences_status_schedule_idx
 			ON state_occurrences(status, local_date, local_time)`,
-		`CREATE TABLE IF NOT EXISTS state_audit_events (
-			sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-			id TEXT NOT NULL UNIQUE,
-			reminder_id TEXT NOT NULL REFERENCES state_reminders(id),
-			action TEXT NOT NULL,
-			revision INTEGER NOT NULL,
-			client_request_id TEXT NOT NULL UNIQUE,
-			previous_hash TEXT NOT NULL,
-			hash TEXT NOT NULL UNIQUE,
-			signature TEXT NOT NULL,
-			server_time TEXT NOT NULL,
-			event_json TEXT NOT NULL CHECK(json_valid(event_json))
-		) STRICT`,
+		stateAuditEventsTableStatement,
 		`CREATE TABLE IF NOT EXISTS state_idempotency (
 			client_request_id TEXT PRIMARY KEY,
 			actor_id TEXT NOT NULL,
@@ -634,8 +659,65 @@ func (repository *PocketBaseRepository) ensureSchema() error {
 			result_json TEXT NOT NULL CHECK(json_valid(result_json)),
 			created_at TEXT NOT NULL
 		) STRICT`,
-		`CREATE INDEX IF NOT EXISTS state_audit_events_reminder_sequence_idx
-			ON state_audit_events(reminder_id, sequence)`,
+		`CREATE TABLE IF NOT EXISTS state_projects (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL UNIQUE,
+			revision INTEGER NOT NULL CHECK(revision > 0),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			data_json TEXT NOT NULL CHECK(json_valid(data_json))
+		) STRICT`,
+		`CREATE TABLE IF NOT EXISTS state_policies (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL UNIQUE,
+			project_id TEXT NOT NULL REFERENCES state_projects(id),
+			adapter TEXT NOT NULL,
+			mode TEXT NOT NULL CHECK(mode IN ('supervised', 'unattended-low-risk')),
+			enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+			revision INTEGER NOT NULL CHECK(revision > 0),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			data_json TEXT NOT NULL CHECK(json_valid(data_json))
+		) STRICT`,
+		`CREATE INDEX IF NOT EXISTS state_policies_project_idx
+			ON state_policies(project_id)`,
+		`CREATE TABLE IF NOT EXISTS state_runners (
+			id TEXT PRIMARY KEY REFERENCES state_actors(id),
+			display_name TEXT NOT NULL,
+			last_seen_at TEXT NOT NULL,
+			revision INTEGER NOT NULL CHECK(revision > 0),
+			registered_at TEXT NOT NULL,
+			data_json TEXT NOT NULL CHECK(json_valid(data_json))
+		) STRICT`,
+		`CREATE TABLE IF NOT EXISTS state_runs (
+			id TEXT PRIMARY KEY,
+			reminder_id TEXT NOT NULL REFERENCES state_reminders(id),
+			occurrence_id TEXT REFERENCES state_occurrences(id),
+			policy_id TEXT NOT NULL REFERENCES state_policies(id),
+			policy_revision INTEGER NOT NULL,
+			project_id TEXT NOT NULL REFERENCES state_projects(id),
+			adapter TEXT NOT NULL,
+			runner_id TEXT,
+			status TEXT NOT NULL CHECK(status IN ('planned', 'eligible', 'claimed', 'running', 'needs_approval', 'succeeded', 'failed', 'cancelled', 'expired')),
+			idempotency_key TEXT NOT NULL,
+			lease_expires_at TEXT,
+			requested_at TEXT,
+			claimed_at TEXT,
+			started_at TEXT,
+			finished_at TEXT,
+			revision INTEGER NOT NULL CHECK(revision > 0),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			data_json TEXT NOT NULL CHECK(json_valid(data_json)),
+			UNIQUE(occurrence_id, policy_revision)
+		) STRICT`,
+		`CREATE INDEX IF NOT EXISTS state_runs_status_lease_idx
+			ON state_runs(status, lease_expires_at)`,
+		`CREATE INDEX IF NOT EXISTS state_runs_reminder_idx
+			ON state_runs(reminder_id)`,
+		`CREATE INDEX IF NOT EXISTS state_runs_runner_status_idx
+			ON state_runs(runner_id, status)`,
+		stateAuditEventsReminderIndexStatement,
 		`CREATE INDEX IF NOT EXISTS state_reminders_updated_at_idx
 			ON state_reminders(updated_at DESC)`,
 		`CREATE VIRTUAL TABLE IF NOT EXISTS state_search USING fts5(
@@ -644,18 +726,10 @@ func (repository *PocketBaseRepository) ensureSchema() error {
 			content,
 			tokenize = 'unicode61 remove_diacritics 2'
 		)`,
-		`CREATE TRIGGER IF NOT EXISTS state_audit_events_no_update
-			BEFORE UPDATE ON state_audit_events
-			BEGIN
-				SELECT RAISE(ABORT, 'state audit events are immutable');
-			END`,
-		`CREATE TRIGGER IF NOT EXISTS state_audit_events_no_delete
-			BEFORE DELETE ON state_audit_events
-			BEGIN
-				SELECT RAISE(ABORT, 'state audit events are immutable');
-			END`,
+		stateAuditEventsNoUpdateTriggerStatement,
+		stateAuditEventsNoDeleteTriggerStatement,
 	}
-	return repository.app.RunInTransaction(func(txApp core.App) error {
+	if err := repository.app.RunInTransaction(func(txApp core.App) error {
 		for _, statement := range statements {
 			if _, err := txApp.DB().NewQuery(statement).Execute(); err != nil {
 				return err
@@ -681,6 +755,55 @@ func (repository *PocketBaseRepository) ensureSchema() error {
 			)
 		`).Execute(); err != nil {
 			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return repository.migrateAuditReminderNullable()
+}
+
+// migrateAuditReminderNullable rebuilds legacy state_audit_events tables whose
+// reminder_id column was created NOT NULL, so that policy, project and runner
+// events (which carry no reminder) can be recorded. Fresh databases already
+// have the nullable DDL and are skipped. The hash chain, the immutability
+// triggers and all indexes are preserved.
+func (repository *PocketBaseRepository) migrateAuditReminderNullable() error {
+	row := struct {
+		SQL string `db:"sql"`
+	}{}
+	err := repository.app.DB().NewQuery(`
+		SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'state_audit_events'
+	`).One(&row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect audit events schema: %w", err)
+	}
+	if !strings.Contains(row.SQL, "reminder_id TEXT NOT NULL") {
+		return nil
+	}
+	return repository.app.RunInTransaction(func(txApp core.App) error {
+		for _, statement := range []string{
+			`DROP TRIGGER IF EXISTS state_audit_events_no_update`,
+			`DROP TRIGGER IF EXISTS state_audit_events_no_delete`,
+			`ALTER TABLE state_audit_events RENAME TO state_audit_events_old`,
+			stateAuditEventsTableStatement,
+			`INSERT INTO state_audit_events (
+				sequence, id, reminder_id, action, revision, client_request_id, previous_hash, hash, signature, server_time, event_json
+			) SELECT
+				sequence, id, reminder_id, action, revision, client_request_id, previous_hash, hash, signature, server_time, event_json
+			FROM state_audit_events_old
+			ORDER BY sequence ASC`,
+			`DROP TABLE state_audit_events_old`,
+			stateAuditEventsReminderIndexStatement,
+			stateAuditEventsNoUpdateTriggerStatement,
+			stateAuditEventsNoDeleteTriggerStatement,
+		} {
+			if _, err := txApp.DB().NewQuery(statement).Execute(); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -739,6 +862,10 @@ func insertAuditEvent(app core.App, event state.AuditEvent) error {
 	if err != nil {
 		return fmt.Errorf("encode sealed audit event: %w", err)
 	}
+	var reminderID any
+	if event.ReminderID != "" {
+		reminderID = event.ReminderID
+	}
 	_, err = app.DB().NewQuery(`
 		INSERT INTO state_audit_events (
 			id, reminder_id, action, revision, client_request_id, previous_hash, hash, signature, server_time, event_json
@@ -747,7 +874,7 @@ func insertAuditEvent(app core.App, event state.AuditEvent) error {
 		)
 	`).Bind(dbx.Params{
 		"id":                event.ID,
-		"reminder_id":       event.ReminderID,
+		"reminder_id":       reminderID,
 		"action":            string(event.Action),
 		"revision":          event.Revision,
 		"client_request_id": event.ClientRequestID,
@@ -1015,7 +1142,7 @@ func upsertReminderSearch(app core.App, reminder state.Reminder) error {
 	return nil
 }
 
-func insertAuditSearch(app core.App, event state.AuditEvent) error {
+func insertAuditSearch(app core.App, event state.AuditEvent, extraContent ...string) error {
 	contentParts := []string{
 		string(event.Action),
 		event.Actor.DisplayName,
@@ -1024,6 +1151,7 @@ func insertAuditSearch(app core.App, event state.AuditEvent) error {
 		event.SourceExcerpt,
 		strings.Join(event.ChangedFields, " "),
 	}
+	contentParts = append(contentParts, extraContent...)
 	_, err := app.DB().NewQuery(`
 		INSERT INTO state_search (reminder_id, kind, content)
 		VALUES ({:reminder_id}, 'audit', {:content})
