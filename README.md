@@ -1,14 +1,15 @@
 # State
 
-State gives coding agents a durable, auditable memory for reminders while keeping the owner in control. It synchronizes reminders, comments, revisions, conflicts and complete history between Codex, Claude Code, OpenCode and a native iOS app.
+State gives coding agents a durable, auditable memory for reminders while keeping the owner in control. It synchronizes reminders, comments, revisions, conflicts and complete history between Codex, Claude Code, OpenCode and a native iOS app. Scheduled reminders can also start a local agent run on the owner's own workstation, with the result reported back to the phone.
 
-State is built for technical self-hosters. It is not an agent chat app and it does not execute remote subagents.
+State is built for technical self-hosters. It is not an agent chat app, and execution never runs on the server: a workstation pulls its own work through an outbound-only runner.
 
 ## Components
 
 - `state-server`: One Go binary with embedded PocketBase, REST, Streamable HTTP MCP, scheduling, full-text search and a signed audit chain.
 - `state-relay`: A separate Go service that delivers encrypted APNs payloads without receiving reminder plaintext.
-- `statectl`: A signed CLI, secure pairing client and local STDIO adapter for agent harnesses.
+- `statectl`: A signed CLI, secure pairing client, local STDIO adapter for agent harnesses and project projection tool (`.state/`).
+- `state-runner`: An outbound-only worker on an opted-in workstation that claims eligible agent runs, launches local harness adapters and reports redacted results.
 - `State`: A native SwiftUI app for iOS 18 or later with GRDB offline storage and a Notification Service Extension.
 
 ```mermaid
@@ -44,6 +45,7 @@ go test -race ./...
 go build -o state-server ./cmd/state-server
 go build -o state-relay ./cmd/state-relay
 go build -o statectl ./cmd/statectl
+go build -o state-runner ./cmd/state-runner
 ```
 
 Start a development server:
@@ -110,7 +112,29 @@ The Streamable HTTP endpoint is `/mcp`. It exposes:
 - `complete_occurrence`
 - `snooze_occurrence`
 
+Runner-scoped tools, available only to paired `state-runner` credentials:
+
+- `get_execution_context`
+- `claim_agent_run`
+- `report_agent_run_event`
+- `complete_agent_run`
+- `request_agent_approval`
+
 The HTTP contract is documented in [`openapi/state-v1.yaml`](openapi/state-v1.yaml).
+
+## Scheduled agent execution
+
+A reminder can carry an execution policy. When such an occurrence becomes due, the server materializes exactly one auditable `AgentRun`, and a workstation that opted in picks it up:
+
+```bash
+statectl project init --name customer-api --profile codex
+state-runner pair --server https://state.example.com --code ONE_TIME_CODE --name my-laptop --projects PROJECT_ID --adapters codex
+state-runner run
+```
+
+The runner polls outbound-only, validates the hash-pinned task contract against its local configuration, writes the contract and status under the project's `.state/runs/` directory, launches the matching local harness adapter and reports a redacted result. The owner watches the lifecycle in the iOS app, approves sensitive capabilities per run, and receives an encrypted push when a run finishes. Unattended policies are limited to low-risk capabilities; everything else stays supervised.
+
+Read [`docs/agent-execution-implementation-plan.md`](docs/agent-execution-implementation-plan.md) for the full design and [`docs/agent-execution-extension.md`](docs/agent-execution-extension.md) for the originating concept.
 
 ## Deployment
 
@@ -132,7 +156,7 @@ See [`SECURITY.md`](SECURITY.md), [`PRIVACY.md`](PRIVACY.md) and [`docs/threat-m
 
 ## Project status
 
-Version 1 implements the complete reminder core. Attachments, teams, voice alarms, general chat, embeddings, remote subagent execution and Context Cards are intentionally outside this release.
+Version 1 implements the complete reminder core plus scheduled, owner-controlled agent execution on paired workstations. Attachments, teams, voice alarms, general chat, embeddings and Context Cards are intentionally outside this release.
 
 The public relay starts in APNs dry-run mode until protected Apple credentials and a permanent domain are configured. Development and TestFlight may use an `sslip.io` endpoint, but public App Store distribution must use a durable domain.
 
