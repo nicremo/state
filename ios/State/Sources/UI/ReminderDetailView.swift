@@ -63,6 +63,39 @@ struct ReminderDetailView: View {
                         }
                     }
 
+                    if detail.reminder.executionPolicyID != nil || !detail.runs.isEmpty {
+                        Section("Agent runs") {
+                            if let policyID = detail.reminder.executionPolicyID {
+                                HStack {
+                                    PolicyBadge(policy: model.policies.first { $0.id == policyID })
+                                    Spacer()
+                                }
+                            }
+                            if detail.runs.isEmpty {
+                                Text("No runs yet")
+                                    .foregroundStyle(.secondary)
+                            }
+                            ForEach(detail.runs) { run in
+                                NavigationLink {
+                                    RunDetailView(model: model, reminderID: reminderID, run: run)
+                                } label: {
+                                    AgentRunRow(run: run)
+                                }
+                            }
+                            if model.session?.actor.kind == .owner, let policyID = detail.reminder.executionPolicyID {
+                                Button {
+                                    Task {
+                                        await model.triggerManualRun(reminderID: reminderID, policyID: policyID)
+                                        await reload()
+                                    }
+                                } label: {
+                                    Label("Run now", systemImage: "play.fill")
+                                }
+                                .disabled(model.isDemo)
+                            }
+                        }
+                    }
+
                     Section("Comments") {
                         if detail.comments.isEmpty {
                             Text("No comments yet")
@@ -135,7 +168,7 @@ struct ReminderDetailView: View {
         .task(id: model.activity.count) { await reload() }
         .sheet(isPresented: $showsEditor) {
             if let reminder = detail?.reminder {
-                ReminderEditorView(reminder: reminder) { draft in
+                ReminderEditorView(model: model, reminder: reminder) { draft in
                     await model.updateReminder(reminder, draft: draft)
                     await reload()
                 }
@@ -266,6 +299,27 @@ struct AuditEventRow: View {
         case "occurrence.completed": String(localized: "Occurrence completed")
         case "occurrence.snoozed": String(localized: "Occurrence snoozed")
         case "conflict.resolved": String(localized: "Conflict resolved")
+        case "run.planned": String(localized: "Run planned")
+        case "run.eligible": String(localized: "Run eligible")
+        case "run.claimed": String(localized: "Run claimed")
+        case "run.started": String(localized: "Run started")
+        case "run.progress": String(localized: "Run progress")
+        case "run.approval_requested": String(localized: "Approval requested")
+        case "run.approved": String(localized: "Run approved")
+        case "run.declined": String(localized: "Run declined")
+        case "run.succeeded": String(localized: "Run succeeded")
+        case "run.failed": String(localized: "Run failed")
+        case "run.cancelled": String(localized: "Run cancelled")
+        case "run.expired": String(localized: "Run expired")
+        case "run.requeued": String(localized: "Run requeued")
+        case "policy.created": String(localized: "Policy created")
+        case "policy.updated": String(localized: "Policy changed")
+        case "policy.enabled": String(localized: "Policy enabled")
+        case "policy.disabled": String(localized: "Policy disabled")
+        case "project.created": String(localized: "Project created")
+        case "project.updated": String(localized: "Project changed")
+        case "runner.registered": String(localized: "Runner registered")
+        case "runner.updated": String(localized: "Runner changed")
         default: event.action
         }
     }

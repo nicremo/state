@@ -30,3 +30,25 @@ func TestRunRejectsUnknownCommand(t *testing.T) {
 		t.Fatal("run(unknown) succeeded")
 	}
 }
+
+func TestRunProjectValidateWithoutPolicyFile(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&stderr, nil))
+	err := run([]string{"project", "validate", "--dir", t.TempDir()}, &stdout, &stderr, logger)
+	if err == nil || !strings.Contains(err.Error(), "project init") {
+		t.Fatalf("run(project validate) error = %v, want init guidance", err)
+	}
+}
+
+func TestRunRejectsUnknownProjectCommand(t *testing.T) {
+	t.Parallel()
+
+	var output bytes.Buffer
+	err := run([]string{"project", "unknown"}, &output, &output, slog.New(slog.NewTextHandler(&output, nil)))
+	if err == nil {
+		t.Fatal("run(project unknown) succeeded")
+	}
+}

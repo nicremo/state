@@ -7,6 +7,7 @@ flowchart TB
     subgraph Machine["Developer machine"]
         H["Agent harness"] --> C["statectl"]
         K["Operating system keychain"] <--> C
+        W["state-runner"] --> X["Local harness adapter"]
     end
     subgraph Personal["Owner controlled infrastructure"]
         S["state-server"] --> D["PocketBase SQLite"]
@@ -20,6 +21,7 @@ flowchart TB
         E["Notification extension"] --> A
     end
     C -->|"HTTPS MCP"| S
+    W -->|"HTTPS REST, outbound only"| S
     A <-->|"HTTPS REST"| S
     S -->|"Opaque route and encrypted envelope"| R
     R -->|"APNs"| E
@@ -49,9 +51,14 @@ The iOS app maintains a rolling set of local notifications and confirms protecte
 
 The owner-controlled server can read reminder content. This is required for search, briefings and MCP tools. The relay cannot decrypt reminder payloads. Device private keys never leave the Keychain.
 
+## Agent execution
+
+A reminder may reference a versioned execution policy. When such an occurrence becomes due, the execution scheduler materializes one `AgentRun`, idempotent per occurrence and policy revision. A `state-runner` on an opted-in workstation polls outbound-only, claims one run under a lease bound to its runner identity, verifies the hash-pinned task contract against its local project and adapter scopes, and launches a local harness adapter. Task contracts never contain commands. Lifecycle transitions and terminal results are audited like every other mutation, an evidence mismatch between outcome and exit code forces a failure, and a failed run never completes its occurrence. The owner receives an encrypted `run_finished` push through the same relay path as reminders.
+
 ## Contracts
 
 - REST: versioned under `/api/v1` and described by OpenAPI.
 - MCP: Streamable HTTP at `/mcp` using the negotiated stable protocol version.
 - CLI adapter: MCP over STDIO between the harness and `statectl`.
+- Runner: outbound-only, long-polled REST between `state-runner` and the server.
 - Push: X25519 key agreement, HKDF key derivation and AES-GCM authenticated encryption.

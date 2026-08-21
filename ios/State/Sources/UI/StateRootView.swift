@@ -44,18 +44,28 @@ struct StateRootView: View {
             Task { await pushRegistrationService.registerIfSupported(apnsToken: token, model: model) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .stateNotificationAction)) { notification in
-            guard let occurrenceID = notification.userInfo?["occurrence_id"] as? String, !occurrenceID.isEmpty else { return }
+            let occurrenceID = notification.userInfo?["occurrence_id"] as? String ?? ""
+            let agentRunID = notification.userInfo?["agent_run_id"] as? String ?? ""
+            guard !occurrenceID.isEmpty || !agentRunID.isEmpty else { return }
             let action = notification.userInfo?["action"] as? String
             Task {
-                switch action {
-                case StateNotificationAction.complete:
-                    await model.completeOccurrence(id: occurrenceID)
-                case StateNotificationAction.snoozeTenMinutes:
-                    await model.snoozeOccurrence(id: occurrenceID, until: Date().addingTimeInterval(10 * 60))
-                case StateNotificationAction.snoozeOneHour:
-                    await model.snoozeOccurrence(id: occurrenceID, until: Date().addingTimeInterval(60 * 60))
-                default:
-                    break
+                if !occurrenceID.isEmpty {
+                    switch action {
+                    case StateNotificationAction.complete:
+                        await model.completeOccurrence(id: occurrenceID)
+                    case StateNotificationAction.snoozeTenMinutes:
+                        await model.snoozeOccurrence(id: occurrenceID, until: Date().addingTimeInterval(10 * 60))
+                    case StateNotificationAction.snoozeOneHour:
+                        await model.snoozeOccurrence(id: occurrenceID, until: Date().addingTimeInterval(60 * 60))
+                    default:
+                        break
+                    }
+                }
+                // A run notification tap has no action of its own; it refreshes
+                // State so the run and its reminder are current when the owner
+                // opens them. There is no cross-tab navigation path yet.
+                if !agentRunID.isEmpty {
+                    await model.synchronize()
                 }
                 await notificationCoordinator.refresh(model: model)
             }

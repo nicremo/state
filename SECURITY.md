@@ -16,8 +16,9 @@ State is self-hosted software. Operators are responsible for:
 
 - TLS termination and a durable domain.
 - Host patching, firewall policy and access control.
-- Protecting bootstrap tokens, harness credentials, age recipients and APNs keys.
-- Keeping the server, relay and `statectl` updated.
+- Protecting bootstrap tokens, harness credentials, runner credentials, age recipients and APNs keys.
+- Keeping the server, relay, `statectl` and `state-runner` updated.
+- Reviewing execution policies before enabling them, and keeping unattended policies limited to low-risk capabilities.
 - Testing encrypted backups and restores.
 - Revoking credentials when a device or machine is lost.
 
@@ -26,12 +27,16 @@ Never commit environment files, Apple private keys, access tokens or backup iden
 ## Security properties
 
 - Every harness has a separate, revocable bearer credential.
+- Every runner has a separate, revocable credential whose scope is limited to claiming and reporting runs; it cannot mutate reminders.
 - Pairing codes are one-time and expire.
 - Mutations require an expected revision and stable request identifier.
 - Audit rows are immutable and connected by a signed hash chain.
 - Agent actors cannot archive or delete reminders.
+- Task contracts contain no shell commands; runners map contracts to their own local adapter invocations and verify the contract hash before launch.
+- Unattended policies are restricted to an explicit low-risk capability allow-list; anything beyond it requires supervised mode and a per-run approval.
+- Run logs and artifacts remain on the workstation; only redacted, size-bounded summaries reach the server, and push notifications carry generic lifecycle text.
 - Relay routes are opaque and APNs tokens are encrypted at rest.
-- Reminder payloads are encrypted before reaching the relay.
+- Reminder and run payloads are encrypted before reaching the relay.
 - App Attest protects relay registration in production.
 
 These properties do not make a compromised personal State server confidential. That server intentionally processes plaintext for MCP and full-text search.

@@ -20,7 +20,18 @@ type PairRequest struct {
 	ServerURL   string
 	Code        string
 	Harness     string
+	// Kind selects the credential kind to pair. The empty default pairs a
+	// harness credential and keeps the historical assertions; "runner" pairs a
+	// runner credential (no harness label, actor kind must be runner).
+	Kind string
 }
+
+// PairKindRunner requests a runner credential instead of a harness credential.
+const PairKindRunner = "runner"
+
+// runnerProfileHarness is stored as the profile harness of a runner pairing so
+// the profile stays complete; a runner has no agent CLI label.
+const runnerProfileHarness = "runner"
 
 type PairService struct {
 	config     *ConfigStore
@@ -36,15 +47,23 @@ func NewPairService(config *ConfigStore, secrets SecretStore, httpClient *http.C
 }
 
 func (service *PairService) Pair(ctx context.Context, request PairRequest) (Profile, error) {
-	if service.config == nil || service.secrets == nil || request.ProfileName == "" || request.Code == "" || !state.ValidHarness(request.Harness) {
+	runnerKind := request.Kind == PairKindRunner
+	if service.config == nil || service.secrets == nil || request.ProfileName == "" || request.Code == "" || (request.Kind != "" && !runnerKind) {
 		return Profile{}, state.ErrInvalidInput
+	}
+	if !runnerKind && !state.ValidHarness(request.Harness) {
+		return Profile{}, state.ErrInvalidInput
+	}
+	harness := request.Harness
+	if runnerKind {
+		harness = runnerProfileHarness
 	}
 	serverURL := strings.TrimRight(strings.TrimSpace(request.ServerURL), "/")
 	probe := Profile{
 		Name:      request.ProfileName,
 		ServerURL: serverURL,
 		ActorID:   "pending",
-		Harness:   request.Harness,
+		Harness:   harness,
 	}
 	if err := validateProfile(probe); err != nil {
 		return Profile{}, err
@@ -78,14 +97,18 @@ func (service *PairService) Pair(ctx context.Context, request PairRequest) (Prof
 	if err := json.NewDecoder(limited).Decode(&credential); err != nil {
 		return Profile{}, fmt.Errorf("decode pairing response: %w", err)
 	}
-	if credential.Token == "" || credential.Actor.ID == "" || credential.Actor.Kind != state.ActorKindHarness || credential.Actor.Harness != request.Harness {
+	if runnerKind {
+		if credential.Token == "" || credential.Actor.ID == "" || credential.Actor.Kind != state.ActorKindRunner {
+			return Profile{}, errors.New("pairing response is not a runner credential")
+		}
+	} else if credential.Token == "" || credential.Actor.ID == "" || credential.Actor.Kind != state.ActorKindHarness || credential.Actor.Harness != request.Harness {
 		return Profile{}, errors.New("pairing response does not match requested harness")
 	}
 	profile := Profile{
 		Name:      request.ProfileName,
 		ServerURL: serverURL,
 		ActorID:   credential.Actor.ID,
-		Harness:   credential.Actor.Harness,
+		Harness:   harness,
 	}
 	account := profile.CredentialAccount()
 	if err := service.secrets.Set(account, credential.Token); err != nil {

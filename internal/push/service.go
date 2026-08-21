@@ -69,6 +69,56 @@ func (service *Service) NotifySync(ctx context.Context, excludedActorID string) 
 	return errors.Join(failures...)
 }
 
+// NotifyRunFinished pushes an encrypted run-lifecycle notification to every
+// registered device route. It fires for succeeded, failed, and
+// needs_approval only; cancelled and expired are skipped — cancellation is
+// owner-initiated and expiry is a quiet housekeeping sweep, which keeps one
+// uniform rule: notify only when a run produced an outcome or awaits a
+// decision. Notification preferences (NotifyOnCompletion/NotifyOnFailure)
+// are enforced by the caller (state.Service), not here. The payload carries
+// no result summary and no logs.
+func (service *Service) NotifyRunFinished(ctx context.Context, run state.AgentRun, reminderTitle string) error {
+	if service == nil || service.repository == nil || service.sender == nil {
+		return nil
+	}
+	switch run.Status {
+	case state.AgentRunStatusSucceeded, state.AgentRunStatusFailed, state.AgentRunStatusNeedsApproval:
+	default:
+		return nil
+	}
+	routes, err := service.repository.ListDeviceRoutes(ctx)
+	if err != nil {
+		return err
+	}
+	finishedAt := run.FinishedAt
+	if finishedAt == nil {
+		now := service.clock().UTC()
+		finishedAt = &now
+	}
+	payload := map[string]any{
+		"kind":        "run_finished",
+		"run_id":      run.ID,
+		"reminder_id": run.ReminderID,
+		"status":      run.Status,
+		"title":       reminderTitle,
+		"finished_at": finishedAt.UTC(),
+	}
+	if run.OccurrenceID != nil {
+		payload["occurrence_id"] = *run.OccurrenceID
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	var failures []error
+	for _, route := range routes {
+		if err := service.sender.Send(ctx, route, "run_finished", run.ID, encoded); err != nil {
+			failures = append(failures, fmt.Errorf("notify run %s to device %s: %w", run.ID, route.ActorID, err))
+		}
+	}
+	return errors.Join(failures...)
+}
+
 func (service *Service) DeliverDue(ctx context.Context, from time.Time, through time.Time) (int, error) {
 	if service == nil || service.repository == nil || service.sender == nil {
 		return 0, nil

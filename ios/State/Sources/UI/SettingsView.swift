@@ -9,6 +9,10 @@ struct SettingsView: View {
     @State private var customHarness = ""
     @State private var harnessName = "Codex on Mac"
     @State private var pairingCode: PairingCode?
+    @State private var runnerName = ""
+    @State private var runnerPairingCode: PairingCode?
+    @State private var editingPolicy: ExecutionPolicy?
+    @State private var createsPolicy = false
     @State private var confirmsDisconnect = false
 
     private var harness: String {
@@ -107,6 +111,109 @@ struct SettingsView: View {
 
                     actorSection(title: "Agents", actors: model.agents)
                     actorSection(title: "Devices", actors: model.devices.filter { $0.id != model.session?.actor.id })
+
+                    Section("Runners") {
+                        if model.runners.isEmpty {
+                            Text("None connected")
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(model.runners) { runner in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(runner.displayName)
+                                    if !runner.projects.isEmpty || !runner.adapters.isEmpty {
+                                        HStack {
+                                            ForEach(runner.projects, id: \.self) { projectID in
+                                                chip(projectName(for: projectID))
+                                            }
+                                            ForEach(runner.adapters, id: \.self) { adapter in
+                                                chip(adapter)
+                                            }
+                                        }
+                                    }
+                                    (Text(String(localized: "Last seen")) + Text(" ") + Text(runner.lastSeenAt, style: .relative))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button(role: .destructive) {
+                                    Task { await model.revokeRunner(runner) }
+                                } label: {
+                                    Image(systemName: "xmark.circle")
+                                }
+                                .accessibilityLabel("Revoke access")
+                            }
+                            .accessibilityIdentifier("runner-\(runner.id)")
+                        }
+                        TextField("Runner name", text: $runnerName)
+                        Button {
+                            Task {
+                                runnerPairingCode = await model.createRunnerPairingCode(
+                                    displayName: runnerName.trimmingCharacters(in: .whitespacesAndNewlines)
+                                )
+                            }
+                        } label: {
+                            Label("Create one-time code", systemImage: "link.badge.plus")
+                        }
+                        .disabled(runnerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                        if let runnerPairingCode {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(runnerPairingCode.code)
+                                    .font(.title3.monospaced().weight(.semibold))
+                                    .textSelection(.enabled)
+                                LabeledContent("Expires") {
+                                    Text(runnerPairingCode.expiresAt, style: .relative)
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                Button {
+                                    UIPasteboard.general.string = runnerPairingCommand(code: runnerPairingCode.code)
+                                } label: {
+                                    Label("Copy state-runner command", systemImage: "doc.on.doc")
+                                }
+                                Text("Run the command on the machine that should execute runs. state-runner stores the credential there.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+
+                    Section("Execution policies") {
+                        if model.policies.isEmpty {
+                            Text("None created yet")
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(model.policies) { policy in
+                            HStack {
+                                Button {
+                                    editingPolicy = policy
+                                } label: {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(policy.name)
+                                                .foregroundStyle(StateTheme.graphite)
+                                            Text(policySubtitle(policy))
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer(minLength: 8)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                Toggle("Enabled", isOn: policyEnabledBinding(policy))
+                                    .labelsHidden()
+                            }
+                            .accessibilityIdentifier("policy-\(policy.id)")
+                        }
+                        Button {
+                            createsPolicy = true
+                        } label: {
+                            Label("New policy…", systemImage: "plus")
+                        }
+                    }
                 }
 
                 Section("Notifications") {
@@ -140,6 +247,12 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("The server data remains intact. This device loses its stored credential.")
+            }
+            .sheet(item: $editingPolicy) { policy in
+                PolicyEditorView(model: model, policy: policy)
+            }
+            .sheet(isPresented: $createsPolicy) {
+                PolicyEditorView(model: model)
             }
         }
     }
@@ -182,6 +295,42 @@ struct SettingsView: View {
     private func pairingCommand(code: String) -> String {
         guard let server = model.session?.serverURL.absoluteString else { return code }
         return "statectl pair --profile \(harness) --server \(server) --code \(code) --harness \(harness)"
+    }
+
+    private func runnerPairingCommand(code: String) -> String {
+        guard let server = model.session?.serverURL.absoluteString else { return code }
+        return "state-runner pair --server \(server) --code \(code)"
+    }
+
+    private func chip(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.secondary.opacity(0.12), in: Capsule())
+    }
+
+    private func projectName(for id: String) -> String {
+        model.projects.first { $0.id == id }?.name ?? id
+    }
+
+    private func policySubtitle(_ policy: ExecutionPolicy) -> String {
+        let mode = policy.mode == .supervised
+            ? String(localized: "Supervised")
+            : String(localized: "Unattended (low risk)")
+        return "\(projectName(for: policy.projectID)) · \(policy.adapter) · \(mode)"
+    }
+
+    private func policyEnabledBinding(_ policy: ExecutionPolicy) -> Binding<Bool> {
+        Binding(
+            get: { policy.enabled },
+            set: { enabled in
+                var draft = PolicyDraft(policy: policy)
+                draft.enabled = enabled
+                Task { await model.updatePolicy(policy, draft: draft) }
+            }
+        )
     }
 }
 

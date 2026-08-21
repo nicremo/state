@@ -10,6 +10,8 @@ extension Notification.Name {
 
 enum StateNotificationAction {
     static let category = "STATE_REMINDER"
+    /// Run notifications are view-only: no actions, the tap just opens State.
+    static let runCategory = "STATE_RUN"
     static let complete = "STATE_COMPLETE"
     static let snoozeTenMinutes = "STATE_SNOOZE_10"
     static let snoozeOneHour = "STATE_SNOOZE_60"
@@ -43,6 +45,12 @@ final class StateAppDelegate: NSObject, UIApplicationDelegate, @preconcurrency U
                         options: []
                     ),
                 ],
+                intentIdentifiers: [],
+                options: [.customDismissAction]
+            ),
+            UNNotificationCategory(
+                identifier: StateNotificationAction.runCategory,
+                actions: [],
                 intentIdentifiers: [],
                 options: [.customDismissAction]
             ),
@@ -94,6 +102,7 @@ final class StateAppDelegate: NSObject, UIApplicationDelegate, @preconcurrency U
                 "action": response.actionIdentifier,
                 "occurrence_id": response.notification.request.content.userInfo["occurrence_id"] as? String ?? "",
                 "reminder_id": response.notification.request.content.userInfo["reminder_id"] as? String ?? "",
+                "agent_run_id": response.notification.request.content.userInfo["agent_run_id"] as? String ?? "",
             ]
         )
     }

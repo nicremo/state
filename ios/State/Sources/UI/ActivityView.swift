@@ -33,9 +33,13 @@ struct ActivityView: View {
                         }
                         Section {
                             ForEach(model.activity) { event in
-                                NavigationLink {
-                                    ReminderDetailView(model: model, reminderID: event.reminderID)
-                                } label: {
+                                if let reminderID = event.reminderID {
+                                    NavigationLink {
+                                        ReminderDetailView(model: model, reminderID: reminderID)
+                                    } label: {
+                                        AuditEventRow(event: event)
+                                    }
+                                } else {
                                     AuditEventRow(event: event)
                                 }
                             }

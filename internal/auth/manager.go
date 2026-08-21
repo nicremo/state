@@ -28,6 +28,36 @@ var (
 	ErrInvalidPairingCode    = errors.New("invalid pairing code")
 )
 
+// The table DDL below is shared between the create-if-not-exists path in
+// ensureSchema and the guarded rebuild migration (migrateActorKindRunner), so
+// both always produce the same shape. SQLite cannot widen a CHECK constraint
+// in place; the rebuild is how legacy databases pick up new actor kinds.
+const createStateActorsTable = `CREATE TABLE IF NOT EXISTS state_actors (
+	id TEXT PRIMARY KEY,
+	kind TEXT NOT NULL CHECK(kind IN ('owner', 'device', 'harness', 'system', 'runner')),
+	display_name TEXT NOT NULL,
+	harness TEXT NOT NULL DEFAULT '',
+	device_name TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL,
+	revoked_at TEXT
+) STRICT`
+
+const createStateSingleOwnerIndex = `CREATE UNIQUE INDEX IF NOT EXISTS state_single_owner_idx
+	ON state_actors(kind) WHERE kind = 'owner'`
+
+const createStatePairingCodesTable = `CREATE TABLE IF NOT EXISTS state_pairing_codes (
+	id TEXT PRIMARY KEY,
+	code_hash TEXT NOT NULL UNIQUE,
+	actor_kind TEXT NOT NULL DEFAULT 'harness' CHECK(actor_kind IN ('device', 'harness', 'runner')),
+	harness TEXT NOT NULL,
+	display_name TEXT NOT NULL,
+	device_name TEXT NOT NULL DEFAULT '',
+	created_by TEXT NOT NULL REFERENCES state_actors(id),
+	created_at TEXT NOT NULL,
+	expires_at TEXT NOT NULL,
+	used_at TEXT
+) STRICT`
+
 type OwnerBootstrapRequest struct {
 	DisplayName string `json:"display_name"`
 	DeviceName  string `json:"device_name"`
@@ -272,12 +302,15 @@ func (manager *Manager) ListActors(ctx context.Context, actor state.Actor, kind 
 	if actor.Kind != state.ActorKindOwner {
 		return nil, state.ErrForbidden
 	}
-	if kind != state.ActorKindDevice && kind != state.ActorKindHarness {
+	if kind != state.ActorKindDevice && kind != state.ActorKindHarness && kind != state.ActorKindRunner {
 		return nil, state.ErrInvalidInput
 	}
 	where := "a.kind = 'harness'"
-	if kind == state.ActorKindDevice {
+	switch kind {
+	case state.ActorKindDevice:
 		where = "a.kind IN ('owner', 'device')"
+	case state.ActorKindRunner:
+		where = "a.kind = 'runner'"
 	}
 	rows := []struct {
 		ID          string  `db:"id"`
@@ -344,7 +377,9 @@ func (manager *Manager) CreatePairingCode(ctx context.Context, actor state.Actor
 	}
 	validDevice := actorKind == state.ActorKindDevice && request.Harness == "" && strings.TrimSpace(request.DeviceName) != ""
 	validAgent := actorKind == state.ActorKindHarness && state.ValidHarness(request.Harness)
-	if (!validDevice && !validAgent) || strings.TrimSpace(request.DisplayName) == "" {
+	// Runners carry neither a harness label nor a device name.
+	validRunner := actorKind == state.ActorKindRunner && request.Harness == "" && strings.TrimSpace(request.DeviceName) == ""
+	if (!validDevice && !validAgent && !validRunner) || strings.TrimSpace(request.DisplayName) == "" {
 		return PairingCode{}, state.ErrInvalidInput
 	}
 	id, err := manager.newID()
@@ -503,17 +538,8 @@ func (manager *Manager) RevokeActor(ctx context.Context, actor state.Actor, targ
 
 func (manager *Manager) ensureSchema() error {
 	statements := []string{
-		`CREATE TABLE IF NOT EXISTS state_actors (
-			id TEXT PRIMARY KEY,
-			kind TEXT NOT NULL CHECK(kind IN ('owner', 'device', 'harness', 'system')),
-			display_name TEXT NOT NULL,
-			harness TEXT NOT NULL DEFAULT '',
-			device_name TEXT NOT NULL DEFAULT '',
-			created_at TEXT NOT NULL,
-			revoked_at TEXT
-		) STRICT`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS state_single_owner_idx
-			ON state_actors(kind) WHERE kind = 'owner'`,
+		createStateActorsTable,
+		createStateSingleOwnerIndex,
 		`CREATE TABLE IF NOT EXISTS state_credentials (
 			id TEXT PRIMARY KEY,
 			actor_id TEXT NOT NULL REFERENCES state_actors(id),
@@ -524,20 +550,9 @@ func (manager *Manager) ensureSchema() error {
 		) STRICT`,
 		`CREATE INDEX IF NOT EXISTS state_credentials_actor_idx
 			ON state_credentials(actor_id)`,
-		`CREATE TABLE IF NOT EXISTS state_pairing_codes (
-			id TEXT PRIMARY KEY,
-			code_hash TEXT NOT NULL UNIQUE,
-			actor_kind TEXT NOT NULL DEFAULT 'harness' CHECK(actor_kind IN ('device', 'harness')),
-			harness TEXT NOT NULL,
-			display_name TEXT NOT NULL,
-			device_name TEXT NOT NULL DEFAULT '',
-			created_by TEXT NOT NULL REFERENCES state_actors(id),
-			created_at TEXT NOT NULL,
-			expires_at TEXT NOT NULL,
-			used_at TEXT
-		) STRICT`,
+		createStatePairingCodesTable,
 	}
-	return manager.app.RunInTransaction(func(txApp core.App) error {
+	err := manager.app.RunInTransaction(func(txApp core.App) error {
 		for _, statement := range statements {
 			if _, err := txApp.DB().NewQuery(statement).Execute(); err != nil {
 				return err
@@ -566,6 +581,135 @@ func (manager *Manager) ensureSchema() error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	// Runs after the column-add migration above so even the oldest pairing
+	// codes tables carry every column the rebuild's INSERT ... SELECT expects.
+	return manager.migrateActorKindRunner()
+}
+
+// migrateActorKindRunner widens the kind CHECK constraints on state_actors and
+// state_pairing_codes so they admit runner actors. SQLite cannot alter a CHECK
+// constraint in place, so legacy databases get a guarded table rebuild:
+// create the replacement under a temporary name, copy all rows, drop the old
+// table, rename the replacement, and recreate indexes. Fresh databases already
+// carry the widened DDL and skip the rebuild entirely via the sqlite_master
+// detection.
+func (manager *Manager) migrateActorKindRunner() error {
+	rebuildActors, err := manager.tableCheckLacksRunner("state_actors")
+	if err != nil {
+		return err
+	}
+	rebuildPairingCodes, err := manager.tableCheckLacksRunner("state_pairing_codes")
+	if err != nil {
+		return err
+	}
+	if !rebuildActors && !rebuildPairingCodes {
+		return nil
+	}
+	ctx := context.Background()
+	// Dropping a table while live rows in state_credentials /
+	// state_pairing_codes / state_runners reference it fails under enforced
+	// foreign keys, and PRAGMA foreign_keys is a no-op inside a transaction —
+	// so the rebuild runs on one dedicated connection with enforcement paused
+	// for exactly the duration of the transaction.
+	builder, ok := manager.app.ConcurrentDB().(*dbx.DB)
+	if !ok {
+		return fmt.Errorf("migrate actor kind runner: unexpected database handle %T", manager.app.ConcurrentDB())
+	}
+	conn, err := builder.DB().Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire migration connection: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("pause foreign key enforcement: %w", err)
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin actor kind migration: %w", err)
+	}
+	if rebuildActors {
+		err = rebuildKindTable(ctx, tx, "state_actors", createStateActorsTable,
+			"id, kind, display_name, harness, device_name, created_at, revoked_at",
+			[]string{createStateSingleOwnerIndex})
+	}
+	if err == nil && rebuildPairingCodes {
+		err = rebuildKindTable(ctx, tx, "state_pairing_codes", createStatePairingCodesTable,
+			"id, code_hash, actor_kind, harness, display_name, device_name, created_by, created_at, expires_at, used_at",
+			nil)
+	}
+	if err != nil {
+		_ = tx.Rollback()
+	} else {
+		err = tx.Commit()
+	}
+	if _, resumeErr := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err == nil && resumeErr != nil {
+		err = fmt.Errorf("resume foreign key enforcement: %w", resumeErr)
+	}
+	if err != nil {
+		return fmt.Errorf("migrate actor kind runner: %w", err)
+	}
+	// Safety net: the rebuild must not leave dangling references behind.
+	for _, table := range []string{"state_credentials", "state_pairing_codes"} {
+		rows, err := conn.QueryContext(ctx, `PRAGMA foreign_key_check(`+table+`)`)
+		if err != nil {
+			return fmt.Errorf("verify %s references after actor kind migration: %w", table, err)
+		}
+		violation := rows.Next()
+		closeErr := rows.Close()
+		if violation {
+			return fmt.Errorf("actor kind migration left foreign key violations in %s", table)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("verify %s references after actor kind migration: %w", table, closeErr)
+		}
+	}
+	return nil
+}
+
+// tableCheckLacksRunner reports whether the table's stored DDL predates the
+// runner actor kind, i.e. its kind CHECK constraint needs widening.
+func (manager *Manager) tableCheckLacksRunner(table string) (bool, error) {
+	row := struct {
+		SQL string `db:"sql"`
+	}{}
+	err := manager.app.DB().NewQuery(`
+		SELECT sql FROM sqlite_master WHERE type = 'table' AND name = {:table}
+	`).Bind(dbx.Params{"table": table}).One(&row)
+	if err != nil {
+		return false, fmt.Errorf("read %s schema: %w", table, err)
+	}
+	return !strings.Contains(row.SQL, "'runner'"), nil
+}
+
+// rebuildKindTable replaces table with a fresh copy built from createDDL,
+// carrying the listed columns over and recreating the given indexes. The
+// replacement is created under a temporary name first: renaming the old table
+// would rewrite REFERENCES clauses in other tables to the temporary name (and
+// break them when the old table is dropped), while renaming the temporary
+// table to the original name leaves those references untouched. Table and
+// column names are fixed schema constants, never user input.
+func rebuildKindTable(ctx context.Context, tx *sql.Tx, table string, createDDL string, columns string, indexes []string) error {
+	tmpTable := table + "_new"
+	tmpDDL := strings.Replace(createDDL, "CREATE TABLE IF NOT EXISTS "+table+" (", "CREATE TABLE "+tmpTable+" (", 1)
+	if tmpDDL == createDDL {
+		return fmt.Errorf("rebuild %s: shared DDL does not match the table name", table)
+	}
+	statements := []string{
+		tmpDDL,
+		`INSERT INTO ` + tmpTable + ` (` + columns + `) SELECT ` + columns + ` FROM ` + table,
+		`DROP TABLE ` + table,
+		`ALTER TABLE ` + tmpTable + ` RENAME TO ` + table,
+	}
+	statements = append(statements, indexes...)
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("rebuild %s: %w", table, err)
+		}
+	}
+	return nil
 }
 
 func findCredential(app core.App, token string) (string, state.Actor, error) {

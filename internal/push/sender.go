@@ -29,7 +29,7 @@ func NewHTTPSender(client *http.Client) *HTTPSender {
 }
 
 func (sender *HTTPSender) Send(ctx context.Context, route DeviceRoute, kind string, collapseID string, plaintext []byte) error {
-	if !validRelayURL(route.RelayURL) || route.RouteID == "" || route.Authorization == "" || len(route.PublicKey) != 32 || (kind != "sync" && kind != "reminder") || len(plaintext) == 0 {
+	if !validRelayURL(route.RelayURL) || route.RouteID == "" || route.Authorization == "" || len(route.PublicKey) != 32 || (kind != "sync" && kind != "reminder" && kind != "run_finished") || len(plaintext) == 0 {
 		return fmt.Errorf("invalid relay notification")
 	}
 	envelope, err := pushcrypto.Seal(route.PublicKey, plaintext, []byte(route.RouteID))

@@ -28,6 +28,7 @@ jobs:
           go build ./cmd/state-server
           go build ./cmd/state-relay
           go build ./cmd/statectl
+          go build ./cmd/state-runner
       - name: Validate Compose
         run: docker compose -f deploy/compose.yaml config --quiet
       - name: Validate OpenAPI YAML
@@ -52,4 +53,11 @@ jobs:
           context: .
           file: deploy/Dockerfile
           target: state-relay
+          push: false
+      - name: Build runner image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          target: state-runner
           push: false

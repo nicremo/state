@@ -96,6 +96,41 @@ type snoozeOccurrenceInput struct {
 	CorrelationID    string    `json:"correlation_id,omitempty" jsonschema:"Optional UUIDv7 shared by related actions."`
 }
 
+type getExecutionContextInput struct {
+	RunID string `json:"run_id" jsonschema:"UUIDv7 of the agent run."`
+}
+
+type claimAgentRunInput struct {
+	WaitSeconds int `json:"wait_seconds,omitempty" jsonschema:"Long-poll budget in seconds. The server caps it at 25."`
+}
+
+type reportAgentRunEventInput struct {
+	RunID            string `json:"run_id" jsonschema:"UUIDv7 of the claimed run."`
+	Event            string `json:"event" jsonschema:"started, progress, or heartbeat. Heartbeat only extends the lease."`
+	Detail           string `json:"detail,omitempty" jsonschema:"One-line redacted status. Never log content."`
+	ExpectedRevision int64  `json:"expected_revision" jsonschema:"Current run revision. Stale revisions are rejected."`
+}
+
+type completeAgentRunInput struct {
+	RunID             string               `json:"run_id" jsonschema:"UUIDv7 of the claimed run."`
+	Outcome           state.AgentRunStatus `json:"outcome" jsonschema:"succeeded or failed."`
+	ResultSummary     string               `json:"result_summary,omitempty" jsonschema:"Redacted result summary, at most 2000 characters. Never log content."`
+	ResultArtifactRef string               `json:"result_artifact_ref,omitempty" jsonschema:"Opaque local artifact label. Content never leaves the workstation."`
+	FailureCode       string               `json:"failure_code,omitempty" jsonschema:"Optional caller failure code. Only adapter_unavailable is accepted; server-owned codes are set by the server."`
+	ExitCode          int                  `json:"exit_code" jsonschema:"Adapter process exit code. A disagreement with outcome fails the run as evidence_mismatch."`
+	ExpectedRevision  int64                `json:"expected_revision" jsonschema:"Current run revision. Stale revisions are rejected."`
+	ClientRequestID   string               `json:"client_request_id" jsonschema:"Stable UUIDv7 for idempotent retries."`
+	SourceText        string               `json:"source_text,omitempty" jsonschema:"Relevant original wording that caused this write."`
+	CorrelationID     string               `json:"correlation_id,omitempty" jsonschema:"Optional UUIDv7 shared by related actions."`
+}
+
+type requestAgentApprovalInput struct {
+	RunID            string `json:"run_id" jsonschema:"UUIDv7 of the running run."`
+	Capability       string `json:"capability" jsonschema:"Capability outside the policy allow-list that the run needs."`
+	Reason           string `json:"reason,omitempty" jsonschema:"Why the run needs the capability."`
+	ExpectedRevision int64  `json:"expected_revision" jsonschema:"Current run revision. Stale revisions are rejected."`
+}
+
 func NewHandler(config Config) http.Handler {
 	instance := &server{auth: config.Auth, state: config.State, push: config.Push}
 	instance.mcp = mcp.NewServer(&mcp.Implementation{
@@ -176,10 +211,35 @@ func (server *server) registerTools() {
 		Description: "Snooze one occurrence until an explicit UTC time.",
 		Annotations: mutating,
 	}, server.snoozeOccurrence)
+	mcp.AddTool(server.mcp, &mcp.Tool{
+		Name:        "get_execution_context",
+		Description: "Return a run with its task contract, full reminder detail, pinned policy, and the changes since the run's context cursor. Runner and owner only.",
+		Annotations: readOnly,
+	}, server.getExecutionContext)
+	mcp.AddTool(server.mcp, &mcp.Tool{
+		Name:        "claim_agent_run",
+		Description: "Long-poll claim of the oldest eligible agent run this runner may serve. Runner only.",
+		Annotations: mutating,
+	}, server.claimAgentRun)
+	mcp.AddTool(server.mcp, &mcp.Tool{
+		Name:        "report_agent_run_event",
+		Description: "Report started, progress, or a lease-extending heartbeat for a claimed run. Runner only.",
+		Annotations: mutating,
+	}, server.reportAgentRunEvent)
+	mcp.AddTool(server.mcp, &mcp.Tool{
+		Name:        "complete_agent_run",
+		Description: "Finalize a claimed run with the reported outcome and the adapter exit code. Runner only.",
+		Annotations: mutating,
+	}, server.completeAgentRun)
+	mcp.AddTool(server.mcp, &mcp.Tool{
+		Name:        "request_agent_approval",
+		Description: "Park a running run in needs_approval until the owner grants one capability outside the policy allow-list. Runner only.",
+		Annotations: mutating,
+	}, server.requestAgentApproval)
 }
 
 func (server *server) getBriefing(ctx context.Context, request *mcp.CallToolRequest, input getBriefingInput) (*mcp.CallToolResult, any, error) {
-	if _, err := server.actor(ctx, request); err != nil {
+	if _, err := server.reminderActor(ctx, request); err != nil {
 		return nil, nil, err
 	}
 	briefing, err := server.state.GetBriefing(ctx, state.BriefingOptions{AfterCursor: input.AfterCursor, Limit: input.Limit})
@@ -190,7 +250,7 @@ func (server *server) getBriefing(ctx context.Context, request *mcp.CallToolRequ
 }
 
 func (server *server) searchReminders(ctx context.Context, request *mcp.CallToolRequest, input searchRemindersInput) (*mcp.CallToolResult, any, error) {
-	if _, err := server.actor(ctx, request); err != nil {
+	if _, err := server.reminderActor(ctx, request); err != nil {
 		return nil, nil, err
 	}
 	reminders, err := server.state.SearchReminders(ctx, input.Query, input.Limit)
@@ -201,26 +261,36 @@ func (server *server) searchReminders(ctx context.Context, request *mcp.CallTool
 }
 
 func (server *server) getReminder(ctx context.Context, request *mcp.CallToolRequest, input getReminderInput) (*mcp.CallToolResult, any, error) {
-	if _, err := server.actor(ctx, request); err != nil {
+	if _, err := server.reminderActor(ctx, request); err != nil {
 		return nil, nil, err
 	}
-	reminder, err := server.state.GetReminder(ctx, input.ReminderID)
+	detail, err := server.reminderDetail(ctx, input.ReminderID)
 	if err != nil {
 		return nil, nil, err
 	}
-	comments, err := server.state.ListComments(ctx, input.ReminderID)
+	return nil, detail, nil
+}
+
+// reminderDetail assembles the reminder, comments, occurrences, and history
+// block shared by get_reminder and get_execution_context.
+func (server *server) reminderDetail(ctx context.Context, reminderID string) (map[string]any, error) {
+	reminder, err := server.state.GetReminder(ctx, reminderID)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	occurrences, err := server.state.ListOccurrences(ctx, input.ReminderID, state.OccurrenceListOptions{Limit: 500})
+	comments, err := server.state.ListComments(ctx, reminderID)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	history, err := server.state.ListAuditEvents(ctx, input.ReminderID)
+	occurrences, err := server.state.ListOccurrences(ctx, reminderID, state.OccurrenceListOptions{Limit: 500})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return nil, map[string]any{
+	history, err := server.state.ListAuditEvents(ctx, reminderID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
 		"reminder":    reminder,
 		"comments":    comments,
 		"occurrences": occurrences,
@@ -229,7 +299,7 @@ func (server *server) getReminder(ctx context.Context, request *mcp.CallToolRequ
 }
 
 func (server *server) getChanges(ctx context.Context, request *mcp.CallToolRequest, input getChangesInput) (*mcp.CallToolResult, any, error) {
-	if _, err := server.actor(ctx, request); err != nil {
+	if _, err := server.reminderActor(ctx, request); err != nil {
 		return nil, nil, err
 	}
 	changes, err := server.state.ListChanges(ctx, input.AfterCursor, input.Limit)
@@ -244,7 +314,7 @@ func (server *server) getChanges(ctx context.Context, request *mcp.CallToolReque
 }
 
 func (server *server) createReminder(ctx context.Context, request *mcp.CallToolRequest, input createReminderInput) (*mcp.CallToolResult, any, error) {
-	actor, err := server.actor(ctx, request)
+	actor, err := server.reminderActor(ctx, request)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -266,7 +336,7 @@ func (server *server) createReminder(ctx context.Context, request *mcp.CallToolR
 }
 
 func (server *server) updateReminder(ctx context.Context, request *mcp.CallToolRequest, input updateReminderInput) (*mcp.CallToolResult, any, error) {
-	actor, err := server.actor(ctx, request)
+	actor, err := server.reminderActor(ctx, request)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -302,7 +372,7 @@ func (server *server) updateReminder(ctx context.Context, request *mcp.CallToolR
 }
 
 func (server *server) addComment(ctx context.Context, request *mcp.CallToolRequest, input addCommentInput) (*mcp.CallToolResult, any, error) {
-	actor, err := server.actor(ctx, request)
+	actor, err := server.reminderActor(ctx, request)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -321,7 +391,7 @@ func (server *server) addComment(ctx context.Context, request *mcp.CallToolReque
 }
 
 func (server *server) completeOccurrence(ctx context.Context, request *mcp.CallToolRequest, input completeOccurrenceInput) (*mcp.CallToolResult, any, error) {
-	actor, err := server.actor(ctx, request)
+	actor, err := server.reminderActor(ctx, request)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -340,7 +410,7 @@ func (server *server) completeOccurrence(ctx context.Context, request *mcp.CallT
 }
 
 func (server *server) snoozeOccurrence(ctx context.Context, request *mcp.CallToolRequest, input snoozeOccurrenceInput) (*mcp.CallToolResult, any, error) {
-	actor, err := server.actor(ctx, request)
+	actor, err := server.reminderActor(ctx, request)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -359,6 +429,113 @@ func (server *server) snoozeOccurrence(ctx context.Context, request *mcp.CallToo
 	return nil, map[string]any{"stored": true, "occurrence": occurrence}, nil
 }
 
+func (server *server) getExecutionContext(ctx context.Context, request *mcp.CallToolRequest, input getExecutionContextInput) (*mcp.CallToolResult, any, error) {
+	if _, err := server.runnerOrOwnerActor(ctx, request); err != nil {
+		return nil, nil, err
+	}
+	run, err := server.state.GetAgentRun(ctx, input.RunID)
+	if err != nil {
+		return nil, nil, err
+	}
+	detail, err := server.reminderDetail(ctx, run.ReminderID)
+	if err != nil {
+		return nil, nil, err
+	}
+	policy, err := server.state.GetPolicy(ctx, run.PolicyID)
+	if err != nil {
+		return nil, nil, err
+	}
+	changes, err := server.state.ListChanges(ctx, run.ContextCursor, 100)
+	if err != nil {
+		return nil, nil, err
+	}
+	cursor := run.ContextCursor
+	if len(changes) > 0 {
+		cursor = changes[len(changes)-1].Cursor
+	}
+	detail["run"] = run
+	detail["policy"] = policy
+	detail["changes"] = changes
+	detail["cursor"] = cursor
+	return nil, detail, nil
+}
+
+func (server *server) claimAgentRun(ctx context.Context, request *mcp.CallToolRequest, input claimAgentRunInput) (*mcp.CallToolResult, any, error) {
+	actor, err := server.runnerActor(ctx, request)
+	if err != nil {
+		return nil, nil, err
+	}
+	run, err := server.state.ClaimAgentRun(ctx, actor, state.ClaimRunInput{WaitSeconds: input.WaitSeconds})
+	if err != nil {
+		return nil, nil, err
+	}
+	server.notifySync(ctx, actor.ID)
+	return nil, map[string]any{"run": run}, nil
+}
+
+func (server *server) reportAgentRunEvent(ctx context.Context, request *mcp.CallToolRequest, input reportAgentRunEventInput) (*mcp.CallToolResult, any, error) {
+	actor, err := server.runnerActor(ctx, request)
+	if err != nil {
+		return nil, nil, err
+	}
+	run, err := server.state.ReportAgentRunEvent(ctx, actor, state.ReportRunEventInput{
+		RunID:            input.RunID,
+		Event:            input.Event,
+		Detail:           input.Detail,
+		ExpectedRevision: input.ExpectedRevision,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	server.notifySync(ctx, actor.ID)
+	return nil, map[string]any{"run": run}, nil
+}
+
+func (server *server) completeAgentRun(ctx context.Context, request *mcp.CallToolRequest, input completeAgentRunInput) (*mcp.CallToolResult, any, error) {
+	actor, err := server.runnerActor(ctx, request)
+	if err != nil {
+		return nil, nil, err
+	}
+	run, err := server.state.CompleteAgentRun(ctx, actor, state.CompleteRunInput{
+		RunID:             input.RunID,
+		Outcome:           input.Outcome,
+		ResultSummary:     input.ResultSummary,
+		ResultArtifactRef: input.ResultArtifactRef,
+		FailureCode:       input.FailureCode,
+		ExitCode:          input.ExitCode,
+		ExpectedRevision:  input.ExpectedRevision,
+		MutationMetadata: state.MutationMetadata{
+			Source:          "mcp",
+			SourceExcerpt:   input.SourceText,
+			ClientRequestID: input.ClientRequestID,
+			CorrelationID:   input.CorrelationID,
+		},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	server.notifySync(ctx, actor.ID)
+	return nil, map[string]any{"run": run}, nil
+}
+
+func (server *server) requestAgentApproval(ctx context.Context, request *mcp.CallToolRequest, input requestAgentApprovalInput) (*mcp.CallToolResult, any, error) {
+	actor, err := server.runnerActor(ctx, request)
+	if err != nil {
+		return nil, nil, err
+	}
+	run, err := server.state.RequestAgentApproval(ctx, actor, state.RequestApprovalInput{
+		RunID:            input.RunID,
+		Capability:       input.Capability,
+		Reason:           input.Reason,
+		ExpectedRevision: input.ExpectedRevision,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	server.notifySync(ctx, actor.ID)
+	return nil, map[string]any{"run": run}, nil
+}
+
 func (server *server) notifySync(parent context.Context, excludedActorID string) {
 	if server.push == nil {
 		return
@@ -374,6 +551,45 @@ func (server *server) actor(ctx context.Context, request *mcp.CallToolRequest) (
 	}
 	token := bearerToken(request.Extra.Header.Get("Authorization"))
 	return server.auth.Authenticate(ctx, token)
+}
+
+// reminderActor authenticates the caller of a reminder tool. Runners are
+// rejected at the tool edge even though the service repeats the check.
+func (server *server) reminderActor(ctx context.Context, request *mcp.CallToolRequest) (state.Actor, error) {
+	actor, err := server.actor(ctx, request)
+	if err != nil {
+		return state.Actor{}, err
+	}
+	if actor.Kind == state.ActorKindRunner {
+		return state.Actor{}, state.ErrForbidden
+	}
+	return actor, nil
+}
+
+// runnerActor gates the runner lifecycle tools (claim, report, complete,
+// request approval).
+func (server *server) runnerActor(ctx context.Context, request *mcp.CallToolRequest) (state.Actor, error) {
+	actor, err := server.actor(ctx, request)
+	if err != nil {
+		return state.Actor{}, err
+	}
+	if actor.Kind != state.ActorKindRunner {
+		return state.Actor{}, state.ErrForbidden
+	}
+	return actor, nil
+}
+
+// runnerOrOwnerActor gates get_execution_context: the owner may read a run
+// for debugging and the iOS UI.
+func (server *server) runnerOrOwnerActor(ctx context.Context, request *mcp.CallToolRequest) (state.Actor, error) {
+	actor, err := server.actor(ctx, request)
+	if err != nil {
+		return state.Actor{}, err
+	}
+	if actor.Kind != state.ActorKindRunner && actor.Kind != state.ActorKindOwner {
+		return state.Actor{}, state.ErrForbidden
+	}
+	return actor, nil
 }
 
 func (server *server) authenticateHTTP(request *http.Request) (state.Actor, error) {

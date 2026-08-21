@@ -49,7 +49,13 @@ actor SyncEngine {
         while true {
             let response = try await api.getChanges(after: currentCursor, limit: 100)
             guard !response.changes.isEmpty else { return }
-            let reminderIDs = Array(Set(response.changes.map(\.event.reminderID))).sorted()
+            // Policy, project and runner events carry no reminder ID. They are
+            // fetched through the global lists in AppModel.synchronize, so the
+            // pull only groups reminder-scoped events.
+            let reminderIDs = Array(Set(response.changes.compactMap(\.event.reminderID))).sorted()
+            if reminderIDs.isEmpty {
+                try await database.advanceCursor(to: response.cursor)
+            }
             var details: [ReminderDetail] = []
             for identifier in reminderIDs {
                 details.append(try await api.getReminder(id: identifier))

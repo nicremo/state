@@ -137,6 +137,14 @@ func (repository *Repository) ListRoutes(ctx context.Context, excludedActorID st
 	`, params)
 }
 
+// ListDeviceRoutes returns every registered push route (owner and devices)
+// with decrypted relay authorization. Unlike ListUnconfirmedRoutes it is not
+// occurrence-scoped: run lifecycle notifications fan out to all devices and
+// carry no confirmation tracking.
+func (repository *Repository) ListDeviceRoutes(ctx context.Context) ([]DeviceRoute, error) {
+	return repository.ListRoutes(ctx, "")
+}
+
 func (repository *Repository) ListUnconfirmedRoutes(ctx context.Context, occurrenceID string) ([]DeviceRoute, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

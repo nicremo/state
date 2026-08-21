@@ -88,7 +88,7 @@ actor APIClient: StateAPI {
         return try StateJSON.decoder.decode(DeviceRoute.self, from: data)
     }
 
-    func createPairingCode(kind: ActorKind, harness: String?, displayName: String, deviceName: String) async throws -> PairingCode {
+    func createPairingCode(kind: ActorKind = .harness, harness: String?, displayName: String, deviceName: String) async throws -> PairingCode {
         var payload: [String: Any] = [
             "kind": kind.rawValue,
             "display_name": displayName,
@@ -108,7 +108,151 @@ actor APIClient: StateAPI {
         return try StateJSON.decoder.decode(ActorListResponse.self, from: data).actors.map(\.actor)
     }
 
+    // MARK: Agent execution
+
+    // UI-level endpoints for projects, policies, runners and runs. They are
+    // intentionally not part of the StateAPI sync seam: runs ride inside
+    // ReminderDetail during sync and the global lists are fetched
+    // best-effort by the app model.
+
+    func listProjects() async throws -> [Project] {
+        let data = try await request(path: "/api/v1/projects")
+        return try StateJSON.decoder.decode(ProjectListResponse.self, from: data).projects
+    }
+
+    func listPolicies() async throws -> [ExecutionPolicy] {
+        let data = try await request(path: "/api/v1/policies")
+        return try StateJSON.decoder.decode(PolicyListResponse.self, from: data).policies
+    }
+
+    func createPolicy(_ policy: ExecutionPolicy) async throws -> ExecutionPolicy {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "name": policy.name,
+            "project_id": policy.projectID,
+            "adapter": policy.adapter,
+            "mode": policy.mode.rawValue,
+            "allowed_capabilities": policy.allowedCapabilities,
+            "mark_occurrence_done_on_success": policy.markOccurrenceDoneOnSuccess,
+            "notify_on_start": policy.notifyOnStart,
+            "notify_on_completion": policy.notifyOnCompletion,
+            "notify_on_failure": policy.notifyOnFailure,
+            "timeout_minutes": policy.timeoutMinutes,
+            "client_request_id": UUIDv7.generate().uuidString.lowercased(),
+            "source": "ios",
+        ], options: [.sortedKeys])
+        let data = try await request(path: "/api/v1/policies", method: "POST", body: body)
+        return try StateJSON.decoder.decode(ExecutionPolicy.self, from: data)
+    }
+
+    /// `policy.revision` is the last known server revision; it is sent as the
+    /// expected revision of the update.
+    func updatePolicy(_ policy: ExecutionPolicy) async throws -> ExecutionPolicy {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "name": policy.name,
+            "adapter": policy.adapter,
+            "mode": policy.mode.rawValue,
+            "allowed_capabilities": policy.allowedCapabilities,
+            "mark_occurrence_done_on_success": policy.markOccurrenceDoneOnSuccess,
+            "notify_on_start": policy.notifyOnStart,
+            "notify_on_completion": policy.notifyOnCompletion,
+            "notify_on_failure": policy.notifyOnFailure,
+            "timeout_minutes": policy.timeoutMinutes,
+            "enabled": policy.enabled,
+            "expected_revision": policy.revision,
+            "client_request_id": UUIDv7.generate().uuidString.lowercased(),
+            "source": "ios",
+        ], options: [.sortedKeys])
+        let data = try await request(path: "/api/v1/policies/\(policy.id)", method: "PATCH", body: body)
+        return try StateJSON.decoder.decode(ExecutionPolicy.self, from: data)
+    }
+
+    func listRunners() async throws -> [Runner] {
+        let data = try await request(path: "/api/v1/runners")
+        return try StateJSON.decoder.decode(RunnerListResponse.self, from: data).runners
+    }
+
+    /// `runner.revision` is the last known server revision; it is sent as the
+    /// expected revision of the update.
+    func updateRunner(_ runner: Runner) async throws -> Runner {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "display_name": runner.displayName,
+            "projects": runner.projects,
+            "adapters": runner.adapters,
+            "expected_revision": runner.revision,
+            "client_request_id": UUIDv7.generate().uuidString.lowercased(),
+            "source": "ios",
+        ], options: [.sortedKeys])
+        let data = try await request(path: "/api/v1/runners/\(runner.id)", method: "PATCH", body: body)
+        return try StateJSON.decoder.decode(Runner.self, from: data)
+    }
+
+    func listRuns(
+        reminderID: String? = nil,
+        status: AgentRunStatus? = nil,
+        runnerID: String? = nil,
+        limit: Int = 100
+    ) async throws -> [AgentRun] {
+        var query = [URLQueryItem(name: "limit", value: String(limit))]
+        if let reminderID {
+            query.append(URLQueryItem(name: "reminder_id", value: reminderID))
+        }
+        if let status {
+            query.append(URLQueryItem(name: "status", value: status.rawValue))
+        }
+        if let runnerID {
+            query.append(URLQueryItem(name: "runner_id", value: runnerID))
+        }
+        let data = try await request(path: "/api/v1/runs", query: query)
+        return try StateJSON.decoder.decode(RunListResponse.self, from: data).runs
+    }
+
+    func getRun(id: String) async throws -> AgentRun {
+        let data = try await request(path: "/api/v1/runs/\(id)")
+        return try StateJSON.decoder.decode(AgentRun.self, from: data)
+    }
+
+    func createManualRun(reminderID: String, policyID: String) async throws -> AgentRun {
+        let requestID = UUIDv7.generate().uuidString.lowercased()
+        let body = try JSONSerialization.data(withJSONObject: [
+            "reminder_id": reminderID,
+            "policy_id": policyID,
+            "client_request_id": requestID,
+            "correlation_id": requestID,
+            "source": "ios",
+        ], options: [.sortedKeys])
+        let data = try await request(path: "/api/v1/runs", method: "POST", body: body)
+        return try StateJSON.decoder.decode(AgentRun.self, from: data)
+    }
+
+    func approveRun(id: String, approved: Bool, expectedRevision: Int64) async throws -> AgentRun {
+        let requestID = UUIDv7.generate().uuidString.lowercased()
+        let body = try JSONSerialization.data(withJSONObject: [
+            "approved": approved,
+            "expected_revision": expectedRevision,
+            "client_request_id": requestID,
+            "correlation_id": requestID,
+            "source": "ios",
+        ], options: [.sortedKeys])
+        let data = try await request(path: "/api/v1/runs/\(id)/approval", method: "POST", body: body)
+        return try StateJSON.decoder.decode(AgentRun.self, from: data)
+    }
+
+    func cancelRun(id: String, expectedRevision: Int64) async throws -> AgentRun {
+        let requestID = UUIDv7.generate().uuidString.lowercased()
+        let body = try JSONSerialization.data(withJSONObject: [
+            "expected_revision": expectedRevision,
+            "client_request_id": requestID,
+            "correlation_id": requestID,
+            "source": "ios",
+        ], options: [.sortedKeys])
+        let data = try await request(path: "/api/v1/runs/\(id)/cancel", method: "POST", body: body)
+        return try StateJSON.decoder.decode(AgentRun.self, from: data)
+    }
+
     func revokeActor(id: String, kind: ActorKind) async throws {
+        // The server exposes delete routes for agents and devices only; both
+        // land in the same kind-agnostic revocation, so runner credentials
+        // retire through the devices path.
         let path = kind == .harness ? "/api/v1/agents/\(id)" : "/api/v1/devices/\(id)"
         _ = try await request(path: path, method: "DELETE")
     }

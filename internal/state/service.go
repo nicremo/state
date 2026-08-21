@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -25,13 +26,46 @@ type Repository interface {
 	GetOccurrence(context.Context, string) (Occurrence, error)
 	ListOccurrences(context.Context, string, OccurrenceListOptions) ([]Occurrence, error)
 	UpdateOccurrence(context.Context, Occurrence, int64, AuditEvent, string) (Occurrence, error)
+
+	CreateProject(context.Context, Project, AuditEvent, string) (Project, error)
+	UpdateProject(context.Context, Project, int64, AuditEvent, string) (Project, error)
+	GetProject(context.Context, string) (Project, error)
+	ListProjects(context.Context) ([]Project, error)
+
+	CreatePolicy(context.Context, ExecutionPolicy, AuditEvent, string) (ExecutionPolicy, error)
+	UpdatePolicy(context.Context, ExecutionPolicy, int64, AuditEvent, string) (ExecutionPolicy, error)
+	GetPolicy(context.Context, string) (ExecutionPolicy, error)
+	ListPolicies(context.Context) ([]ExecutionPolicy, error)
+
+	UpsertRunner(context.Context, Runner, AuditEvent, string) (Runner, error)
+	UpdateRunner(context.Context, Runner, int64, AuditEvent, string) (Runner, error)
+	GetRunner(context.Context, string) (Runner, error)
+	ListRunners(context.Context) ([]Runner, error)
+	TouchRunnerSeen(context.Context, string, time.Time) error
+
+	CreateAgentRun(context.Context, AgentRun, AuditEvent, string) (AgentRun, bool, error)
+	ClaimAgentRun(context.Context, AgentRun, int64, AuditEvent) (AgentRun, error)
+	GetAgentRun(context.Context, string) (AgentRun, error)
+	ListAgentRuns(context.Context, AgentRunListFilter) ([]AgentRun, error)
+	ListClaimableRuns(context.Context, Runner, time.Time) ([]AgentRun, error)
+	UpdateAgentRunTransition(context.Context, AgentRun, int64, *AuditEvent, *Occurrence, *AuditEvent, string) (AgentRun, bool, error)
+	RequeueExpiredLeases(context.Context, time.Time) ([]AgentRun, error)
+	ExpireStaleRuns(context.Context, time.Time) ([]AgentRun, error)
+	ListDueOccurrences(context.Context, time.Time) ([]DueOccurrence, error)
+	LatestChangeCursor(context.Context) (int64, error)
 }
 
 type Service struct {
-	repository Repository
-	clock      func() time.Time
-	newID      func() (string, error)
+	repository  Repository
+	clock       func() time.Time
+	newID       func() (string, error)
+	runNotifier RunNotifier
 }
+
+// RunNotifier is invoked after a run reaches a terminal state. It is wired to
+// the push pipeline and must be treated as best-effort: errors are swallowed
+// by the service.
+type RunNotifier func(ctx context.Context, run AgentRun, reminderTitle string) error
 
 type ServiceOption func(*Service)
 
@@ -44,6 +78,14 @@ func WithClock(clock func() time.Time) ServiceOption {
 func WithIDGenerator(generator func() (string, error)) ServiceOption {
 	return func(service *Service) {
 		service.newID = generator
+	}
+}
+
+// WithRunNotifier installs the terminal-state run notifier. A nil notifier is
+// allowed and disables notifications.
+func WithRunNotifier(notifier RunNotifier) ServiceOption {
+	return func(service *Service) {
+		service.runNotifier = notifier
 	}
 }
 
@@ -66,6 +108,17 @@ func (service *Service) CreateReminder(ctx context.Context, actor Actor, input C
 	if err := validateMutation(actor, input.Title, input.ClientRequestID); err != nil {
 		return Reminder{}, err
 	}
+	if actor.Kind == ActorKindRunner {
+		return Reminder{}, ErrForbidden
+	}
+	if input.ExecutionPolicyID != nil && *input.ExecutionPolicyID != "" {
+		if _, err := service.repository.GetPolicy(ctx, *input.ExecutionPolicyID); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return Reminder{}, ErrInvalidInput
+			}
+			return Reminder{}, err
+		}
+	}
 
 	reminderID, err := service.newID()
 	if err != nil {
@@ -77,15 +130,16 @@ func (service *Service) CreateReminder(ctx context.Context, actor Actor, input C
 	}
 	now := service.clock().UTC()
 	reminder := Reminder{
-		ID:          reminderID,
-		Title:       strings.TrimSpace(input.Title),
-		Description: input.Description,
-		Status:      ReminderStatusActive,
-		Schedule:    cloneSchedule(input.Schedule),
-		Recurrence:  cloneRecurrence(input.Recurrence),
-		Revision:    1,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:                reminderID,
+		Title:             strings.TrimSpace(input.Title),
+		Description:       input.Description,
+		Status:            ReminderStatusActive,
+		Schedule:          cloneSchedule(input.Schedule),
+		Recurrence:        cloneRecurrence(input.Recurrence),
+		ExecutionPolicyID: cloneStringPointer(input.ExecutionPolicyID),
+		Revision:          1,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	after, err := json.Marshal(reminder)
 	if err != nil {
@@ -101,7 +155,7 @@ func (service *Service) CreateReminder(ctx context.Context, actor Actor, input C
 		Source:          input.Source,
 		SourceExcerpt:   input.SourceExcerpt,
 		AfterSnapshot:   after,
-		ChangedFields:   []string{"archived", "description", "recurrence", "schedule", "status", "title"},
+		ChangedFields:   []string{"archived", "description", "execution_policy_id", "recurrence", "schedule", "status", "title"},
 		Revision:        reminder.Revision,
 		CorrelationID:   correlationID(input.CorrelationID, input.ClientRequestID),
 		ClientRequestID: input.ClientRequestID,
@@ -114,8 +168,19 @@ func (service *Service) UpdateReminder(ctx context.Context, actor Actor, reminde
 	if actor.ID == "" || actor.Kind == "" || input.ClientRequestID == "" || reminderID == "" {
 		return Reminder{}, ErrInvalidInput
 	}
+	if actor.Kind == ActorKindRunner {
+		return Reminder{}, ErrForbidden
+	}
 	if input.Archived != nil && actor.Kind != ActorKindOwner && actor.Kind != ActorKindDevice {
 		return Reminder{}, ErrForbidden
+	}
+	if input.ExecutionPolicyID != nil && *input.ExecutionPolicyID != nil && **input.ExecutionPolicyID != "" {
+		if _, err := service.repository.GetPolicy(ctx, **input.ExecutionPolicyID); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return Reminder{}, ErrInvalidInput
+			}
+			return Reminder{}, err
+		}
 	}
 
 	current, err := service.repository.GetReminder(ctx, reminderID)
@@ -127,7 +192,7 @@ func (service *Service) UpdateReminder(ctx context.Context, actor Actor, reminde
 	}
 
 	updated := cloneReminder(current)
-	changed := make([]string, 0, 6)
+	changed := make([]string, 0, 7)
 	if input.Title != nil {
 		title := strings.TrimSpace(*input.Title)
 		if title == "" {
@@ -153,6 +218,10 @@ func (service *Service) UpdateReminder(ctx context.Context, actor Actor, reminde
 	if input.Recurrence != nil && !reflect.DeepEqual(updated.Recurrence, *input.Recurrence) {
 		updated.Recurrence = cloneRecurrence(*input.Recurrence)
 		changed = append(changed, "recurrence")
+	}
+	if input.ExecutionPolicyID != nil && !reflect.DeepEqual(updated.ExecutionPolicyID, *input.ExecutionPolicyID) {
+		updated.ExecutionPolicyID = cloneStringPointer(*input.ExecutionPolicyID)
+		changed = append(changed, "execution_policy_id")
 	}
 	if input.Archived != nil && updated.Archived != *input.Archived {
 		updated.Archived = *input.Archived
@@ -287,6 +356,9 @@ func (service *Service) AddComment(ctx context.Context, actor Actor, reminderID 
 	if actor.ID == "" || actor.Kind == "" || reminderID == "" || strings.TrimSpace(input.Body) == "" || input.ClientRequestID == "" {
 		return Comment{}, ErrInvalidInput
 	}
+	if actor.Kind == ActorKindRunner {
+		return Comment{}, ErrForbidden
+	}
 	reminder, err := service.repository.GetReminder(ctx, reminderID)
 	if err != nil {
 		return Comment{}, err
@@ -349,6 +421,9 @@ func (service *Service) CompleteOccurrence(ctx context.Context, actor Actor, occ
 	if actor.ID == "" || actor.Kind == "" || occurrenceID == "" || input.ClientRequestID == "" {
 		return Occurrence{}, ErrInvalidInput
 	}
+	if actor.Kind == ActorKindRunner {
+		return Occurrence{}, ErrForbidden
+	}
 	current, err := service.repository.GetOccurrence(ctx, occurrenceID)
 	if err != nil {
 		return Occurrence{}, err
@@ -366,6 +441,9 @@ func (service *Service) CompleteOccurrence(ctx context.Context, actor Actor, occ
 func (service *Service) SnoozeOccurrence(ctx context.Context, actor Actor, occurrenceID string, input SnoozeOccurrenceInput) (Occurrence, error) {
 	if actor.ID == "" || actor.Kind == "" || occurrenceID == "" || input.ClientRequestID == "" || !input.Until.After(service.clock()) {
 		return Occurrence{}, ErrInvalidInput
+	}
+	if actor.Kind == ActorKindRunner {
+		return Occurrence{}, ErrForbidden
 	}
 	current, err := service.repository.GetOccurrence(ctx, occurrenceID)
 	if err != nil {
@@ -444,6 +522,7 @@ func correlationID(explicit string, clientRequestID string) string {
 func cloneReminder(reminder Reminder) Reminder {
 	reminder.Schedule = cloneSchedule(reminder.Schedule)
 	reminder.Recurrence = cloneRecurrence(reminder.Recurrence)
+	reminder.ExecutionPolicyID = cloneStringPointer(reminder.ExecutionPolicyID)
 	return reminder
 }
 
@@ -460,6 +539,14 @@ func cloneRecurrence(recurrence *RecurrenceRule) *RecurrenceRule {
 		return nil
 	}
 	copy := *recurrence
+	return &copy
+}
+
+func cloneStringPointer(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	copy := *value
 	return &copy
 }
 
