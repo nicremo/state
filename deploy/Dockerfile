@@ -22,6 +22,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w -X main.version=${STATE_VERSION}" -o /out/statectl ./cmd/statectl
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w -X main.version=${STATE_VERSION}" -o /out/state-runner ./cmd/state-runner
 
 FROM alpine:3.23.3 AS runtime
 RUN apk add --no-cache ca-certificates tzdata \
@@ -44,3 +48,7 @@ CMD ["serve"]
 FROM runtime AS statectl
 COPY --from=build --chown=10001:10001 /out/statectl /usr/local/bin/statectl
 ENTRYPOINT ["/usr/local/bin/statectl"]
+
+FROM runtime AS state-runner
+COPY --from=build --chown=10001:10001 /out/state-runner /usr/local/bin/state-runner
+ENTRYPOINT ["/usr/local/bin/state-runner"]
