@@ -265,9 +265,9 @@ func (runner *Runner) rejectRun(ctx context.Context, run state.AgentRun, revisio
 	return nil
 }
 
-// failUnavailable reports a run whose adapter cannot launch. The server API
-// has no failure_code input, so the adapter_unavailable marker travels in the
-// redacted summary.
+// failUnavailable reports a run whose adapter cannot launch. The structured
+// failure code travels in CompleteRunInput; the marker also stays in the
+// redacted summary so older servers still surface it.
 func (runner *Runner) failUnavailable(ctx context.Context, run state.AgentRun, revision int64, reason string) error {
 	detail := string(ErrAdapterUnavailable.Error()) + ": " + firstLine(reason)
 	if reported, err := runner.Client.ReportEvent(ctx, run.ID, state.RunEventProgress, detail, revision); err == nil {
@@ -277,6 +277,7 @@ func (runner *Runner) failUnavailable(ctx context.Context, run state.AgentRun, r
 		RunID:            run.ID,
 		Outcome:          state.AgentRunStatusFailed,
 		ResultSummary:    redactSummary(detail),
+		FailureCode:      state.RunFailureAdapterUnavailable,
 		ExitCode:         1,
 		ExpectedRevision: revision,
 		MutationMetadata: state.MutationMetadata{

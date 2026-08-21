@@ -1023,6 +1023,73 @@ func TestCompleteAgentRunEvidenceMismatchForcesFailure(t *testing.T) {
 	}
 }
 
+func TestCompleteAgentRunCallerFailureCode(t *testing.T) {
+	t.Parallel()
+
+	service, _, _ := executionService(t)
+	owner, runner, _ := executionActors()
+	project := mustCreateProject(t, service, owner, "customer-api")
+	policy := mustCreatePolicy(t, service, owner, project.ID, nil)
+	reminder := mustCreateExecutableReminder(t, service, owner, &policy.ID)
+	mustRegisterRunner(t, service, runner, []string{project.ID}, []string{"codex"})
+
+	freshClaim := func() AgentRun {
+		t.Helper()
+		if _, err := service.CreateManualRun(context.Background(), owner, CreateManualRunInput{
+			ReminderID:       reminder.ID,
+			PolicyID:         policy.ID,
+			MutationMetadata: MutationMetadata{ClientRequestID: requestID()},
+		}); err != nil {
+			t.Fatalf("CreateManualRun() error = %v", err)
+		}
+		return mustClaim(t, service, runner)
+	}
+
+	claimed := freshClaim()
+	completed, err := service.CompleteAgentRun(context.Background(), runner, CompleteRunInput{
+		RunID:            claimed.ID,
+		Outcome:          AgentRunStatusFailed,
+		FailureCode:      RunFailureAdapterUnavailable,
+		ExitCode:         1,
+		ExpectedRevision: claimed.Revision,
+		MutationMetadata: MutationMetadata{ClientRequestID: requestID()},
+	})
+	if err != nil {
+		t.Fatalf("CompleteAgentRun() error = %v", err)
+	}
+	if completed.Status != AgentRunStatusFailed || completed.FailureCode != RunFailureAdapterUnavailable {
+		t.Fatalf("adapter_unavailable completion = %#v", completed)
+	}
+
+	// A caller cannot forge the server-owned mismatch code.
+	forged := freshClaim()
+	_, err = service.CompleteAgentRun(context.Background(), runner, CompleteRunInput{
+		RunID:            forged.ID,
+		Outcome:          AgentRunStatusFailed,
+		FailureCode:      RunFailureEvidenceMismatch,
+		ExitCode:         1,
+		ExpectedRevision: forged.Revision,
+		MutationMetadata: MutationMetadata{ClientRequestID: requestID()},
+	})
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("forged failure code error = %v, want ErrInvalidInput", err)
+	}
+
+	// A failure code on a successful outcome is contradictory input.
+	happy := freshClaim()
+	_, err = service.CompleteAgentRun(context.Background(), runner, CompleteRunInput{
+		RunID:            happy.ID,
+		Outcome:          AgentRunStatusSucceeded,
+		FailureCode:      RunFailureAdapterUnavailable,
+		ExitCode:         0,
+		ExpectedRevision: happy.Revision,
+		MutationMetadata: MutationMetadata{ClientRequestID: requestID()},
+	})
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("failure code on success error = %v, want ErrInvalidInput", err)
+	}
+}
+
 func TestApprovalFlow(t *testing.T) {
 	t.Parallel()
 

@@ -54,6 +54,9 @@ const CompletionRuleMarkOccurrenceDoneOnSuccess = "mark_occurrence_done_on_succe
 const (
 	RunFailureEvidenceMismatch = "evidence_mismatch"
 	RunFailureApprovalDeclined = "approval_declined"
+	// RunFailureAdapterUnavailable is the only failure code a runner may
+	// supply itself; the server-owned codes above cannot be forged.
+	RunFailureAdapterUnavailable = "adapter_unavailable"
 )
 
 // Run lifecycle event names accepted by ReportRunEventInput.
@@ -358,8 +361,11 @@ type CompleteRunInput struct {
 	Outcome           AgentRunStatus `json:"outcome"`
 	ResultSummary     string         `json:"result_summary,omitempty"`
 	ResultArtifactRef string         `json:"result_artifact_ref,omitempty"`
-	ExitCode          int            `json:"exit_code"`
-	ExpectedRevision  int64          `json:"expected_revision"`
+	// FailureCode is optional and caller-supplied; only
+	// RunFailureAdapterUnavailable is accepted from runners.
+	FailureCode      string `json:"failure_code,omitempty"`
+	ExitCode         int    `json:"exit_code"`
+	ExpectedRevision int64  `json:"expected_revision"`
 	MutationMetadata
 }
 

@@ -1510,6 +1510,7 @@ components:
             outcome: { type: string, enum: [succeeded, failed] }
             result_summary: { type: [string, "null"], maxLength: 2000 }
             result_artifact_ref: { type: [string, "null"], maxLength: 1000 }
+            failure_code: { type: [string, "null"], enum: [adapter_unavailable, null], description: "Optional caller failure code. Server-owned codes (evidence_mismatch, approval_declined) cannot be supplied." }
             exit_code: { type: integer }
             expected_revision: { type: integer, format: int64, minimum: 1 }
     RequestApprovalRequest:

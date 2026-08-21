@@ -391,6 +391,9 @@ func TestRunnerReportsMissingAdapterBinary(t *testing.T) {
 	if !strings.Contains(finished.ResultSummary, "adapter_unavailable") {
 		t.Fatalf("result summary = %q, want adapter_unavailable", finished.ResultSummary)
 	}
+	if finished.FailureCode != state.RunFailureAdapterUnavailable {
+		t.Fatalf("failure code = %q, want adapter_unavailable", finished.FailureCode)
+	}
 }
 
 func TestRunnerHeartbeatExtendsLease(t *testing.T) {

@@ -1,6 +1,6 @@
 # Proposal: Scheduled agent execution and project state
 
-**Status:** Draft for discussion
+**Status:** Implemented. The binding decisions and the change surface live in `docs/agent-execution-implementation-plan.md`; the text below is the historical record.
 
 **Scope:** Design proposal only. No runtime behavior is introduced by this document.
 
@@ -269,3 +269,17 @@ Adapter-specific CLI flags, temporary prompt files, tmux sessions, and terminal 
 - iOS displays run state and receives an encrypted completion or failure notification.
 - Revoking a runner prevents new claims without invalidating historical audit records.
 - No secret, executable shell command, or unredacted log is written into `.state/` or emitted in a push payload.
+
+## Addendum: as implemented
+
+The proposal shipped as specified here, with the open decisions resolved as follows:
+
+1. Pull-only polling with a bounded long-poll (`wait_seconds`, server-capped at 25 s); no outbound stream in v1.
+2. `unattended-low-risk` policies may carry only `read_repository`, `read_state_context`, `run_tests` and `edit_repository`; the server rejects anything riskier in that mode.
+3. Runner pool: a run is claimable by any runner whose registration covers the run's project and the policy's adapter.
+4. Artifacts stay local; only a redacted, bounded `result_summary` and an opaque `result_artifact_ref` reach the server.
+5. Success evidence is the adapter exit code plus the structured self-report; a disagreement forces `failure_code=evidence_mismatch`.
+6. Approvals are granted per run, for one named capability at a time.
+7. `.state/` is generated; `context/`, `runs/`, logs and locks are gitignored by default, and Git is never the transport.
+
+Implementation notes, the migration approach for the audit and actor tables, and the file-level change surface are recorded in `docs/agent-execution-implementation-plan.md`. The threat model in `docs/threat-model.md` covers the new trust boundaries.

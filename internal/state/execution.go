@@ -729,6 +729,12 @@ func (service *Service) CompleteAgentRun(ctx context.Context, actor Actor, input
 	if run.Revision != input.ExpectedRevision {
 		return AgentRun{}, ErrRunStateConflict
 	}
+	if input.FailureCode != "" && input.FailureCode != RunFailureAdapterUnavailable {
+		return AgentRun{}, fmt.Errorf("%w: unsupported failure code %q", ErrInvalidInput, input.FailureCode)
+	}
+	if input.FailureCode != "" && input.Outcome != AgentRunStatusFailed {
+		return AgentRun{}, fmt.Errorf("%w: failure code requires a failed outcome", ErrInvalidInput)
+	}
 	policy, err := service.repository.GetPolicy(ctx, run.PolicyID)
 	if err != nil {
 		return AgentRun{}, err
@@ -739,6 +745,9 @@ func (service *Service) CompleteAgentRun(ctx context.Context, actor Actor, input
 	if (input.Outcome == AgentRunStatusSucceeded && input.ExitCode != 0) || (input.Outcome == AgentRunStatusFailed && input.ExitCode == 0) {
 		terminal = AgentRunStatusFailed
 		failureCode = RunFailureEvidenceMismatch
+	}
+	if terminal == AgentRunStatusFailed && failureCode == "" {
+		failureCode = input.FailureCode
 	}
 	now := service.clock().UTC()
 	updated := cloneAgentRun(run)

@@ -116,6 +116,7 @@ type completeAgentRunInput struct {
 	Outcome           state.AgentRunStatus `json:"outcome" jsonschema:"succeeded or failed."`
 	ResultSummary     string               `json:"result_summary,omitempty" jsonschema:"Redacted result summary, at most 2000 characters. Never log content."`
 	ResultArtifactRef string               `json:"result_artifact_ref,omitempty" jsonschema:"Opaque local artifact label. Content never leaves the workstation."`
+	FailureCode       string               `json:"failure_code,omitempty" jsonschema:"Optional caller failure code. Only adapter_unavailable is accepted; server-owned codes are set by the server."`
 	ExitCode          int                  `json:"exit_code" jsonschema:"Adapter process exit code. A disagreement with outcome fails the run as evidence_mismatch."`
 	ExpectedRevision  int64                `json:"expected_revision" jsonschema:"Current run revision. Stale revisions are rejected."`
 	ClientRequestID   string               `json:"client_request_id" jsonschema:"Stable UUIDv7 for idempotent retries."`
@@ -500,6 +501,7 @@ func (server *server) completeAgentRun(ctx context.Context, request *mcp.CallToo
 		Outcome:           input.Outcome,
 		ResultSummary:     input.ResultSummary,
 		ResultArtifactRef: input.ResultArtifactRef,
+		FailureCode:       input.FailureCode,
 		ExitCode:          input.ExitCode,
 		ExpectedRevision:  input.ExpectedRevision,
 		MutationMetadata: state.MutationMetadata{
