@@ -51,11 +51,16 @@ func TestMCPServerNegotiatesListsToolsAndCreatesAuditedReminder(t *testing.T) {
 	sort.Strings(names)
 	want := []string{
 		"add_comment",
+		"claim_agent_run",
+		"complete_agent_run",
 		"complete_occurrence",
 		"create_reminder",
 		"get_briefing",
 		"get_changes",
+		"get_execution_context",
 		"get_reminder",
+		"report_agent_run_event",
+		"request_agent_approval",
 		"search_reminders",
 		"snooze_occurrence",
 		"update_reminder",
@@ -155,10 +160,11 @@ func newTestMCPHandler(t *testing.T) (http.Handler, string) {
 // testMCPFixture is a booted server plus the owner credential, so a test can
 // pair as many agents as it needs.
 type testMCPFixture struct {
-	handler http.Handler
-	auth    *stateauth.Manager
-	state   *state.Service
-	owner   state.Actor
+	handler    http.Handler
+	auth       *stateauth.Manager
+	state      *state.Service
+	owner      state.Actor
+	ownerToken string
 }
 
 // pairHarness creates a one-time code as the owner and exchanges it, which is
@@ -229,7 +235,7 @@ func newTestMCPFixture(t *testing.T) testMCPFixture {
 		State:   stateService,
 		Version: "test-version",
 	})
-	return testMCPFixture{handler: handler, auth: authManager, state: stateService, owner: owner}
+	return testMCPFixture{handler: handler, auth: authManager, state: stateService, owner: owner, ownerToken: ownerCredential.Token}
 }
 
 type bearerTransport struct {

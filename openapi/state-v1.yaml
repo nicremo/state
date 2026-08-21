@@ -18,6 +18,10 @@ tags:
   - name: Occurrences
   - name: Sync
   - name: Devices
+  - name: Projects
+  - name: Policies
+  - name: Runners
+  - name: Runs
 paths:
   /health/live:
     get:
@@ -471,6 +475,417 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Export" }
         "403": { $ref: "#/components/responses/Error" }
+  /api/v1/projects:
+    post:
+      tags: [Projects]
+      operationId: createProject
+      description: Owner-only. Creates a project a runner may serve.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "201":
+          description: Project stored with its audit event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    get:
+      tags: [Projects]
+      operationId: listProjects
+      description: Owner and device read access.
+      responses:
+        "200":
+          description: All projects.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projects]
+                properties:
+                  projects:
+                    type: array
+                    items: { $ref: "#/components/schemas/Project" }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{project_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+    get:
+      tags: [Projects]
+      operationId: getProject
+      description: Owner and device read access.
+      responses:
+        "200":
+          description: Project detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [Projects]
+      operationId: updateProject
+      description: Owner-only update with optimistic revision checking.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectRequest"
+      responses:
+        "200":
+          description: Updated project.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/policies:
+    post:
+      tags: [Policies]
+      operationId: createPolicy
+      description: Owner-only. Creates an execution policy; invalid capability/mode combinations answer 403 policy_violation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePolicyRequest"
+      responses:
+        "201":
+          description: Policy stored with its audit event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExecutionPolicy" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    get:
+      tags: [Policies]
+      operationId: listPolicies
+      description: Owner and device read access.
+      responses:
+        "200":
+          description: All execution policies.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [policies]
+                properties:
+                  policies:
+                    type: array
+                    items: { $ref: "#/components/schemas/ExecutionPolicy" }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/policies/{policy_id}:
+    parameters:
+      - $ref: "#/components/parameters/PolicyID"
+    get:
+      tags: [Policies]
+      operationId: getPolicy
+      description: Owner and device read access.
+      responses:
+        "200":
+          description: Policy detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExecutionPolicy" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [Policies]
+      operationId: updatePolicy
+      description: Owner-only update with optimistic revision checking. Runs pin the policy revision at materialization, so edits never change existing runs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePolicyRequest"
+      responses:
+        "200":
+          description: Updated policy.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExecutionPolicy" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/runner/registration:
+    post:
+      tags: [Runners]
+      operationId: registerRunner
+      description: Runner self-registration on first contact. Re-registering updates the stored scopes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRunnerRequest"
+      responses:
+        "201":
+          description: Runner profile stored with its audit event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Runner" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/runner/claims:
+    post:
+      tags: [Runs]
+      operationId: claimAgentRun
+      description: Runner long-poll claim of the oldest eligible run it may serve. The server caps wait_seconds at 25. An empty pool answers 409 not_claimable.
+      parameters:
+        - name: wait_seconds
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 25, default: 0 }
+      responses:
+        "200":
+          description: Claimed run with its task contract and lease.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRun" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409":
+          description: No claimable run (code not_claimable).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/runner/runs/{run_id}/events:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [Runs]
+      operationId: reportRunEvent
+      description: Runner reports started, progress, or a lease-extending heartbeat. Stale revisions answer 409 run_state_conflict.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunEventRequest"
+      responses:
+        "200":
+          description: Current run after the event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRun" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/runner/runs/{run_id}/complete:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [Runs]
+      operationId: completeAgentRun
+      description: Runner finalizes its claimed run. An outcome/exit-code disagreement marks the run failed with failure_code evidence_mismatch.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteRunRequest"
+      responses:
+        "200":
+          description: Terminal run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRun" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/runner/runs/{run_id}/approval:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [Runs]
+      operationId: requestRunApproval
+      description: Runner escalates one capability outside the policy allow-list; the run parks in needs_approval until the owner decides.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestApprovalRequest"
+      responses:
+        "200":
+          description: Run waiting for the owner decision.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRun" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/runners:
+    get:
+      tags: [Runners]
+      operationId: listRunners
+      description: Owner and device read access.
+      responses:
+        "200":
+          description: Registered runners.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runners]
+                properties:
+                  runners:
+                    type: array
+                    items: { $ref: "#/components/schemas/Runner" }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/runners/{runner_id}:
+    parameters:
+      - $ref: "#/components/parameters/RunnerID"
+    patch:
+      tags: [Runners]
+      operationId: updateRunner
+      description: Owner-only edit of the runner's display name, project, and adapter scopes. Revocation uses DELETE /api/v1/agents/{actor_id}.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRunnerRequest"
+      responses:
+        "200":
+          description: Updated runner.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Runner" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/runs:
+    get:
+      tags: [Runs]
+      operationId: listRuns
+      description: Owner and device read access, newest first.
+      parameters:
+        - name: reminder_id
+          in: query
+          schema: { $ref: "#/components/schemas/UUIDv7" }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/AgentRunStatus" }
+        - name: runner_id
+          in: query
+          schema: { $ref: "#/components/schemas/UUIDv7" }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Matching agent runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs]
+                properties:
+                  runs:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentRun" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Runs]
+      operationId: createManualRun
+      description: Owner-only manual run for a reminder under an execution policy. Idempotent on client_request_id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateManualRunRequest"
+      responses:
+        "201":
+          description: Eligible run created with its audit event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRun" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/runs/{run_id}:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    get:
+      tags: [Runs]
+      operationId: getRun
+      description: Owner and device read access.
+      responses:
+        "200":
+          description: Agent run detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRun" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/runs/{run_id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [Runs]
+      operationId: cancelRun
+      description: Owner-only cancellation of any non-terminal run; a claimed runner observes it on its next call.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelRunRequest"
+      responses:
+        "200":
+          description: Cancelled run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRun" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Run already terminal (code run_state_conflict).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/runs/{run_id}/approval:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [Runs]
+      operationId: approveRun
+      description: Owner-only decision on a needs_approval run. Approving resumes with a fresh lease; declining cancels with failure_code approval_declined.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveRunRequest"
+      responses:
+        "200":
+          description: Run after the decision.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRun" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Run not waiting for approval (code run_state_conflict).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /mcp:
     post:
       tags: [Sync]
@@ -511,6 +926,26 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/UUIDv7" }
+    ProjectID:
+      name: project_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/UUIDv7" }
+    PolicyID:
+      name: policy_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/UUIDv7" }
+    RunnerID:
+      name: runner_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/UUIDv7" }
+    RunID:
+      name: run_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/UUIDv7" }
     Limit:
       name: limit
       in: query
@@ -537,7 +972,7 @@ components:
         status: { type: string, enum: [ok, ready, not_ready] }
     ActorKind:
       type: string
-      enum: [owner, device, harness, system]
+      enum: [owner, device, harness, system, runner]
     Actor:
       type: object
       required: [id, kind]
@@ -572,7 +1007,7 @@ components:
       type: object
       required: [display_name]
       properties:
-        kind: { type: string, enum: [device, harness] }
+        kind: { type: string, enum: [device, harness, runner] }
         harness: { type: [string, "null"], enum: [codex, claude-code, opencode, null] }
         display_name: { type: string, minLength: 1, maxLength: 200 }
         device_name: { type: string, minLength: 1, maxLength: 200 }
@@ -629,6 +1064,10 @@ components:
         recurrence:
           oneOf:
             - $ref: "#/components/schemas/RecurrenceRule"
+            - type: "null"
+        execution_policy_id:
+          oneOf:
+            - $ref: "#/components/schemas/UUIDv7"
             - type: "null"
         revision: { type: integer, format: int64, minimum: 1 }
         archived: { type: boolean }
@@ -691,7 +1130,7 @@ components:
         signature: { type: string }
     ReminderDetail:
       type: object
-      required: [reminder, comments, occurrences, history]
+      required: [reminder, comments, occurrences, history, runs]
       properties:
         reminder: { $ref: "#/components/schemas/Reminder" }
         comments:
@@ -703,6 +1142,10 @@ components:
         history:
           type: array
           items: { $ref: "#/components/schemas/AuditEvent" }
+        runs:
+          description: Latest 20 agent runs of this reminder.
+          type: array
+          items: { $ref: "#/components/schemas/AgentRun" }
     MutationMetadata:
       type: object
       required: [client_request_id]
@@ -728,6 +1171,10 @@ components:
               oneOf:
                 - $ref: "#/components/schemas/RecurrenceRule"
                 - type: "null"
+            execution_policy_id:
+              oneOf:
+                - $ref: "#/components/schemas/UUIDv7"
+                - type: "null"
     UpdateReminderRequest:
       allOf:
         - $ref: "#/components/schemas/MutationMetadata"
@@ -744,6 +1191,11 @@ components:
             recurrence:
               oneOf:
                 - $ref: "#/components/schemas/RecurrenceRule"
+                - type: "null"
+            execution_policy_id:
+              description: Explicit null detaches the policy.
+              oneOf:
+                - $ref: "#/components/schemas/UUIDv7"
                 - type: "null"
             archived: { type: boolean }
             expected_revision: { type: integer, format: int64, minimum: 1 }
@@ -798,6 +1250,292 @@ components:
         reminders:
           type: array
           items: { $ref: "#/components/schemas/ReminderDetail" }
+    ProjectSlug:
+      type: string
+      pattern: "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$"
+    Project:
+      type: object
+      required: [id, name, revision, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/UUIDv7" }
+        name: { $ref: "#/components/schemas/ProjectSlug" }
+        description: { type: [string, "null"], maxLength: 100000 }
+        root_path_hint:
+          type: [string, "null"]
+          description: Informational checkout hint (e.g. ~/src/customer-api); the runner still enforces its own configured root.
+          maxLength: 1000
+        revision: { type: integer, format: int64, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateProjectRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [name]
+          properties:
+            name: { $ref: "#/components/schemas/ProjectSlug" }
+            description: { type: [string, "null"], maxLength: 100000 }
+            root_path_hint: { type: [string, "null"], maxLength: 1000 }
+    UpdateProjectRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [expected_revision]
+          properties:
+            name: { $ref: "#/components/schemas/ProjectSlug" }
+            description: { type: [string, "null"], maxLength: 100000 }
+            root_path_hint: { type: [string, "null"], maxLength: 1000 }
+            expected_revision: { type: integer, format: int64, minimum: 1 }
+    ExecutionMode:
+      type: string
+      enum: [supervised, unattended-low-risk]
+    Capability:
+      type: string
+      enum: [read_repository, edit_repository, run_tests, read_state_context, write_state, network_access, deploy, message_external, destructive]
+    ExecutionPolicy:
+      type: object
+      required: [id, name, project_id, adapter, mode, allowed_capabilities, mark_occurrence_done_on_success, notify_on_start, notify_on_completion, notify_on_failure, timeout_minutes, enabled, revision, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/UUIDv7" }
+        name: { $ref: "#/components/schemas/ProjectSlug" }
+        project_id: { $ref: "#/components/schemas/UUIDv7" }
+        adapter:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$"
+        mode: { $ref: "#/components/schemas/ExecutionMode" }
+        allowed_capabilities:
+          type: array
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/Capability" }
+        mark_occurrence_done_on_success: { type: boolean }
+        notify_on_start: { type: boolean }
+        notify_on_completion: { type: boolean }
+        notify_on_failure: { type: boolean }
+        timeout_minutes: { type: integer, minimum: 1, maximum: 240 }
+        enabled: { type: boolean }
+        revision: { type: integer, format: int64, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreatePolicyRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [name, project_id, adapter, mode, allowed_capabilities, timeout_minutes]
+          properties:
+            name: { $ref: "#/components/schemas/ProjectSlug" }
+            project_id: { $ref: "#/components/schemas/UUIDv7" }
+            adapter:
+              type: string
+              pattern: "^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$"
+            mode: { $ref: "#/components/schemas/ExecutionMode" }
+            allowed_capabilities:
+              description: unattended-low-risk mode accepts only read_repository, read_state_context, run_tests, edit_repository.
+              type: array
+              uniqueItems: true
+              items: { $ref: "#/components/schemas/Capability" }
+            mark_occurrence_done_on_success: { type: boolean }
+            notify_on_start: { type: boolean }
+            notify_on_completion: { type: boolean }
+            notify_on_failure: { type: boolean }
+            timeout_minutes: { type: integer, minimum: 1, maximum: 240 }
+    UpdatePolicyRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [expected_revision]
+          properties:
+            name: { $ref: "#/components/schemas/ProjectSlug" }
+            adapter:
+              type: string
+              pattern: "^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$"
+            mode: { $ref: "#/components/schemas/ExecutionMode" }
+            allowed_capabilities:
+              type: array
+              uniqueItems: true
+              items: { $ref: "#/components/schemas/Capability" }
+            mark_occurrence_done_on_success: { type: boolean }
+            notify_on_start: { type: boolean }
+            notify_on_completion: { type: boolean }
+            notify_on_failure: { type: boolean }
+            timeout_minutes: { type: integer, minimum: 1, maximum: 240 }
+            enabled: { type: boolean }
+            expected_revision: { type: integer, format: int64, minimum: 1 }
+    Runner:
+      type: object
+      required: [id, display_name, projects, adapters, registered_at, last_seen_at, revision]
+      properties:
+        id:
+          $ref: "#/components/schemas/UUIDv7"
+          description: Matches the actor ID of kind runner.
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        projects:
+          type: array
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/UUIDv7" }
+        adapters:
+          type: array
+          uniqueItems: true
+          items: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$" }
+        registered_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        revision: { type: integer, format: int64, minimum: 1 }
+    RegisterRunnerRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [display_name, projects, adapters]
+          properties:
+            display_name: { type: string, minLength: 1, maxLength: 200 }
+            projects:
+              type: array
+              uniqueItems: true
+              items: { $ref: "#/components/schemas/UUIDv7" }
+            adapters:
+              type: array
+              uniqueItems: true
+              items: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$" }
+    UpdateRunnerRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [expected_revision]
+          properties:
+            display_name: { type: string, minLength: 1, maxLength: 200 }
+            projects:
+              type: array
+              uniqueItems: true
+              items: { $ref: "#/components/schemas/UUIDv7" }
+            adapters:
+              type: array
+              uniqueItems: true
+              items: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$" }
+            expected_revision: { type: integer, format: int64, minimum: 1 }
+    AgentRunStatus:
+      type: string
+      enum: [planned, eligible, claimed, running, needs_approval, succeeded, failed, cancelled, expired]
+    TaskContract:
+      type: object
+      required: [run_id, correlation_id, objective, project_id, project_name, policy_id, policy_revision, contract_hash, allowed_capabilities, timeout_minutes]
+      properties:
+        run_id: { $ref: "#/components/schemas/UUIDv7" }
+        correlation_id: { type: string }
+        objective: { type: string }
+        acceptance_criteria:
+          type: array
+          items: { type: string }
+        project_id: { $ref: "#/components/schemas/UUIDv7" }
+        project_name: { type: string }
+        policy_id: { $ref: "#/components/schemas/UUIDv7" }
+        policy_revision: { type: integer, format: int64, minimum: 1 }
+        contract_hash:
+          type: string
+          description: SHA-256 over the canonical contract JSON; the runner recomputes it and refuses mismatches.
+        allowed_capabilities:
+          type: array
+          items: { $ref: "#/components/schemas/Capability" }
+        timeout_minutes: { type: integer, minimum: 1, maximum: 240 }
+        completion_rule: { type: [string, "null"], enum: [mark_occurrence_done_on_success, null] }
+    AgentRun:
+      type: object
+      required: [id, reminder_id, policy_id, policy_revision, project_id, adapter, status, idempotency_key, task_contract, context_cursor, created_by_actor, revision, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/UUIDv7" }
+        reminder_id: { $ref: "#/components/schemas/UUIDv7" }
+        occurrence_id:
+          oneOf:
+            - $ref: "#/components/schemas/UUIDv7"
+            - type: "null"
+        policy_id: { $ref: "#/components/schemas/UUIDv7" }
+        policy_revision: { type: integer, format: int64, minimum: 1 }
+        project_id: { $ref: "#/components/schemas/UUIDv7" }
+        adapter: { type: string }
+        runner_id:
+          description: Set at claim time.
+          oneOf:
+            - $ref: "#/components/schemas/UUIDv7"
+            - type: "null"
+        status: { $ref: "#/components/schemas/AgentRunStatus" }
+        idempotency_key: { type: string }
+        task_contract: { $ref: "#/components/schemas/TaskContract" }
+        context_cursor: { type: integer, format: int64, minimum: 0 }
+        lease_expires_at: { type: [string, "null"], format: date-time }
+        requested_at: { type: [string, "null"], format: date-time }
+        claimed_at: { type: [string, "null"], format: date-time }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        result_summary:
+          type: [string, "null"]
+          description: Redacted, at most 2000 characters; never log content.
+          maxLength: 2000
+        result_artifact_ref:
+          type: [string, "null"]
+          description: Opaque local path label; artifact content never leaves the workstation.
+        failure_code: { type: [string, "null"], enum: [evidence_mismatch, approval_declined, null] }
+        approval_capability:
+          oneOf:
+            - $ref: "#/components/schemas/Capability"
+            - type: "null"
+        created_by_actor: { $ref: "#/components/schemas/Actor" }
+        completed_by_actor:
+          oneOf:
+            - $ref: "#/components/schemas/Actor"
+            - type: "null"
+        revision: { type: integer, format: int64, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateManualRunRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [reminder_id, policy_id]
+          properties:
+            reminder_id: { $ref: "#/components/schemas/UUIDv7" }
+            policy_id: { $ref: "#/components/schemas/UUIDv7" }
+    RunEventRequest:
+      type: object
+      required: [event, expected_revision]
+      properties:
+        event: { type: string, enum: [started, progress, heartbeat] }
+        detail:
+          type: [string, "null"]
+          description: One-line redacted status; never log content.
+          maxLength: 2000
+        expected_revision: { type: integer, format: int64, minimum: 1 }
+    CompleteRunRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [outcome, exit_code, expected_revision]
+          properties:
+            outcome: { type: string, enum: [succeeded, failed] }
+            result_summary: { type: [string, "null"], maxLength: 2000 }
+            result_artifact_ref: { type: [string, "null"], maxLength: 1000 }
+            exit_code: { type: integer }
+            expected_revision: { type: integer, format: int64, minimum: 1 }
+    RequestApprovalRequest:
+      type: object
+      required: [capability, expected_revision]
+      properties:
+        capability:
+          $ref: "#/components/schemas/Capability"
+          description: Must be outside the policy's allowed set.
+        reason: { type: [string, "null"], maxLength: 2000 }
+        expected_revision: { type: integer, format: int64, minimum: 1 }
+    ApproveRunRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [approved, expected_revision]
+          properties:
+            approved: { type: boolean }
+            expected_revision: { type: integer, format: int64, minimum: 1 }
+    CancelRunRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [expected_revision]
+          properties:
+            expected_revision: { type: integer, format: int64, minimum: 1 }
     RegisterDevicePushRequest:
       type: object
       required: [relay_url, route_id, authorization, public_key]

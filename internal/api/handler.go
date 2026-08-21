@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -38,6 +39,7 @@ type ReminderDetail struct {
 	Comments    []state.Comment    `json:"comments"`
 	Occurrences []state.Occurrence `json:"occurrences"`
 	History     []state.AuditEvent `json:"history"`
+	Runs        []state.AgentRun   `json:"runs"`
 }
 
 type ErrorResponse struct {
@@ -94,6 +96,26 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("GET /api/v1/changes", handler.getChanges)
 	handler.router.HandleFunc("GET /api/v1/briefing", handler.getBriefing)
 	handler.router.HandleFunc("GET /api/v1/export", handler.exportState)
+	handler.router.HandleFunc("POST /api/v1/projects", handler.createProject)
+	handler.router.HandleFunc("GET /api/v1/projects", handler.listProjects)
+	handler.router.HandleFunc("GET /api/v1/projects/{id}", handler.getProject)
+	handler.router.HandleFunc("PATCH /api/v1/projects/{id}", handler.updateProject)
+	handler.router.HandleFunc("POST /api/v1/policies", handler.createPolicy)
+	handler.router.HandleFunc("GET /api/v1/policies", handler.listPolicies)
+	handler.router.HandleFunc("GET /api/v1/policies/{id}", handler.getPolicy)
+	handler.router.HandleFunc("PATCH /api/v1/policies/{id}", handler.updatePolicy)
+	handler.router.HandleFunc("POST /api/v1/runner/registration", handler.registerRunner)
+	handler.router.HandleFunc("POST /api/v1/runner/claims", handler.claimAgentRun)
+	handler.router.HandleFunc("POST /api/v1/runner/runs/{id}/events", handler.reportRunEvent)
+	handler.router.HandleFunc("POST /api/v1/runner/runs/{id}/complete", handler.completeRun)
+	handler.router.HandleFunc("POST /api/v1/runner/runs/{id}/approval", handler.requestRunApproval)
+	handler.router.HandleFunc("GET /api/v1/runners", handler.listRunners)
+	handler.router.HandleFunc("PATCH /api/v1/runners/{id}", handler.updateRunner)
+	handler.router.HandleFunc("GET /api/v1/runs", handler.listRuns)
+	handler.router.HandleFunc("GET /api/v1/runs/{id}", handler.getRun)
+	handler.router.HandleFunc("POST /api/v1/runs", handler.createManualRun)
+	handler.router.HandleFunc("POST /api/v1/runs/{id}/cancel", handler.cancelRun)
+	handler.router.HandleFunc("POST /api/v1/runs/{id}/approval", handler.approveRun)
 }
 
 func (handler *Handler) healthLive(writer http.ResponseWriter, _ *http.Request) {
@@ -350,11 +372,17 @@ func (handler *Handler) getReminder(writer http.ResponseWriter, request *http.Re
 		writeError(writer, err, nil)
 		return
 	}
+	runs, err := handler.state.ListAgentRuns(request.Context(), state.AgentRunListFilter{ReminderID: reminderID, Limit: 20})
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
 	writeJSON(writer, http.StatusOK, ReminderDetail{
 		Reminder:    reminder,
 		Comments:    comments,
 		Occurrences: occurrences,
 		History:     history,
+		Runs:        runs,
 	})
 }
 
@@ -425,11 +453,17 @@ func (handler *Handler) exportState(writer http.ResponseWriter, request *http.Re
 			writeError(writer, err, nil)
 			return
 		}
+		runs, err := handler.state.ListAgentRuns(request.Context(), state.AgentRunListFilter{ReminderID: id, Limit: 20})
+		if err != nil {
+			writeError(writer, err, nil)
+			return
+		}
 		details = append(details, ReminderDetail{
 			Reminder:    reminder,
 			Comments:    comments,
 			Occurrences: occurrences,
 			History:     history,
+			Runs:        runs,
 		})
 	}
 
@@ -447,7 +481,7 @@ func (handler *Handler) updateReminder(writer http.ResponseWriter, request *http
 		return
 	}
 	var input state.UpdateReminderInput
-	if err := decodeJSON(request, &input); err != nil {
+	if err := decodeUpdateReminder(request, &input); err != nil {
 		writeError(writer, state.ErrInvalidInput, nil)
 		return
 	}
@@ -587,6 +621,404 @@ func (handler *Handler) snoozeOccurrence(writer http.ResponseWriter, request *ht
 	writeJSON(writer, http.StatusOK, occurrence)
 }
 
+func (handler *Handler) createProject(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindOwner)
+	if !ok {
+		return
+	}
+	var input state.CreateProjectInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	project, err := handler.state.CreateProject(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusCreated, project)
+}
+
+func (handler *Handler) listProjects(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticateKind(writer, request, state.ActorKindOwner, state.ActorKindDevice); !ok {
+		return
+	}
+	projects, err := handler.state.ListProjects(request.Context())
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"projects": projects})
+}
+
+func (handler *Handler) getProject(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticateKind(writer, request, state.ActorKindOwner, state.ActorKindDevice); !ok {
+		return
+	}
+	project, err := handler.state.GetProject(request.Context(), request.PathValue("id"))
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, project)
+}
+
+func (handler *Handler) updateProject(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindOwner)
+	if !ok {
+		return
+	}
+	var input state.UpdateProjectInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	project, err := handler.state.UpdateProject(request.Context(), actor, request.PathValue("id"), input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, project)
+}
+
+func (handler *Handler) createPolicy(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindOwner)
+	if !ok {
+		return
+	}
+	var input state.CreatePolicyInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	policy, err := handler.state.CreatePolicy(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusCreated, policy)
+}
+
+func (handler *Handler) listPolicies(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticateKind(writer, request, state.ActorKindOwner, state.ActorKindDevice); !ok {
+		return
+	}
+	policies, err := handler.state.ListPolicies(request.Context())
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"policies": policies})
+}
+
+func (handler *Handler) getPolicy(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticateKind(writer, request, state.ActorKindOwner, state.ActorKindDevice); !ok {
+		return
+	}
+	policy, err := handler.state.GetPolicy(request.Context(), request.PathValue("id"))
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, policy)
+}
+
+func (handler *Handler) updatePolicy(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindOwner)
+	if !ok {
+		return
+	}
+	var input state.UpdatePolicyInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	policy, err := handler.state.UpdatePolicy(request.Context(), actor, request.PathValue("id"), input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, policy)
+}
+
+func (handler *Handler) registerRunner(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindRunner)
+	if !ok {
+		return
+	}
+	var input state.RegisterRunnerInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	runner, err := handler.state.RegisterRunner(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusCreated, runner)
+}
+
+func (handler *Handler) claimAgentRun(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindRunner)
+	if !ok {
+		return
+	}
+	waitSeconds := 0
+	if value := request.URL.Query().Get("wait_seconds"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 0 {
+			writeError(writer, state.ErrInvalidInput, nil)
+			return
+		}
+		waitSeconds = parsed
+	}
+	run, err := handler.state.ClaimAgentRun(request.Context(), actor, state.ClaimRunInput{WaitSeconds: waitSeconds})
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, run)
+}
+
+func (handler *Handler) reportRunEvent(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindRunner)
+	if !ok {
+		return
+	}
+	var input state.ReportRunEventInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	input.RunID = request.PathValue("id")
+	run, err := handler.state.ReportAgentRunEvent(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, run)
+}
+
+func (handler *Handler) completeRun(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindRunner)
+	if !ok {
+		return
+	}
+	var input state.CompleteRunInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	input.RunID = request.PathValue("id")
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	run, err := handler.state.CompleteAgentRun(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, run)
+}
+
+func (handler *Handler) requestRunApproval(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindRunner)
+	if !ok {
+		return
+	}
+	var input state.RequestApprovalInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	input.RunID = request.PathValue("id")
+	run, err := handler.state.RequestAgentApproval(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, run)
+}
+
+func (handler *Handler) listRunners(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticateKind(writer, request, state.ActorKindOwner, state.ActorKindDevice); !ok {
+		return
+	}
+	runners, err := handler.state.ListRunners(request.Context())
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"runners": runners})
+}
+
+func (handler *Handler) updateRunner(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindOwner)
+	if !ok {
+		return
+	}
+	var input state.UpdateRunnerInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	runner, err := handler.state.UpdateRunner(request.Context(), actor, request.PathValue("id"), input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, runner)
+}
+
+func (handler *Handler) listRuns(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticateKind(writer, request, state.ActorKindOwner, state.ActorKindDevice); !ok {
+		return
+	}
+	limit, err := queryInteger(request, "limit", 100)
+	if err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	filter := state.AgentRunListFilter{
+		ReminderID: strings.TrimSpace(request.URL.Query().Get("reminder_id")),
+		RunnerID:   strings.TrimSpace(request.URL.Query().Get("runner_id")),
+		Limit:      limit,
+	}
+	if value := strings.TrimSpace(request.URL.Query().Get("status")); value != "" {
+		status := state.AgentRunStatus(value)
+		switch status {
+		case state.AgentRunStatusPlanned,
+			state.AgentRunStatusEligible,
+			state.AgentRunStatusClaimed,
+			state.AgentRunStatusRunning,
+			state.AgentRunStatusNeedsApproval,
+			state.AgentRunStatusSucceeded,
+			state.AgentRunStatusFailed,
+			state.AgentRunStatusCancelled,
+			state.AgentRunStatusExpired:
+			filter.Status = &status
+		default:
+			writeError(writer, state.ErrInvalidInput, nil)
+			return
+		}
+	}
+	runs, err := handler.state.ListAgentRuns(request.Context(), filter)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"runs": runs})
+}
+
+func (handler *Handler) getRun(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticateKind(writer, request, state.ActorKindOwner, state.ActorKindDevice); !ok {
+		return
+	}
+	run, err := handler.state.GetAgentRun(request.Context(), request.PathValue("id"))
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, run)
+}
+
+func (handler *Handler) createManualRun(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindOwner)
+	if !ok {
+		return
+	}
+	var input state.CreateManualRunInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	run, err := handler.state.CreateManualRun(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusCreated, run)
+}
+
+func (handler *Handler) cancelRun(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindOwner)
+	if !ok {
+		return
+	}
+	var input state.CancelRunInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	input.RunID = request.PathValue("id")
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	run, err := handler.state.CancelAgentRun(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, run)
+}
+
+func (handler *Handler) approveRun(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindOwner)
+	if !ok {
+		return
+	}
+	var input state.ApproveRunInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	input.RunID = request.PathValue("id")
+	if input.Source == "" {
+		input.Source = "rest"
+	}
+	run, err := handler.state.ApproveAgentRun(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, run)
+}
+
 func (handler *Handler) notifySync(parent context.Context, excludedActorID string) {
 	if handler.push == nil {
 		return
@@ -664,6 +1096,24 @@ func (handler *Handler) authenticate(writer http.ResponseWriter, request *http.R
 	return actor, true
 }
 
+// authenticateKind authenticates the caller and enforces the route's actor
+// kinds. The state service repeats every check; the edge gate keeps the
+// authorization matrix (docs/agent-execution-implementation-plan.md §2.1)
+// readable in one place.
+func (handler *Handler) authenticateKind(writer http.ResponseWriter, request *http.Request, kinds ...state.ActorKind) (state.Actor, bool) {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
+		return state.Actor{}, false
+	}
+	for _, kind := range kinds {
+		if actor.Kind == kind {
+			return actor, true
+		}
+	}
+	writeError(writer, state.ErrForbidden, nil)
+	return state.Actor{}, false
+}
+
 func bearerToken(request *http.Request) string {
 	header := request.Header.Get("Authorization")
 	if !strings.HasPrefix(header, "Bearer ") {
@@ -685,6 +1135,34 @@ func decodeJSON(request *http.Request, output any) error {
 	return nil
 }
 
+// decodeUpdateReminder decodes a reminder PATCH body and restores the explicit
+// null that clears the execution policy: encoding/json cannot distinguish an
+// absent key from a null literal on the double-pointer field.
+func decodeUpdateReminder(request *http.Request, input *state.UpdateReminderInput) error {
+	defer request.Body.Close()
+	body, err := io.ReadAll(http.MaxBytesReader(nil, request.Body, maxRequestBodyBytes))
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(input); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return errors.New("request body must contain one JSON object")
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return err
+	}
+	if value, present := fields["execution_policy_id"]; present && strings.TrimSpace(string(value)) == "null" {
+		var cleared *string
+		input.ExecutionPolicyID = &cleared
+	}
+	return nil
+}
+
 func writeError(writer http.ResponseWriter, err error, details any) {
 	status, code := mapError(err)
 	message := code
@@ -700,6 +1178,12 @@ func mapError(err error) (int, string) {
 		return http.StatusNotFound, "not_found"
 	case errors.Is(err, state.ErrRevisionConflict), errors.Is(err, stateauth.ErrOwnerExists):
 		return http.StatusConflict, "revision_conflict"
+	case errors.Is(err, state.ErrNotClaimable):
+		return http.StatusConflict, "not_claimable"
+	case errors.Is(err, state.ErrRunStateConflict):
+		return http.StatusConflict, "run_state_conflict"
+	case errors.Is(err, state.ErrPolicyViolation):
+		return http.StatusForbidden, "policy_violation"
 	case errors.Is(err, state.ErrForbidden):
 		return http.StatusForbidden, "forbidden"
 	case errors.Is(err, state.ErrInvalidInput):

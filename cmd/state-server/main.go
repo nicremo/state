@@ -36,6 +36,7 @@ type application struct {
 	pocketBase *pocketbase.PocketBase
 	repository *store.PocketBaseRepository
 	push       *statepush.Service
+	state      *state.Service
 }
 
 func main() {
@@ -91,6 +92,7 @@ func runServe(args []string, stderr io.Writer, logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go runPushScheduler(ctx, app.push, logger)
+	go runExecutionScheduler(ctx, app.state, logger)
 	serverError := make(chan error, 1)
 	go func() {
 		logger.Info("state-server listening", "address", *httpAddress, "version", version)
@@ -185,7 +187,7 @@ func newApplication(config applicationConfig) (*application, error) {
 		return nil, err
 	}
 	pushService := statepush.NewService(pushRepository, statepush.NewHTTPSender(nil))
-	stateService := state.NewService(repository)
+	stateService := state.NewService(repository, state.WithRunNotifier(pushService.NotifyRunFinished))
 	restHandler := api.NewHandler(api.Config{
 		Auth:    authManager,
 		State:   stateService,
@@ -206,6 +208,7 @@ func newApplication(config applicationConfig) (*application, error) {
 		pocketBase: pb,
 		repository: repository,
 		push:       pushService,
+		state:      stateService,
 	}, nil
 }
 
@@ -233,6 +236,53 @@ func runPushScheduler(ctx context.Context, service *statepush.Service, logger *s
 		case <-ticker.C:
 			run()
 		}
+	}
+}
+
+// runExecutionScheduler materializes eligible runs from due occurrences,
+// requeues expired leases, and retires stale runs — immediately at startup and
+// then every 30 seconds, mirroring the push scheduler's discipline.
+func runExecutionScheduler(ctx context.Context, service *state.Service, logger *slog.Logger) {
+	if service == nil {
+		return
+	}
+	run := func() {
+		runExecutionCycle(ctx, service, logger, time.Now().UTC())
+	}
+	run()
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
+}
+
+func runExecutionCycle(ctx context.Context, service *state.Service, logger *slog.Logger, now time.Time) {
+	materialized, err := service.MaterializeEligibleRuns(ctx, now)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		logger.Warn("execution scheduler materialization failed", "error", err)
+	}
+	if len(materialized) > 0 {
+		logger.Info("execution scheduler materialized runs", "count", len(materialized))
+	}
+	requeued, err := service.RequeueExpiredLeases(ctx, now)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		logger.Warn("execution scheduler lease requeue failed", "error", err)
+	}
+	if len(requeued) > 0 {
+		logger.Info("execution scheduler requeued runs", "count", len(requeued))
+	}
+	expired, err := service.ExpireStaleRuns(ctx, now)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		logger.Warn("execution scheduler expiry failed", "error", err)
+	}
+	if len(expired) > 0 {
+		logger.Info("execution scheduler expired runs", "count", len(expired))
 	}
 }
 
