@@ -54,6 +54,7 @@ targets:
     platform: iOS
     sources:
       - path: StateNotificationService/Sources
+      - path: State/Sources/Notifications/PushPayloads.swift
       - path: State/Sources/Security/PushEnvelope.swift
       - path: State/Sources/Security/SharedKeychain.swift
     settings:

@@ -484,6 +484,30 @@ final class AppModel {
         }
     }
 
+    /// Runners pair without a harness label or device name; the server only
+    /// wants the kind and a display name.
+    func createRunnerPairingCode(displayName: String) async -> PairingCode? {
+        guard let api else { return nil }
+        do {
+            return try await api.createPairingCode(kind: .runner, harness: nil, displayName: displayName, deviceName: "")
+        } catch {
+            presentedError = error.localizedDescription
+            return nil
+        }
+    }
+
+    /// Revoking a runner retires its credential; the runner row itself stays
+    /// on the server as history and disappears from no list.
+    func revokeRunner(_ runner: Runner) async {
+        guard let api else { return }
+        do {
+            try await api.revokeActor(id: runner.id, kind: .runner)
+            await synchronize()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
     func createPolicy(_ draft: PolicyDraft) async {
         do {
             let now = Date()

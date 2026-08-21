@@ -106,7 +106,7 @@ struct ReminderCollectionView: View {
                 }
             }
             .sheet(isPresented: $showsEditor) {
-                ReminderEditorView { draft in
+                ReminderEditorView(model: model) { draft in
                     await model.createReminder(draft)
                 }
             }

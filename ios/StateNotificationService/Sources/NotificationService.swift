@@ -33,12 +33,22 @@ final class NotificationService: UNNotificationServiceExtension {
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             let envelope = try decoder.decode(PushEnvelope.self, from: envelopeData)
             let plaintext = try envelope.open(recipientPrivateKey: privateKey, routeID: routeID)
-            let payload = try decoder.decode(ReminderPushPayload.self, from: plaintext)
-            content.title = payload.title
-            content.body = payload.description?.isEmpty == false ? payload.description ?? "" : localizedFallback(state: state)
-            content.userInfo["reminder_id"] = payload.reminderID
-            content.userInfo["occurrence_id"] = payload.occurrenceID
-            content.userInfo["revision"] = payload.revision
+            if try decoder.decode(PushKindProbe.self, from: plaintext).kind == "run_finished" {
+                let payload = try decoder.decode(RunPushPayload.self, from: plaintext)
+                content.title = "State"
+                content.body = "\(payload.title) — \(RunPushStatusText.localized(payload.status, language: languageCode))"
+                content.userInfo["agent_run_id"] = payload.runId
+                content.userInfo["reminder_id"] = payload.reminderId
+            } else {
+                // Any other kind — present and future — keeps the reminder
+                // shape, which is also what older servers send without a kind.
+                let payload = try decoder.decode(ReminderPushPayload.self, from: plaintext)
+                content.title = payload.title
+                content.body = payload.description?.isEmpty == false ? payload.description ?? "" : localizedFallback(state: state)
+                content.userInfo["reminder_id"] = payload.reminderId
+                content.userInfo["occurrence_id"] = payload.occurrenceId
+                content.userInfo["revision"] = payload.revision
+            }
         } catch {
             content.title = "State"
             content.body = localizedFallback(state: (try? statePayload(from: request.content.userInfo)) ?? [:])
@@ -59,21 +69,14 @@ final class NotificationService: UNNotificationServiceExtension {
         return state
     }
 
+    private var languageCode: String {
+        Locale.current.language.languageCode?.identifier ?? "en"
+    }
+
     private func localizedFallback(state: [String: Any]) -> String {
         guard let fallback = state["fallback"] as? [String: String] else {
             return "New reminder"
         }
-        let language = Locale.current.language.languageCode?.identifier ?? "en"
-        return fallback[language] ?? fallback["en"] ?? "New reminder"
+        return fallback[languageCode] ?? fallback["en"] ?? "New reminder"
     }
-}
-
-private struct ReminderPushPayload: Codable {
-    let kind: String
-    let reminderID: String
-    let occurrenceID: String
-    let title: String
-    let description: String?
-    let notifyAt: String
-    let revision: Int64
 }

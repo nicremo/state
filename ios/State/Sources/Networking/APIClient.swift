@@ -250,6 +250,9 @@ actor APIClient: StateAPI {
     }
 
     func revokeActor(id: String, kind: ActorKind) async throws {
+        // The server exposes delete routes for agents and devices only; both
+        // land in the same kind-agnostic revocation, so runner credentials
+        // retire through the devices path.
         let path = kind == .harness ? "/api/v1/agents/\(id)" : "/api/v1/devices/\(id)"
         _ = try await request(path: path, method: "DELETE")
     }

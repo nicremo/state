@@ -12,19 +12,25 @@
 		0EC25D57FC4F6CF2D6FA9FF8 /* SyncEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEA74FBAC0A4D8299F73D22A /* SyncEngineTests.swift */; };
 		119FEB1330F4F2CF49FC1B19 /* PushEnvelopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9E35C98AD7FCDC965ADA7C /* PushEnvelopeTests.swift */; };
 		16B7841A2AD057191FD575E2 /* UUIDv7Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A53151A5538CF22AA06C2F59 /* UUIDv7Tests.swift */; };
+		177EE7BD41FDB6650B5856B8 /* PolicyDraftValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0B57D33EA9C96E17EC2644 /* PolicyDraftValidationTests.swift */; };
 		17D74956B8F952DD3161515D /* PushEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3FF11D16348C43C9D86F1D /* PushEnvelope.swift */; };
+		1D1FF0B35C4BC8A0738F7E71 /* RunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 703233419435A6EC390D6127 /* RunDetailView.swift */; };
 		24AB9ED657748C538A145AD3 /* SharedKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525378143D0F69591632200B /* SharedKeychain.swift */; };
+		2B1DC5D1C8B6E6240A4694BC /* PushPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA9FBD89EF008034E44EA62 /* PushPayloadTests.swift */; };
 		2D12E5CAAC48135B1DEAB66B /* StateApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00EBED32EA6304F9ADF2D84B /* StateApp.swift */; };
 		35CF6489A313E355ED2711FB /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5457F1BB657C0C37A60A3676 /* InfoPlist.strings */; };
 		40969094DFE641A03E1CA239 /* SessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED80418839D065D0FCB106DD /* SessionRepository.swift */; };
 		46F34D35BD3072605534E920 /* SharedKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525378143D0F69591632200B /* SharedKeychain.swift */; };
 		479055869CC0FC054779E56E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8E6B844029635B1CC04B9E40 /* PrivacyInfo.xcprivacy */; };
+		4DFE6A85FD80ED737339A2EC /* PolicyEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57C4DB7021BD019A1C887BF6 /* PolicyEditorView.swift */; };
 		5038B093F736157AE986F748 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B260373D5854890462B580B1 /* APIClient.swift */; };
 		56E28BB30E886ACDC0A34484 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A95BED5A46CC435F7A6B7E /* SyncEngine.swift */; };
+		5AE63DFE1161FC727E0BC459 /* PushPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 545A001C0089B05C97B8C14E /* PushPayloads.swift */; };
 		61B3DC6AFE76B63F8BE3F55D /* HarnessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F45C19CFDD1BE98ECD5882 /* HarnessCatalog.swift */; };
 		61E352C20C59C014B9B5A130 /* StateRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D6CC896460A70110EF5362 /* StateRootView.swift */; };
 		656A443223F52DA2BFC071CF /* StateDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95434DB52CE79EC0ACBCA873 /* StateDatabase.swift */; };
 		657BE7BC07589A53E444F263 /* PushEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3FF11D16348C43C9D86F1D /* PushEnvelope.swift */; };
+		66F71E9C9CE41EC22DE0765D /* PushPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 545A001C0089B05C97B8C14E /* PushPayloads.swift */; };
 		698C557C9964F3DE324750C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CBB0341B714371E25C8C921C /* Assets.xcassets */; };
 		739F03ABE01C34B752EFC4AF /* ReminderDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B2B6204A2A5749FD6D9286 /* ReminderDetailView.swift */; };
 		73AB7CBB0C637AC111FA698A /* UUIDv7.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596270393A6CEA01AD29FA15 /* UUIDv7.swift */; };
@@ -97,10 +103,14 @@
 		44D6CC896460A70110EF5362 /* StateRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateRootView.swift; sourceTree = "<group>"; };
 		49E24CB265A5E0785289B0DB /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		525378143D0F69591632200B /* SharedKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedKeychain.swift; sourceTree = "<group>"; };
+		545A001C0089B05C97B8C14E /* PushPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPayloads.swift; sourceTree = "<group>"; };
+		57C4DB7021BD019A1C887BF6 /* PolicyEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyEditorView.swift; sourceTree = "<group>"; };
 		596270393A6CEA01AD29FA15 /* UUIDv7.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UUIDv7.swift; sourceTree = "<group>"; };
 		5FA25B43007EB3C718B4BD00 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
+		5FA9FBD89EF008034E44EA62 /* PushPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPayloadTests.swift; sourceTree = "<group>"; };
 		6395893E6E8D9F4870E9D30C /* StateTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		67F45C19CFDD1BE98ECD5882 /* HarnessCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessCatalog.swift; sourceTree = "<group>"; };
+		703233419435A6EC390D6127 /* RunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunDetailView.swift; sourceTree = "<group>"; };
 		7BBB357F0392F998BB99044C /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		7F808B6F2B8A329996C25508 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		8BD4050889C2AD09C3EDFA81 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -109,6 +119,7 @@
 		8E9E35C98AD7FCDC965ADA7C /* PushEnvelopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushEnvelopeTests.swift; sourceTree = "<group>"; };
 		935830B8F2C2878AE68984B0 /* State.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = State.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		95434DB52CE79EC0ACBCA873 /* StateDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateDatabase.swift; sourceTree = "<group>"; };
+		9C0B57D33EA9C96E17EC2644 /* PolicyDraftValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyDraftValidationTests.swift; sourceTree = "<group>"; };
 		9E1EDE45CB4D909427D3FA61 /* StateUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StateUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A53151A5538CF22AA06C2F59 /* UUIDv7Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UUIDv7Tests.swift; sourceTree = "<group>"; };
 		A7761E726011D22475832A98 /* PushRegistrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrationService.swift; sourceTree = "<group>"; };
@@ -156,8 +167,10 @@
 				5FA25B43007EB3C718B4BD00 /* ActivityView.swift */,
 				7BBB357F0392F998BB99044C /* MainTabView.swift */,
 				49E24CB265A5E0785289B0DB /* OnboardingView.swift */,
+				57C4DB7021BD019A1C887BF6 /* PolicyEditorView.swift */,
 				E0B2B6204A2A5749FD6D9286 /* ReminderDetailView.swift */,
 				C84F67F48E8E4FD028AC4060 /* ReminderEditorView.swift */,
+				703233419435A6EC390D6127 /* RunDetailView.swift */,
 				8BD4050889C2AD09C3EDFA81 /* SettingsView.swift */,
 				44D6CC896460A70110EF5362 /* StateRootView.swift */,
 				018038764FE0FC5AA2A1718D /* StateTheme.swift */,
@@ -199,7 +212,9 @@
 				B330D47D344AF973FD64CD46 /* DatabaseTests.swift */,
 				B6BA0685CDCD6EEFC45E2381 /* ExecutionModelTests.swift */,
 				0D06FBE82110384711CA15F1 /* HarnessCatalogTests.swift */,
+				9C0B57D33EA9C96E17EC2644 /* PolicyDraftValidationTests.swift */,
 				8E9E35C98AD7FCDC965ADA7C /* PushEnvelopeTests.swift */,
+				5FA9FBD89EF008034E44EA62 /* PushPayloadTests.swift */,
 				EEA74FBAC0A4D8299F73D22A /* SyncEngineTests.swift */,
 				A53151A5538CF22AA06C2F59 /* UUIDv7Tests.swift */,
 			);
@@ -302,6 +317,7 @@
 			isa = PBXGroup;
 			children = (
 				37E22432DA6BAAD47D855756 /* NotificationCoordinator.swift */,
+				545A001C0089B05C97B8C14E /* PushPayloads.swift */,
 				A7761E726011D22475832A98 /* PushRegistrationService.swift */,
 				3BDAFF6318988EE63851DFD1 /* StateAppDelegate.swift */,
 			);
@@ -492,10 +508,13 @@
 				A963E01C464A6B13F1742981 /* Models.swift in Sources */,
 				96FDC642DAF2CB21D922A85C /* NotificationCoordinator.swift in Sources */,
 				BFC44BF26E2878133DBAB89F /* OnboardingView.swift in Sources */,
+				4DFE6A85FD80ED737339A2EC /* PolicyEditorView.swift in Sources */,
 				657BE7BC07589A53E444F263 /* PushEnvelope.swift in Sources */,
+				66F71E9C9CE41EC22DE0765D /* PushPayloads.swift in Sources */,
 				AC816DB6CC17F748F4D10A1D /* PushRegistrationService.swift in Sources */,
 				739F03ABE01C34B752EFC4AF /* ReminderDetailView.swift in Sources */,
 				F5344EA7424A8AB3FDB3D185 /* ReminderEditorView.swift in Sources */,
+				1D1FF0B35C4BC8A0738F7E71 /* RunDetailView.swift in Sources */,
 				40969094DFE641A03E1CA239 /* SessionRepository.swift in Sources */,
 				06D9B7D04C940870DA13C8E9 /* SettingsView.swift in Sources */,
 				24AB9ED657748C538A145AD3 /* SharedKeychain.swift in Sources */,
@@ -515,6 +534,7 @@
 			files = (
 				F8423B6955E1B3CD9DCF7729 /* NotificationService.swift in Sources */,
 				17D74956B8F952DD3161515D /* PushEnvelope.swift in Sources */,
+				5AE63DFE1161FC727E0BC459 /* PushPayloads.swift in Sources */,
 				46F34D35BD3072605534E920 /* SharedKeychain.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -526,7 +546,9 @@
 				F624CB13CFF06570A79128A3 /* DatabaseTests.swift in Sources */,
 				F09EC862041F195F8EA4F4CC /* ExecutionModelTests.swift in Sources */,
 				C10D681C9E4FCC0C231CE373 /* HarnessCatalogTests.swift in Sources */,
+				177EE7BD41FDB6650B5856B8 /* PolicyDraftValidationTests.swift in Sources */,
 				119FEB1330F4F2CF49FC1B19 /* PushEnvelopeTests.swift in Sources */,
+				2B1DC5D1C8B6E6240A4694BC /* PushPayloadTests.swift in Sources */,
 				0EC25D57FC4F6CF2D6FA9FF8 /* SyncEngineTests.swift in Sources */,
 				16B7841A2AD057191FD575E2 /* UUIDv7Tests.swift in Sources */,
 			);

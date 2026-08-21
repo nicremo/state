@@ -2,12 +2,15 @@ import SwiftUI
 
 struct ReminderEditorView: View {
     @Environment(\.dismiss) private var dismiss
+    @Bindable var model: AppModel
     @State private var draft: ReminderDraft
     @State private var isSaving = false
+    @State private var showsPolicyEditor = false
     private let title: LocalizedStringKey
     private let onSave: (ReminderDraft) async -> Void
 
-    init(reminder: Reminder? = nil, onSave: @escaping (ReminderDraft) async -> Void) {
+    init(model: AppModel, reminder: Reminder? = nil, onSave: @escaping (ReminderDraft) async -> Void) {
+        self.model = model
         var draft = ReminderDraft()
         if let reminder {
             draft.title = reminder.title
@@ -71,10 +74,42 @@ struct ReminderEditorView: View {
                         Text("Yearly").tag(RecurrenceFrequency.yearly as RecurrenceFrequency?)
                     }
                 }
+
+                Section {
+                    Picker("Policy", selection: $draft.executionPolicyID) {
+                        Text("None").tag(nil as String?)
+                        ForEach(model.policies) { policy in
+                            Text(policy.name).tag(policy.id as String?)
+                        }
+                    }
+                    Button {
+                        showsPolicyEditor = true
+                    } label: {
+                        Label("New policy…", systemImage: "plus")
+                    }
+                } header: {
+                    Text("Agent execution")
+                } footer: {
+                    if model.policies.isEmpty {
+                        Text("No policies yet. Create one and a runner can execute this reminder on your Mac when it is due.")
+                    } else {
+                        Text("A runner executes this reminder with the policy's capabilities when it is due.")
+                    }
+                }
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(isSaving)
+            .task {
+                // The policy list arrives with the sync; a fresh install opens
+                // the editor before the first pull has finished.
+                if model.policies.isEmpty {
+                    await model.synchronize()
+                }
+            }
+            .sheet(isPresented: $showsPolicyEditor) {
+                PolicyEditorView(model: model)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
