@@ -349,6 +349,13 @@ func readOptional(path string) (string, error) {
 	return string(contents), nil
 }
 
+// WriteAtomic writes a file through a temporary file plus rename, with the
+// given permissions and a 0700 parent directory. Shared with the runner for
+// runner.json and the .state/runs projection.
+func WriteAtomic(path string, contents []byte, mode os.FileMode) error {
+	return writeAtomic(path, contents, mode)
+}
+
 func writeAtomic(path string, contents []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err

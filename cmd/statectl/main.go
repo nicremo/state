@@ -31,7 +31,7 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger) error {
 	if len(args) == 0 {
-		return errors.New("usage: statectl <pair|mcp|doctor|rotate|revoke|install|uninstall|unpair|version>")
+		return errors.New("usage: statectl <pair|mcp|doctor|rotate|revoke|install|uninstall|unpair|project|version>")
 	}
 	switch args[0] {
 	case "pair":
@@ -50,6 +50,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger)
 		return runUninstall(args[1:], stdout, stderr)
 	case "unpair":
 		return runUnpair(args[1:], stdout, stderr)
+	case "project":
+		return runProject(args[1:], stdout, stderr)
 	case "version":
 		_, err := fmt.Fprintln(stdout, version)
 		return err
@@ -163,7 +165,7 @@ func runMCP(args []string, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	remoteSession, err := connectRemote(context.Background(), profile, token)
+	remoteSession, err := statectl.ConnectRemote(context.Background(), profile, token, version)
 	if err != nil {
 		return err
 	}
@@ -191,7 +193,7 @@ func runDoctor(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	session, err := connectRemote(context.Background(), profile, token)
+	session, err := statectl.ConnectRemote(context.Background(), profile, token, version)
 	if err != nil {
 		return err
 	}
@@ -308,13 +310,112 @@ func loadProfileAndCredential(configPath string, profileName string) (statectl.P
 	return profile, token, nil
 }
 
-func connectRemote(ctx context.Context, profile statectl.Profile, token string) (*mcp.ClientSession, error) {
-	client := mcp.NewClient(&mcp.Implementation{Name: "statectl", Version: version}, nil)
-	return client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint:             strings.TrimRight(profile.ServerURL, "/") + "/mcp",
-		HTTPClient:           &http.Client{Transport: bearerRoundTripper{token: token}},
-		DisableStandaloneSSE: true,
-	}, nil)
+func runProject(args []string, stdout io.Writer, stderr io.Writer) error {
+	if len(args) == 0 {
+		return errors.New("usage: statectl project <init|sync|validate>")
+	}
+	switch args[0] {
+	case "init":
+		return runProjectInit(args[1:], stdout, stderr)
+	case "sync":
+		return runProjectSync(args[1:], stdout, stderr)
+	case "validate":
+		return runProjectValidate(args[1:], stdout, stderr)
+	default:
+		return fmt.Errorf("unknown project command %q", args[0])
+	}
+}
+
+func runProjectInit(args []string, stdout io.Writer, stderr io.Writer) error {
+	flags := flag.NewFlagSet("statectl project init", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	name := flags.String("name", "", "project name (slug), for example customer-api")
+	rootPath := flags.String("root", "", "project root path hint for runners, for example ~/src/customer-api")
+	profileName := flags.String("profile", "", "statectl profile name")
+	directory := flags.String("dir", ".", "project checkout directory")
+	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *name == "" || *profileName == "" {
+		return errors.New("statectl project init requires --name and --profile")
+	}
+	service := statectl.NewProjectService(statectl.NewConfigStore(*configPath), statectl.KeyringSecretStore{}, nil)
+	result, err := service.Init(context.Background(), statectl.ProjectInitRequest{
+		Name:        *name,
+		RootPath:    *rootPath,
+		ProfileName: *profileName,
+		Dir:         *directory,
+	})
+	if err != nil {
+		return err
+	}
+	verb := "resolved"
+	if result.Created {
+		verb = "created"
+	}
+	if _, err := fmt.Fprintf(stdout, "%s project %s (%s)\n", verb, result.Project.Name, result.Project.ID); err != nil {
+		return err
+	}
+	for _, written := range result.Written {
+		if _, err := fmt.Fprintf(stdout, "wrote %s\n", written); err != nil {
+			return err
+		}
+	}
+	for _, kept := range result.Kept {
+		if _, err := fmt.Fprintf(stdout, "kept existing %s\n", kept); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runProjectSync(args []string, stdout io.Writer, stderr io.Writer) error {
+	flags := flag.NewFlagSet("statectl project sync", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	profileName := flags.String("profile", "", "statectl profile name")
+	directory := flags.String("dir", ".", "project checkout directory")
+	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *profileName == "" {
+		return errors.New("statectl project sync requires --profile")
+	}
+	service := statectl.NewProjectService(statectl.NewConfigStore(*configPath), statectl.KeyringSecretStore{}, nil)
+	path, err := service.Sync(context.Background(), statectl.ProjectSyncRequest{
+		ProfileName:   *profileName,
+		Dir:           *directory,
+		ClientVersion: version,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(stdout, "synced %s\n", path)
+	return err
+}
+
+func runProjectValidate(args []string, stdout io.Writer, stderr io.Writer) error {
+	flags := flag.NewFlagSet("statectl project validate", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	directory := flags.String("dir", ".", "project checkout directory")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	validation, err := statectl.NewProjectService(nil, nil, nil).Validate(*directory)
+	if err != nil {
+		return err
+	}
+	if len(validation.Findings) > 0 {
+		for _, finding := range validation.Findings {
+			if _, err := fmt.Fprintf(stdout, "invalid: %s\n", finding); err != nil {
+				return err
+			}
+		}
+		return fmt.Errorf(".state/policy.yaml has %d problem(s)", len(validation.Findings))
+	}
+	_, err = fmt.Fprintf(stdout, ".state/policy.yaml is valid\n")
+	return err
 }
 
 func fetchServerVersion(serverURL string) (string, error) {
@@ -358,15 +459,4 @@ func defaultConfigPath() string {
 		return "statectl.json"
 	}
 	return path
-}
-
-type bearerRoundTripper struct {
-	token string
-}
-
-func (transport bearerRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	clone := request.Clone(request.Context())
-	clone.Header = request.Header.Clone()
-	clone.Header.Set("Authorization", "Bearer "+transport.token)
-	return http.DefaultTransport.RoundTrip(clone)
 }

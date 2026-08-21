@@ -146,12 +146,19 @@ func validateProfile(profile Profile) error {
 	if profile.Name == "" || profile.ServerURL == "" || profile.ActorID == "" || profile.Harness == "" {
 		return errors.New("statectl profile is incomplete")
 	}
-	parsed, err := url.Parse(profile.ServerURL)
+	return ValidateServerURL(profile.ServerURL)
+}
+
+// ValidateServerURL enforces the transport rule shared by statectl profiles
+// and the runner configuration: HTTPS everywhere except loopback development
+// servers.
+func ValidateServerURL(serverURL string) error {
+	parsed, err := url.Parse(serverURL)
 	if err != nil || parsed.Host == "" {
-		return errors.New("statectl server URL is invalid")
+		return errors.New("state server URL is invalid")
 	}
 	if parsed.Scheme != "https" && !(parsed.Scheme == "http" && isLoopbackHost(parsed.Hostname())) {
-		return errors.New("statectl server URL must use HTTPS except on loopback")
+		return errors.New("state server URL must use HTTPS except on loopback")
 	}
 	return nil
 }

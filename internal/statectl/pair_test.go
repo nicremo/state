@@ -3,6 +3,7 @@ package statectl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -145,6 +146,97 @@ func TestRotateAndRevokeCredential(t *testing.T) {
 	}
 	if _, err := configStore.LoadProfile(profile.Name); err != ErrProfileNotFound {
 		t.Fatalf("profile after revoke error = %v", err)
+	}
+}
+
+func TestPairAcceptsRunnerCredentialWithRunnerKind(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(writer).Encode(stateauth.Credential{
+			Actor: state.Actor{ID: "01989f4a-ddfa-7c42-9e7d-0a2f4bb2f2a2", Kind: state.ActorKindRunner, DisplayName: "Mac mini"},
+			Token: "state_runner_credential",
+		})
+	}))
+	t.Cleanup(server.Close)
+
+	configStore := NewConfigStore(filepath.Join(t.TempDir(), "statectl.json"))
+	secrets := &memorySecretStore{values: make(map[string]string)}
+	pairer := NewPairService(configStore, secrets, server.Client())
+	profile, err := pairer.Pair(context.Background(), PairRequest{
+		ProfileName: "mac-mini",
+		ServerURL:   server.URL,
+		Code:        "ABCDE-23456",
+		Kind:        PairKindRunner,
+	})
+	if err != nil {
+		t.Fatalf("Pair(runner) error = %v", err)
+	}
+	if profile.ActorID != "01989f4a-ddfa-7c42-9e7d-0a2f4bb2f2a2" || profile.Harness != "runner" {
+		t.Fatalf("runner profile = %#v", profile)
+	}
+	credential, err := secrets.Get(profile.CredentialAccount())
+	if err != nil || credential != "state_runner_credential" {
+		t.Fatalf("runner credential = %q, %v", credential, err)
+	}
+}
+
+func TestPairRejectsRunnerCredentialOnHarnessDefault(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(writer).Encode(stateauth.Credential{
+			Actor: state.Actor{ID: "01989f4a-ddfa-7c42-9e7d-0a2f4bb2f2a2", Kind: state.ActorKindRunner, DisplayName: "Mac mini"},
+			Token: "state_runner_credential",
+		})
+	}))
+	t.Cleanup(server.Close)
+
+	pairer := NewPairService(NewConfigStore(filepath.Join(t.TempDir(), "statectl.json")), &memorySecretStore{values: make(map[string]string)}, server.Client())
+	// The default (harness) path must keep rejecting runner credentials.
+	if _, err := pairer.Pair(context.Background(), PairRequest{
+		ProfileName: "codex",
+		ServerURL:   server.URL,
+		Code:        "ABCDE-23456",
+		Harness:     "codex",
+	}); err == nil {
+		t.Fatal("Pair() accepted a runner credential without Kind=runner")
+	}
+	if _, err := pairer.Pair(context.Background(), PairRequest{
+		ProfileName: "codex",
+		ServerURL:   server.URL,
+		Code:        "ABCDE-23456",
+		Kind:        "device",
+	}); !errors.Is(err, state.ErrInvalidInput) {
+		t.Fatalf("Pair(Kind=device) error = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestPairRunnerRejectsHarnessCredential(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(writer).Encode(stateauth.Credential{
+			Actor: state.Actor{ID: "01989f4a-ddfa-769f-bd09-53052672c44f", Kind: state.ActorKindHarness, Harness: "codex"},
+			Token: "state_harness_credential",
+		})
+	}))
+	t.Cleanup(server.Close)
+
+	pairer := NewPairService(NewConfigStore(filepath.Join(t.TempDir(), "statectl.json")), &memorySecretStore{values: make(map[string]string)}, server.Client())
+	if _, err := pairer.Pair(context.Background(), PairRequest{
+		ProfileName: "mac-mini",
+		ServerURL:   server.URL,
+		Code:        "ABCDE-23456",
+		Kind:        PairKindRunner,
+	}); err == nil {
+		t.Fatal("Pair(Kind=runner) accepted a harness credential")
 	}
 }
 

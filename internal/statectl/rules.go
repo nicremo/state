@@ -50,5 +50,10 @@ func DefaultAgentRules() string {
 - Report success only after State confirms stored=true.
 - Read the latest reminder revision before editing and pass expected_revision.
 - Use add_comment when new context should be appended without replacing the reminder.
-- Never delete or archive reminders through an agent.`
+- Never delete or archive reminders through an agent.
+
+When launched as a task by a State runner:
+
+- The task prompt names the State reminder ID; read context with get_reminder and get_changes. get_execution_context is reserved for the runner itself.
+- When the run's execution policy handles completion, State completes the occurrence automatically on verified success — never complete that occurrence manually.`
 }
