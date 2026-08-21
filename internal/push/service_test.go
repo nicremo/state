@@ -6,7 +6,9 @@ import (
 	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +17,7 @@ import (
 
 	stateauth "github.com/nicremo/state/internal/auth"
 	"github.com/nicremo/state/internal/pushcrypto"
+	"github.com/nicremo/state/internal/relay"
 	"github.com/nicremo/state/internal/state"
 	"github.com/nicremo/state/internal/store"
 	"github.com/pocketbase/pocketbase"
@@ -184,6 +187,404 @@ func TestServiceDeliversOnlyUnconfirmedOccurrenceOnce(t *testing.T) {
 	if err != nil || delivered != 0 || len(recorder.deliveries) != 1 {
 		t.Fatalf("second delivery = %d, recordings = %d, error = %v", delivered, len(recorder.deliveries), err)
 	}
+}
+
+func TestNotifyRunFinishedDeliversToAllDeviceRoutes(t *testing.T) {
+	t.Parallel()
+
+	app, _, owner := newPushTestApplication(t)
+	repository, err := NewRepository(app, bytes.Repeat([]byte{0x63}, 32))
+	if err != nil {
+		t.Fatalf("NewRepository() error = %v", err)
+	}
+	authManager, err := stateauth.NewManager(app, "bootstrap-secret")
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+	pairing, err := authManager.CreatePairingCode(context.Background(), owner.Actor, stateauth.PairingCodeRequest{
+		Kind:        state.ActorKindDevice,
+		DisplayName: "Fabian",
+		DeviceName:  "iPad",
+	})
+	if err != nil {
+		t.Fatalf("CreatePairingCode() error = %v", err)
+	}
+	device, err := authManager.ExchangePairingCode(context.Background(), pairing.Code)
+	if err != nil {
+		t.Fatalf("ExchangePairingCode() error = %v", err)
+	}
+	ownerKey := newRouteKey(t)
+	deviceKey := newRouteKey(t)
+	registerRoute(t, repository, owner.Actor, "0198a08d-1ca1-7122-bf7d-c6f428ad7398", "owner-route-secret", ownerKey)
+	registerRoute(t, repository, device.Actor, "0198a08d-1ca1-7a31-9f62-0c85e07e8a10", "device-route-secret", deviceKey)
+
+	recorder := &recordingSender{}
+	service := NewService(repository, recorder)
+	finishedAt := time.Date(2026, time.August, 17, 10, 0, 0, 0, time.UTC)
+	occurrenceID := "0198a08d-1ca1-70f2-88d3-0a49e1e2c901"
+	run := state.AgentRun{
+		ID:            "0198a08d-1ca1-7c44-8a5b-4e2f6a91b201",
+		ReminderID:    "0198a08d-1ca1-75b1-9c42-7d0e5f31a8b2",
+		OccurrenceID:  &occurrenceID,
+		Status:        state.AgentRunStatusSucceeded,
+		FinishedAt:    &finishedAt,
+		ResultSummary: "must not leak into the payload",
+	}
+	if err := service.NotifyRunFinished(context.Background(), run, "Weekly report"); err != nil {
+		t.Fatalf("NotifyRunFinished() error = %v", err)
+	}
+	if len(recorder.deliveries) != 2 {
+		t.Fatalf("deliveries = %#v", recorder.deliveries)
+	}
+	secrets := map[string]string{
+		owner.Actor.ID:  "owner-route-secret",
+		device.Actor.ID: "device-route-secret",
+	}
+	for _, delivery := range recorder.deliveries {
+		if delivery.kind != "run_finished" || delivery.collapseID != run.ID {
+			t.Fatalf("delivery metadata = %#v", delivery)
+		}
+		if delivery.route.Authorization != secrets[delivery.route.ActorID] {
+			t.Fatalf("route authorization for %s was not decrypted: %#v", delivery.route.ActorID, delivery.route)
+		}
+		payload := map[string]any{}
+		if err := json.Unmarshal(delivery.plaintext, &payload); err != nil {
+			t.Fatalf("payload is not JSON: %v", err)
+		}
+		if len(payload) != 7 {
+			t.Fatalf("payload keys = %#v", payload)
+		}
+		if payload["kind"] != "run_finished" || payload["run_id"] != run.ID || payload["reminder_id"] != run.ReminderID ||
+			payload["occurrence_id"] != occurrenceID || payload["status"] != "succeeded" || payload["title"] != "Weekly report" ||
+			payload["finished_at"] != finishedAt.Format(time.RFC3339Nano) {
+			t.Fatalf("payload = %#v", payload)
+		}
+		if strings.Contains(string(delivery.plaintext), "must not leak") {
+			t.Fatalf("payload carries result summary: %s", delivery.plaintext)
+		}
+	}
+
+	recorder.deliveries = nil
+	runWithoutOccurrence := state.AgentRun{
+		ID:         "0198a08d-1ca1-7aa1-b1f1-9e8d7c6b5a4f",
+		ReminderID: "0198a08d-1ca1-75b1-9c42-7d0e5f31a8b2",
+		Status:     state.AgentRunStatusFailed,
+		FinishedAt: &finishedAt,
+	}
+	if err := service.NotifyRunFinished(context.Background(), runWithoutOccurrence, "Weekly report"); err != nil {
+		t.Fatalf("NotifyRunFinished() error = %v", err)
+	}
+	if len(recorder.deliveries) != 2 {
+		t.Fatalf("deliveries = %#v", recorder.deliveries)
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(recorder.deliveries[0].plaintext, &payload); err != nil {
+		t.Fatalf("payload is not JSON: %v", err)
+	}
+	if _, present := payload["occurrence_id"]; present || len(payload) != 6 {
+		t.Fatalf("payload keys = %#v", payload)
+	}
+}
+
+func TestNotifyRunFinishedStatusFilter(t *testing.T) {
+	t.Parallel()
+
+	app, _, owner := newPushTestApplication(t)
+	repository, err := NewRepository(app, bytes.Repeat([]byte{0x74}, 32))
+	if err != nil {
+		t.Fatalf("NewRepository() error = %v", err)
+	}
+	registerRoute(t, repository, owner.Actor, "0198a08d-1ca1-7122-bf7d-c6f428ad7398", "route-secret", newRouteKey(t))
+	recorder := &recordingSender{}
+	service := NewService(repository, recorder)
+	run := state.AgentRun{
+		ID:         "0198a08d-1ca1-7c44-8a5b-4e2f6a91b201",
+		ReminderID: "0198a08d-1ca1-75b1-9c42-7d0e5f31a8b2",
+	}
+	for _, status := range []state.AgentRunStatus{
+		state.AgentRunStatusPlanned,
+		state.AgentRunStatusEligible,
+		state.AgentRunStatusClaimed,
+		state.AgentRunStatusRunning,
+		state.AgentRunStatusCancelled,
+		state.AgentRunStatusExpired,
+	} {
+		run.Status = status
+		if err := service.NotifyRunFinished(context.Background(), run, "Weekly report"); err != nil {
+			t.Fatalf("NotifyRunFinished(%s) error = %v", status, err)
+		}
+		if len(recorder.deliveries) != 0 {
+			t.Fatalf("NotifyRunFinished(%s) delivered %#v", status, recorder.deliveries)
+		}
+	}
+	for _, status := range []state.AgentRunStatus{state.AgentRunStatusSucceeded, state.AgentRunStatusFailed, state.AgentRunStatusNeedsApproval} {
+		recorder.deliveries = nil
+		run.Status = status
+		run.FinishedAt = nil
+		if err := service.NotifyRunFinished(context.Background(), run, "Weekly report"); err != nil {
+			t.Fatalf("NotifyRunFinished(%s) error = %v", status, err)
+		}
+		if len(recorder.deliveries) != 1 {
+			t.Fatalf("NotifyRunFinished(%s) deliveries = %#v", status, recorder.deliveries)
+		}
+		payload := map[string]any{}
+		if err := json.Unmarshal(recorder.deliveries[0].plaintext, &payload); err != nil {
+			t.Fatalf("payload is not JSON: %v", err)
+		}
+		if payload["status"] != string(status) {
+			t.Fatalf("payload status = %#v, want %s", payload["status"], status)
+		}
+		finishedAt, ok := payload["finished_at"].(string)
+		if !ok || finishedAt == "" {
+			t.Fatalf("payload finished_at = %#v", payload["finished_at"])
+		}
+		if _, err := time.Parse(time.RFC3339Nano, finishedAt); err != nil {
+			t.Fatalf("finished_at does not parse: %v", err)
+		}
+	}
+}
+
+func TestNotifyRunFinishedIsNilSafe(t *testing.T) {
+	t.Parallel()
+
+	run := state.AgentRun{ID: "run", ReminderID: "reminder", Status: state.AgentRunStatusSucceeded}
+	var service *Service
+	if err := service.NotifyRunFinished(context.Background(), run, "title"); err != nil {
+		t.Fatalf("nil service error = %v", err)
+	}
+	if err := NewService(nil, &recordingSender{}).NotifyRunFinished(context.Background(), run, "title"); err != nil {
+		t.Fatalf("nil repository error = %v", err)
+	}
+	if err := NewService(&Repository{}, nil).NotifyRunFinished(context.Background(), run, "title"); err != nil {
+		t.Fatalf("nil sender error = %v", err)
+	}
+}
+
+func TestNotifyRunFinishedAccumulatesRouteErrors(t *testing.T) {
+	t.Parallel()
+
+	app, _, owner := newPushTestApplication(t)
+	repository, err := NewRepository(app, bytes.Repeat([]byte{0x85}, 32))
+	if err != nil {
+		t.Fatalf("NewRepository() error = %v", err)
+	}
+	authManager, err := stateauth.NewManager(app, "bootstrap-secret")
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+	pairing, err := authManager.CreatePairingCode(context.Background(), owner.Actor, stateauth.PairingCodeRequest{
+		Kind:        state.ActorKindDevice,
+		DisplayName: "Fabian",
+		DeviceName:  "iPad",
+	})
+	if err != nil {
+		t.Fatalf("CreatePairingCode() error = %v", err)
+	}
+	device, err := authManager.ExchangePairingCode(context.Background(), pairing.Code)
+	if err != nil {
+		t.Fatalf("ExchangePairingCode() error = %v", err)
+	}
+	registerRoute(t, repository, owner.Actor, "0198a08d-1ca1-7122-bf7d-c6f428ad7398", "owner-route-secret", newRouteKey(t))
+	registerRoute(t, repository, device.Actor, "0198a08d-1ca1-7a31-9f62-0c85e07e8a10", "device-route-secret", newRouteKey(t))
+	failing := &failingSender{}
+	service := NewService(repository, failing)
+	run := state.AgentRun{
+		ID:         "0198a08d-1ca1-7c44-8a5b-4e2f6a91b201",
+		ReminderID: "0198a08d-1ca1-75b1-9c42-7d0e5f31a8b2",
+		Status:     state.AgentRunStatusFailed,
+	}
+	err = service.NotifyRunFinished(context.Background(), run, "Weekly report")
+	if err == nil || !strings.Contains(err.Error(), owner.Actor.ID) || !strings.Contains(err.Error(), device.Actor.ID) {
+		t.Fatalf("NotifyRunFinished() error = %v", err)
+	}
+	if failing.attempts != 2 {
+		t.Fatalf("attempts = %d, want one per route", failing.attempts)
+	}
+}
+
+func TestHTTPSenderKindAllowList(t *testing.T) {
+	t.Parallel()
+
+	privateKey, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey() error = %v", err)
+	}
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		requests++
+		writer.WriteHeader(http.StatusAccepted)
+	}))
+	t.Cleanup(server.Close)
+	sender := NewHTTPSender(server.Client())
+	route := DeviceRoute{
+		RelayURL:      server.URL,
+		RouteID:       "route-id",
+		Authorization: "route-secret",
+		PublicKey:     privateKey.PublicKey().Bytes(),
+	}
+	if err := sender.Send(context.Background(), route, "run_finished", "run-01989f", []byte(`{"kind":"run_finished"}`)); err != nil {
+		t.Fatalf("Send(run_finished) error = %v", err)
+	}
+	if err := sender.Send(context.Background(), route, "heartbeat", "run-01989f", []byte(`{"kind":"heartbeat"}`)); err == nil {
+		t.Fatalf("Send(heartbeat) error = nil, want rejection")
+	}
+	if requests != 1 {
+		t.Fatalf("requests = %d, want only the run_finished send", requests)
+	}
+}
+
+func TestNotifyRunFinishedThroughRelay(t *testing.T) {
+	t.Parallel()
+
+	app, _, owner := newPushTestApplication(t)
+	repository, err := NewRepository(app, bytes.Repeat([]byte{0x96}, 32))
+	if err != nil {
+		t.Fatalf("NewRepository() error = %v", err)
+	}
+	deviceKey := newRouteKey(t)
+	routeID := "0198a08d-1ca1-7122-bf7d-c6f428ad7398"
+	capability := "run-route-secret"
+	capabilityHash := sha256.Sum256([]byte(capability))
+	dispatcher := &recordingRelayDispatcher{}
+	relayHandler := relay.NewHandler(relay.Config{
+		Repository: &singleRouteRepository{route: relay.Route{
+			ID:             routeID,
+			APNSToken:      strings.Repeat("f", 64),
+			Environment:    relay.EnvironmentSandbox,
+			CapabilityHash: capabilityHash[:],
+		}},
+		Attestor:   acceptAllAttestor{},
+		Dispatcher: dispatcher,
+	})
+	server := httptest.NewServer(relayHandler)
+	t.Cleanup(server.Close)
+	registerRouteWithURL(t, repository, owner.Actor, server.URL, routeID, capability, deviceKey)
+	service := NewService(repository, NewHTTPSender(server.Client()))
+	finishedAt := time.Date(2026, time.August, 17, 10, 0, 0, 0, time.UTC)
+	run := state.AgentRun{
+		ID:         "0198a08d-1ca1-7c44-8a5b-4e2f6a91b201",
+		ReminderID: "0198a08d-1ca1-75b1-9c42-7d0e5f31a8b2",
+		Status:     state.AgentRunStatusFailed,
+		FinishedAt: &finishedAt,
+	}
+	if err := service.NotifyRunFinished(context.Background(), run, "Secret run title"); err != nil {
+		t.Fatalf("NotifyRunFinished() error = %v", err)
+	}
+	if len(dispatcher.notifications) != 1 {
+		t.Fatalf("notifications = %#v", dispatcher.notifications)
+	}
+	notification := dispatcher.notifications[0]
+	if notification.PushType != relay.PushTypeAlert || notification.CollapseID != run.ID {
+		t.Fatalf("notification metadata = %#v", notification)
+	}
+	encodedPayload := string(notification.Payload)
+	if strings.Contains(encodedPayload, "Secret run title") || strings.Contains(encodedPayload, "failed") {
+		t.Fatalf("outer APS payload leaks plaintext or status: %s", encodedPayload)
+	}
+	var decoded struct {
+		APS struct {
+			Category string `json:"category"`
+		} `json:"aps"`
+		State struct {
+			Envelope pushcrypto.Envelope `json:"envelope"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal(notification.Payload, &decoded); err != nil {
+		t.Fatalf("decode notification payload: %v", err)
+	}
+	if decoded.APS.Category != "STATE_RUN" {
+		t.Fatalf("category = %q", decoded.APS.Category)
+	}
+	opened, err := pushcrypto.Open(deviceKey.Bytes(), decoded.State.Envelope, []byte(routeID))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(opened, &payload); err != nil {
+		t.Fatalf("opened payload is not JSON: %v", err)
+	}
+	if payload["kind"] != "run_finished" || payload["status"] != "failed" || payload["title"] != "Secret run title" || payload["run_id"] != run.ID {
+		t.Fatalf("opened payload = %#v", payload)
+	}
+}
+
+type failingSender struct {
+	attempts int
+}
+
+func (sender *failingSender) Send(context.Context, DeviceRoute, string, string, []byte) error {
+	sender.attempts++
+	return errors.New("relay unreachable")
+}
+
+func newRouteKey(t *testing.T) *ecdh.PrivateKey {
+	t.Helper()
+	key, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey() error = %v", err)
+	}
+	return key
+}
+
+func registerRoute(t *testing.T, repository *Repository, actor state.Actor, routeID string, authorization string, key *ecdh.PrivateKey) {
+	t.Helper()
+	registerRouteWithURL(t, repository, actor, "https://relay.example.com", routeID, authorization, key)
+}
+
+func registerRouteWithURL(t *testing.T, repository *Repository, actor state.Actor, relayURL string, routeID string, authorization string, key *ecdh.PrivateKey) {
+	t.Helper()
+	if _, err := repository.RegisterDevice(context.Background(), actor, RegisterDeviceInput{
+		RelayURL:      relayURL,
+		RouteID:       routeID,
+		Authorization: authorization,
+		PublicKey:     key.PublicKey().Bytes(),
+	}); err != nil {
+		t.Fatalf("RegisterDevice() error = %v", err)
+	}
+}
+
+type singleRouteRepository struct {
+	route relay.Route
+}
+
+func (repository *singleRouteRepository) CreateChallenge(context.Context, relay.Challenge) error {
+	return nil
+}
+
+func (repository *singleRouteRepository) ConsumeChallenge(context.Context, string, time.Time) error {
+	return nil
+}
+
+func (repository *singleRouteRepository) CreateRoute(_ context.Context, route relay.Route) error {
+	repository.route = route
+	return nil
+}
+
+func (repository *singleRouteRepository) GetRoute(context.Context, string) (relay.Route, error) {
+	return repository.route, nil
+}
+
+func (repository *singleRouteRepository) UpdateRouteToken(context.Context, string, string) error {
+	return nil
+}
+
+func (repository *singleRouteRepository) DeleteRoute(context.Context, string) error {
+	return nil
+}
+
+type acceptAllAttestor struct{}
+
+func (acceptAllAttestor) Verify(context.Context, relay.AttestationInput) error {
+	return nil
+}
+
+type recordingRelayDispatcher struct {
+	notifications []relay.Notification
+}
+
+func (dispatcher *recordingRelayDispatcher) Send(_ context.Context, notification relay.Notification) error {
+	dispatcher.notifications = append(dispatcher.notifications, notification)
+	return nil
 }
 
 type recordedDelivery struct {

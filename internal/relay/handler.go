@@ -357,6 +357,10 @@ func (handler *Handler) authenticateRoute(writer http.ResponseWriter, request *h
 func notificationPayload(routeID string, kind string, envelope pushcrypto.Envelope) ([]byte, PushType, error) {
 	aps := map[string]any{"content-available": 1}
 	pushType := PushTypeBackground
+	fallback := map[string]string{
+		"de": "Neue Erinnerung",
+		"en": "New reminder",
+	}
 	if kind == "reminder" {
 		pushType = PushTypeAlert
 		aps["mutable-content"] = 1
@@ -370,15 +374,30 @@ func notificationPayload(routeID string, kind string, envelope pushcrypto.Envelo
 			"body":  "New reminder",
 		}
 	}
+	if kind == "run_finished" {
+		pushType = PushTypeAlert
+		aps["mutable-content"] = 1
+		aps["sound"] = "default"
+		aps["category"] = "STATE_RUN"
+		aps["interruption-level"] = "time-sensitive"
+		aps["relevance-score"] = 1
+		// The run status lives inside the encrypted envelope, so the generic
+		// text stays status-neutral and must not leak the outcome.
+		aps["alert"] = map[string]string{
+			"title": "State",
+			"body":  "Agent run finished",
+		}
+		fallback = map[string]string{
+			"de": "Agent-Lauf abgeschlossen",
+			"en": "Agent run finished",
+		}
+	}
 	payload, err := json.Marshal(map[string]any{
 		"aps": aps,
 		"state": map[string]any{
 			"route_id": routeID,
 			"envelope": envelope,
-			"fallback": map[string]string{
-				"de": "Neue Erinnerung",
-				"en": "New reminder",
-			},
+			"fallback": fallback,
 		},
 	})
 	return payload, pushType, err
@@ -414,7 +433,7 @@ func validAttestation(proof AttestationProof) bool {
 }
 
 func validNotification(kind string, collapseID string, envelope pushcrypto.Envelope) bool {
-	if kind != "sync" && kind != "reminder" {
+	if kind != "sync" && kind != "reminder" && kind != "run_finished" {
 		return false
 	}
 	if len(collapseID) > 64 || envelope.Version != 1 {

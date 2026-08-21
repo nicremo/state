@@ -151,6 +151,120 @@ func TestRelayRejectsInvalidCapabilityAndRateLimit(t *testing.T) {
 	}
 }
 
+func TestRunFinishedNotificationIsTimeSensitiveAlert(t *testing.T) {
+	t.Parallel()
+
+	repository := newMemoryRepository()
+	repository.routes["route"] = Route{
+		ID:             "route",
+		APNSToken:      strings.Repeat("e", 64),
+		Environment:    EnvironmentProduction,
+		CapabilityHash: hashCapability("correct"),
+	}
+	dispatcher := &recordingDispatcher{}
+	handler := NewHandler(Config{
+		Repository: repository,
+		Attestor:   &recordingAttestor{},
+		Dispatcher: dispatcher,
+		Limiter:    AllowAllLimiter{},
+	})
+	envelope := pushcrypto.Envelope{
+		Version:            1,
+		EphemeralPublicKey: bytes.Repeat([]byte{3}, 32),
+		Nonce:              bytes.Repeat([]byte{4}, 12),
+		Ciphertext:         []byte("sealed run outcome"),
+	}
+	response := performRequest(t, handler, http.MethodPost, "/v1/routes/route/notifications", "correct", map[string]any{
+		"kind":        "run_finished",
+		"collapse_id": "run-01989f",
+		"envelope":    envelope,
+	})
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("send status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if len(dispatcher.notifications) != 1 {
+		t.Fatalf("notification count = %d", len(dispatcher.notifications))
+	}
+	notification := dispatcher.notifications[0]
+	if notification.PushType != PushTypeAlert || notification.CollapseID != "run-01989f" {
+		t.Fatalf("notification metadata = %#v", notification)
+	}
+	encodedPayload := string(notification.Payload)
+	if strings.Contains(encodedPayload, "sealed run outcome") {
+		t.Fatalf("payload leaks envelope plaintext: %s", encodedPayload)
+	}
+	if strings.Contains(encodedPayload, "fehlgeschlagen") || strings.Contains(encodedPayload, "failed") {
+		t.Fatalf("run_finished text must stay status-neutral: %s", encodedPayload)
+	}
+	var decoded struct {
+		APS struct {
+			MutableContent    int               `json:"mutable-content"`
+			Sound             string            `json:"sound"`
+			Category          string            `json:"category"`
+			InterruptionLevel string            `json:"interruption-level"`
+			RelevanceScore    int               `json:"relevance-score"`
+			Alert             map[string]string `json:"alert"`
+		} `json:"aps"`
+		State struct {
+			Envelope pushcrypto.Envelope `json:"envelope"`
+			Fallback map[string]string   `json:"fallback"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal(notification.Payload, &decoded); err != nil {
+		t.Fatalf("decode notification payload: %v", err)
+	}
+	if decoded.APS.Category != "STATE_RUN" || decoded.APS.InterruptionLevel != "time-sensitive" ||
+		decoded.APS.RelevanceScore != 1 || decoded.APS.MutableContent != 1 || decoded.APS.Sound != "default" {
+		t.Fatalf("run_finished aps = %#v", decoded.APS)
+	}
+	if decoded.APS.Alert["title"] != "State" || decoded.APS.Alert["body"] != "Agent run finished" {
+		t.Fatalf("run_finished alert = %#v", decoded.APS.Alert)
+	}
+	if decoded.State.Fallback["de"] != "Agent-Lauf abgeschlossen" || decoded.State.Fallback["en"] != "Agent run finished" {
+		t.Fatalf("run_finished fallback = %#v", decoded.State.Fallback)
+	}
+	if !bytes.Equal(decoded.State.Envelope.Ciphertext, envelope.Ciphertext) {
+		t.Fatalf("notification envelope = %#v", decoded.State.Envelope)
+	}
+}
+
+func TestValidNotificationKinds(t *testing.T) {
+	t.Parallel()
+
+	envelope := pushcrypto.Envelope{
+		Version:            1,
+		EphemeralPublicKey: bytes.Repeat([]byte{1}, 32),
+		Nonce:              bytes.Repeat([]byte{2}, 12),
+		Ciphertext:         []byte("opaque"),
+	}
+	for _, kind := range []string{"sync", "reminder", "run_finished"} {
+		if !validNotification(kind, "collapse", envelope) {
+			t.Fatalf("validNotification(%s) = false, want true", kind)
+		}
+	}
+	if validNotification("heartbeat", "collapse", envelope) {
+		t.Fatalf("validNotification(heartbeat) = true, want false")
+	}
+	if validNotification("run_finished", strings.Repeat("x", 65), envelope) {
+		t.Fatalf("collapse ID longer than 64 must be rejected")
+	}
+	badVersion := envelope
+	badVersion.Version = 2
+	if validNotification("run_finished", "collapse", badVersion) {
+		t.Fatalf("envelope version 2 must be rejected")
+	}
+	emptyCiphertext := envelope
+	emptyCiphertext.Ciphertext = nil
+	if validNotification("run_finished", "collapse", emptyCiphertext) {
+		t.Fatalf("empty ciphertext must be rejected")
+	}
+	oversized := envelope
+	oversized.Ciphertext = make([]byte, 3001)
+	if validNotification("run_finished", "collapse", oversized) {
+		t.Fatalf("ciphertext over 3000 bytes must be rejected")
+	}
+}
+
 func TestRegistrationChallengeIsSingleUse(t *testing.T) {
 	t.Parallel()
 
