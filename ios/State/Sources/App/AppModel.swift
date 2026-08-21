@@ -11,6 +11,22 @@ struct ReminderDraft: Sendable {
     var recurrence: RecurrenceFrequency?
     var timeZoneMode: TimeZoneMode = .floating
     var timeZoneIdentifier = TimeZone.current.identifier
+    var executionPolicyID: String?
+}
+
+/// Editable fields of an execution policy. The project is fixed at creation.
+struct PolicyDraft: Sendable {
+    var name = ""
+    var projectID = ""
+    var adapter = "claude-code"
+    var mode: ExecutionMode = .supervised
+    var allowedCapabilities: [String] = []
+    var markOccurrenceDoneOnSuccess = true
+    var notifyOnStart = false
+    var notifyOnCompletion = true
+    var notifyOnFailure = true
+    var timeoutMinutes = 30
+    var enabled = true
 }
 
 @MainActor
@@ -27,6 +43,9 @@ final class AppModel {
     private(set) var conflicts: [StoredConflict] = []
     private(set) var agents: [Actor] = []
     private(set) var devices: [Actor] = []
+    private(set) var projects: [Project] = []
+    private(set) var policies: [ExecutionPolicy] = []
+    private(set) var runners: [Runner] = []
     private(set) var isSyncing = false
     private(set) var lastSyncAt: Date?
     private(set) var isDemo = false
@@ -97,6 +116,7 @@ final class AppModel {
         defer { isSyncing = false }
         do {
             try await syncEngine.sync()
+            await syncExecutionState()
             lastSyncAt = Date()
             await reloadCache()
             await reloadActors()
@@ -106,6 +126,24 @@ final class AppModel {
             if !(error is URLError) {
                 presentedError = error.localizedDescription
             }
+        }
+    }
+
+    /// Fetches the global project/policy/runner lists after the change pull.
+    /// Best-effort: a failure keeps the cached lists and stays silent, so a
+    /// transient error never masks a successful reminder sync.
+    private func syncExecutionState() async {
+        guard let api else { return }
+        do {
+            async let fetchedProjects = api.listProjects()
+            async let fetchedPolicies = api.listPolicies()
+            async let fetchedRunners = api.listRunners()
+            let (projects, policies, runners) = try await (fetchedProjects, fetchedPolicies, fetchedRunners)
+            try await database.apply(projects: projects)
+            try await database.apply(policies: policies)
+            try await database.apply(runners: runners)
+        } catch {
+            // Cached lists stay in place until the next successful sync.
         }
     }
 
@@ -122,6 +160,7 @@ final class AppModel {
                 status: .active,
                 schedule: schedule,
                 recurrence: draft.recurrence.map { RecurrenceRule(frequency: $0, interval: 1, untilDate: nil) },
+                executionPolicyID: draft.executionPolicyID,
                 revision: 1,
                 archived: false,
                 createdAt: now,
@@ -142,6 +181,7 @@ final class AppModel {
                 description: reminder.description,
                 schedule: reminder.schedule,
                 recurrence: reminder.recurrence,
+                executionPolicyID: reminder.executionPolicyID,
                 clientTime: now,
                 source: "ios",
                 sourceExcerpt: nil,
@@ -167,7 +207,8 @@ final class AppModel {
         title: String,
         description: String,
         schedule: Schedule?,
-        recurrence: RecurrenceRule? = nil
+        recurrence: RecurrenceRule? = nil,
+        executionPolicyID: String?
     ) async {
         do {
             guard var detail = try await database.detail(id: reminder.id) else { return }
@@ -180,6 +221,7 @@ final class AppModel {
                     status: detail.reminder.status,
                     schedule: schedule,
                     recurrence: recurrence,
+                    executionPolicyID: executionPolicyID,
                     revision: expectedRevision + 1,
                     archived: detail.reminder.archived,
                     createdAt: detail.reminder.createdAt,
@@ -187,7 +229,8 @@ final class AppModel {
                 ),
                 comments: detail.comments,
                 occurrences: detail.occurrences,
-                history: detail.history
+                history: detail.history,
+                runs: detail.runs
             )
             try await database.apply(detail: detail, cursor: nil)
             if isDemo {
@@ -200,6 +243,7 @@ final class AppModel {
                 description: description,
                 schedule: schedule,
                 recurrence: recurrence,
+                executionPolicyID: executionPolicyID,
                 expectedRevision: expectedRevision,
                 clientTime: Date(),
                 source: "ios",
@@ -225,7 +269,22 @@ final class AppModel {
             title: draft.title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: draft.description,
             schedule: draft.scheduled ? makeSchedule(from: draft) : nil,
-            recurrence: draft.recurrence.map { RecurrenceRule(frequency: $0, interval: 1, untilDate: nil) }
+            recurrence: draft.recurrence.map { RecurrenceRule(frequency: $0, interval: 1, untilDate: nil) },
+            executionPolicyID: draft.executionPolicyID
+        )
+    }
+
+    /// Attaches or detaches the reminder's execution policy through the
+    /// regular update path; nil detaches and is encoded as an explicit null,
+    /// exactly like the schedule and recurrence fields.
+    func setExecutionPolicy(_ policyID: String?, on reminder: Reminder) async {
+        await updateReminder(
+            reminder,
+            title: reminder.title,
+            description: reminder.description ?? "",
+            schedule: reminder.schedule,
+            recurrence: reminder.recurrence,
+            executionPolicyID: policyID
         )
     }
 
@@ -248,7 +307,8 @@ final class AppModel {
                 reminder: detail.reminder,
                 comments: detail.comments + [comment],
                 occurrences: detail.occurrences,
-                history: detail.history
+                history: detail.history,
+                runs: detail.runs
             )
             try await database.apply(detail: detail, cursor: nil)
             if isDemo {
@@ -287,6 +347,7 @@ final class AppModel {
                     status: detail.reminder.status,
                     schedule: detail.reminder.schedule,
                     recurrence: detail.reminder.recurrence,
+                    executionPolicyID: detail.reminder.executionPolicyID,
                     revision: expectedRevision + 1,
                     archived: archived,
                     createdAt: detail.reminder.createdAt,
@@ -294,7 +355,8 @@ final class AppModel {
                 ),
                 comments: detail.comments,
                 occurrences: detail.occurrences,
-                history: detail.history
+                history: detail.history,
+                runs: detail.runs
             )
             try await database.apply(detail: detail, cursor: nil)
             if isDemo {
@@ -388,6 +450,7 @@ final class AppModel {
                     description: local.description,
                     schedule: local.schedule,
                     recurrence: local.recurrence,
+                    executionPolicyID: local.executionPolicyID,
                     expectedRevision: server.revision,
                     clientTime: Date(),
                     source: "ios-conflict-resolution",
@@ -418,6 +481,153 @@ final class AppModel {
         } catch {
             presentedError = error.localizedDescription
             return nil
+        }
+    }
+
+    func createPolicy(_ draft: PolicyDraft) async {
+        do {
+            let now = Date()
+            let provisionalID = UUIDv7.generate().uuidString.lowercased()
+            let policy = ExecutionPolicy(
+                id: provisionalID,
+                name: draft.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                projectID: draft.projectID,
+                adapter: draft.adapter,
+                mode: draft.mode,
+                allowedCapabilities: draft.allowedCapabilities,
+                markOccurrenceDoneOnSuccess: draft.markOccurrenceDoneOnSuccess,
+                notifyOnStart: draft.notifyOnStart,
+                notifyOnCompletion: draft.notifyOnCompletion,
+                notifyOnFailure: draft.notifyOnFailure,
+                timeoutMinutes: draft.timeoutMinutes,
+                enabled: draft.enabled,
+                revision: 1,
+                createdAt: now,
+                updatedAt: now
+            )
+            try await database.apply(policies: policies + [policy])
+            if isDemo {
+                await reloadCache()
+                return
+            }
+            let requestID = UUIDv7.generate().uuidString.lowercased()
+            let request = CreatePolicyRequest(
+                name: policy.name,
+                projectID: policy.projectID,
+                adapter: policy.adapter,
+                mode: policy.mode,
+                allowedCapabilities: policy.allowedCapabilities,
+                markOccurrenceDoneOnSuccess: policy.markOccurrenceDoneOnSuccess,
+                notifyOnStart: policy.notifyOnStart,
+                notifyOnCompletion: policy.notifyOnCompletion,
+                notifyOnFailure: policy.notifyOnFailure,
+                timeoutMinutes: policy.timeoutMinutes,
+                clientTime: now,
+                source: "ios",
+                clientRequestID: requestID,
+                correlationID: requestID
+            )
+            // The server assigns the real ID; the next sync's replace-all
+            // policy fetch retires the provisional row.
+            _ = try await database.enqueue(
+                method: "POST",
+                path: "/api/v1/policies",
+                body: StateJSON.encoder.encode(request),
+                entityID: provisionalID
+            )
+            await reloadCache()
+            await synchronize()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func updatePolicy(_ policy: ExecutionPolicy, draft: PolicyDraft) async {
+        do {
+            let expectedRevision = policy.revision
+            let updated = ExecutionPolicy(
+                id: policy.id,
+                name: draft.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                projectID: policy.projectID,
+                adapter: draft.adapter,
+                mode: draft.mode,
+                allowedCapabilities: draft.allowedCapabilities,
+                markOccurrenceDoneOnSuccess: draft.markOccurrenceDoneOnSuccess,
+                notifyOnStart: draft.notifyOnStart,
+                notifyOnCompletion: draft.notifyOnCompletion,
+                notifyOnFailure: draft.notifyOnFailure,
+                timeoutMinutes: draft.timeoutMinutes,
+                enabled: draft.enabled,
+                revision: expectedRevision + 1,
+                createdAt: policy.createdAt,
+                updatedAt: Date()
+            )
+            try await database.apply(policies: policies.map { $0.id == policy.id ? updated : $0 })
+            if isDemo {
+                await reloadCache()
+                return
+            }
+            let requestID = UUIDv7.generate().uuidString.lowercased()
+            let request = UpdatePolicyRequest(
+                name: updated.name,
+                adapter: updated.adapter,
+                mode: updated.mode,
+                allowedCapabilities: updated.allowedCapabilities,
+                markOccurrenceDoneOnSuccess: updated.markOccurrenceDoneOnSuccess,
+                notifyOnStart: updated.notifyOnStart,
+                notifyOnCompletion: updated.notifyOnCompletion,
+                notifyOnFailure: updated.notifyOnFailure,
+                timeoutMinutes: updated.timeoutMinutes,
+                enabled: updated.enabled,
+                expectedRevision: expectedRevision,
+                clientTime: Date(),
+                source: "ios",
+                clientRequestID: requestID,
+                correlationID: requestID
+            )
+            _ = try await database.enqueue(
+                method: "PATCH",
+                path: "/api/v1/policies/\(policy.id)",
+                body: StateJSON.encoder.encode(request),
+                entityID: policy.id
+            )
+            await reloadCache()
+            await synchronize()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    // Run mutations are direct API calls rather than queued offline
+    // mutations: a run only makes sense against the live server, and the
+    // response plus the following sync bring the cache up to date.
+    func triggerManualRun(reminderID: String, policyID: String) async {
+        guard let api, !isDemo else { return }
+        do {
+            _ = try await api.createManualRun(reminderID: reminderID, policyID: policyID)
+            await synchronize()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func approveRun(_ run: AgentRun, approved: Bool) async {
+        guard let api, !isDemo else { return }
+        do {
+            _ = try await api.approveRun(id: run.id, approved: approved, expectedRevision: run.revision)
+            await synchronize()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func cancelRun(_ run: AgentRun) async {
+        guard let api, !isDemo else { return }
+        do {
+            _ = try await api.cancelRun(id: run.id, expectedRevision: run.revision)
+            await synchronize()
+        } catch {
+            presentedError = error.localizedDescription
         }
     }
 
@@ -465,9 +675,12 @@ final class AppModel {
         do {
             let loadedReminders = try await database.reminders()
             let loadedActivity = try await database.activity()
+            projects = try await database.projects()
+            policies = try await database.policies()
+            runners = try await database.runners()
             if isDemo {
                 reminders = loadedReminders.filter { Self.demoReminderIDs.contains($0.id) }
-                activity = loadedActivity.filter { Self.demoReminderIDs.contains($0.reminderID) }
+                activity = loadedActivity.filter { $0.reminderID.map(Self.demoReminderIDs.contains) ?? false }
                 conflicts = []
             } else {
                 reminders = loadedReminders
@@ -512,6 +725,7 @@ final class AppModel {
                 prewarningMinutes: 10
             ),
             recurrence: nil,
+            executionPolicyID: Self.demoPolicyID,
             revision: 2,
             archived: false,
             createdAt: now.addingTimeInterval(-7_200),
@@ -530,6 +744,7 @@ final class AppModel {
                 prewarningMinutes: 60
             ),
             recurrence: RecurrenceRule(frequency: .monthly, interval: 1, untilDate: nil),
+            executionPolicyID: nil,
             revision: 1,
             archived: false,
             createdAt: now.addingTimeInterval(-86_400),
@@ -567,6 +782,107 @@ final class AppModel {
             serverTime: now.addingTimeInterval(-86_400),
             sourceExcerpt: String(localized: "Remind me to renew the backup restore test")
         )
+        let project = Project(
+            id: "01989f00-0000-7000-8000-000000000050",
+            name: "customer-api",
+            description: String(localized: "Customer API service"),
+            rootPathHint: "~/src/customer-api",
+            revision: 1,
+            createdAt: now.addingTimeInterval(-86_400),
+            updatedAt: now.addingTimeInterval(-86_400)
+        )
+        let policy = ExecutionPolicy(
+            id: Self.demoPolicyID,
+            name: "nightly-maintenance",
+            projectID: project.id,
+            adapter: "claude-code",
+            mode: .supervised,
+            allowedCapabilities: ["read_repository", "run_tests", "edit_repository"],
+            markOccurrenceDoneOnSuccess: true,
+            notifyOnStart: false,
+            notifyOnCompletion: true,
+            notifyOnFailure: true,
+            timeoutMinutes: 30,
+            enabled: true,
+            revision: 1,
+            createdAt: now.addingTimeInterval(-86_400),
+            updatedAt: now.addingTimeInterval(-86_400)
+        )
+        let runner = Runner(
+            id: "01989f00-0000-7000-8000-000000000052",
+            displayName: "Mac mini",
+            projects: [project.id],
+            adapters: ["claude-code", "codex"],
+            registeredAt: now.addingTimeInterval(-86_400),
+            lastSeenAt: now.addingTimeInterval(-300),
+            revision: 1
+        )
+        let runnerActor = Actor(
+            id: runner.id,
+            kind: .runner,
+            displayName: runner.displayName,
+            harness: nil,
+            deviceName: nil
+        )
+        let succeededRun = AgentRun(
+            id: "01989f00-0000-7000-8000-000000000060",
+            reminderID: first.id,
+            occurrenceID: firstOccurrence.id,
+            policyID: policy.id,
+            policyRevision: 1,
+            projectID: project.id,
+            adapter: policy.adapter,
+            runnerID: runner.id,
+            status: .succeeded,
+            idempotencyKey: "01989f00-0000-7000-8000-000000000060",
+            taskContract: demoContract(runID: "01989f00-0000-7000-8000-000000000060", policy: policy, project: project, objective: first.title),
+            contextCursor: 3,
+            leaseExpiresAt: nil,
+            requestedAt: now.addingTimeInterval(-3_600),
+            claimedAt: now.addingTimeInterval(-3_590),
+            startedAt: now.addingTimeInterval(-3_580),
+            finishedAt: now.addingTimeInterval(-3_300),
+            resultSummary: String(localized: "Notes added and the test suite is green."),
+            resultArtifactRef: nil,
+            failureCode: nil,
+            approvalCapability: nil,
+            createdByActor: Actor(id: "system", kind: .system, displayName: "State", harness: nil, deviceName: nil),
+            completedByActor: runnerActor,
+            revision: 4,
+            createdAt: now.addingTimeInterval(-3_600),
+            updatedAt: now.addingTimeInterval(-3_300)
+        )
+        let approvalRun = AgentRun(
+            id: "01989f00-0000-7000-8000-000000000061",
+            reminderID: first.id,
+            occurrenceID: nil,
+            policyID: policy.id,
+            policyRevision: 1,
+            projectID: project.id,
+            adapter: policy.adapter,
+            runnerID: runner.id,
+            status: .needsApproval,
+            idempotencyKey: "01989f00-0000-7000-8000-000000000061",
+            taskContract: demoContract(runID: "01989f00-0000-7000-8000-000000000061", policy: policy, project: project, objective: first.title),
+            contextCursor: 4,
+            leaseExpiresAt: nil,
+            requestedAt: now.addingTimeInterval(-900),
+            claimedAt: now.addingTimeInterval(-890),
+            startedAt: now.addingTimeInterval(-880),
+            finishedAt: nil,
+            resultSummary: nil,
+            resultArtifactRef: nil,
+            failureCode: nil,
+            approvalCapability: "deploy",
+            createdByActor: fabian,
+            completedByActor: nil,
+            revision: 3,
+            createdAt: now.addingTimeInterval(-900),
+            updatedAt: now.addingTimeInterval(-600)
+        )
+        try await database.apply(projects: [project])
+        try await database.apply(policies: [policy])
+        try await database.apply(runners: [runner])
         try await database.apply(
             detail: ReminderDetail(
                 reminder: first,
@@ -582,7 +898,8 @@ final class AppModel {
                     ),
                 ],
                 occurrences: [firstOccurrence],
-                history: [created, changed]
+                history: [created, changed],
+                runs: [approvalRun, succeededRun]
             ),
             cursor: nil
         )
@@ -597,8 +914,7 @@ final class AppModel {
         )
     }
 
-    private func demoOccurrence(reminder: Reminder, id: String, now: Date) -> Occurrence {
-        let schedule = reminder.schedule!
+    private func demoOccurrence(reminder: Reminder, id: String, now: Date) -> Occurrence {        let schedule = reminder.schedule!
         return Occurrence(
             id: id,
             reminderID: reminder.id,
@@ -644,10 +960,29 @@ final class AppModel {
         )
     }
 
+    private func demoContract(runID: String, policy: ExecutionPolicy, project: Project, objective: String) -> TaskContract {
+        TaskContract(
+            runID: runID,
+            correlationID: runID,
+            objective: objective,
+            acceptanceCriteria: [],
+            projectID: project.id,
+            projectName: project.name,
+            policyID: policy.id,
+            policyRevision: policy.revision,
+            contractHash: "demo",
+            allowedCapabilities: policy.allowedCapabilities,
+            timeoutMinutes: policy.timeoutMinutes,
+            completionRule: "mark_occurrence_done_on_success"
+        )
+    }
+
     private static let demoReminderIDs = [
         "01989f00-0000-7000-8000-000000000010",
         "01989f00-0000-7000-8000-000000000011",
     ]
+
+    private static let demoPolicyID = "01989f00-0000-7000-8000-000000000051"
 
     private func reloadActors() async {
         guard let api, session?.actor.kind == .owner else { return }
@@ -691,7 +1026,8 @@ final class AppModel {
                 reminder: detail.reminder,
                 comments: detail.comments,
                 occurrences: detail.occurrences.map { $0.id == id ? updated : $0 },
-                history: detail.history
+                history: detail.history,
+                runs: detail.runs
             )
             try await database.apply(detail: detail, cursor: nil)
             if isDemo {
@@ -794,6 +1130,7 @@ private struct CreateReminderRequest: Codable {
     let description: String?
     let schedule: Schedule?
     let recurrence: RecurrenceRule?
+    let executionPolicyID: String?
     let clientTime: Date
     let source: String
     let sourceExcerpt: String?
@@ -806,6 +1143,7 @@ private struct UpdateReminderRequest: Codable {
     let description: String?
     let schedule: Schedule?
     let recurrence: RecurrenceRule?
+    let executionPolicyID: String?
     let expectedRevision: Int64
     let clientTime: Date
     let source: String
@@ -817,6 +1155,7 @@ private struct UpdateReminderRequest: Codable {
         case description
         case schedule
         case recurrence
+        case executionPolicyID
         case expectedRevision
         case clientTime
         case source
@@ -837,6 +1176,11 @@ private struct UpdateReminderRequest: Codable {
             try container.encode(recurrence, forKey: .recurrence)
         } else {
             try container.encodeNil(forKey: .recurrence)
+        }
+        if let executionPolicyID {
+            try container.encode(executionPolicyID, forKey: .executionPolicyID)
+        } else {
+            try container.encodeNil(forKey: .executionPolicyID)
         }
         try container.encode(expectedRevision, forKey: .expectedRevision)
         try container.encode(clientTime, forKey: .clientTime)
@@ -873,6 +1217,41 @@ private struct CompleteOccurrenceRequest: Codable {
 
 private struct SnoozeOccurrenceRequest: Codable {
     let until: Date
+    let expectedRevision: Int64
+    let clientTime: Date
+    let source: String
+    let clientRequestID: String
+    let correlationID: String
+}
+
+private struct CreatePolicyRequest: Codable {
+    let name: String
+    let projectID: String
+    let adapter: String
+    let mode: ExecutionMode
+    let allowedCapabilities: [String]
+    let markOccurrenceDoneOnSuccess: Bool
+    let notifyOnStart: Bool
+    let notifyOnCompletion: Bool
+    let notifyOnFailure: Bool
+    let timeoutMinutes: Int
+    let clientTime: Date
+    let source: String
+    let clientRequestID: String
+    let correlationID: String
+}
+
+private struct UpdatePolicyRequest: Codable {
+    let name: String
+    let adapter: String
+    let mode: ExecutionMode
+    let allowedCapabilities: [String]
+    let markOccurrenceDoneOnSuccess: Bool
+    let notifyOnStart: Bool
+    let notifyOnCompletion: Bool
+    let notifyOnFailure: Bool
+    let timeoutMinutes: Int
+    let enabled: Bool
     let expectedRevision: Int64
     let clientTime: Date
     let source: String

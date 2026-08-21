@@ -41,6 +41,7 @@ struct OriginBadge: View {
         case .device: "iphone"
         case .harness: "terminal.fill"
         case .system: "gearshape.fill"
+        case .runner: "desktopcomputer"
         }
     }
 
@@ -50,6 +51,7 @@ struct OriginBadge: View {
         case .device: .teal
         case .harness: StateTheme.accent
         case .system: .secondary
+        case .runner: .purple
         }
     }
 }

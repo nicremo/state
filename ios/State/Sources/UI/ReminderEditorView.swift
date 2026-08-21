@@ -19,6 +19,7 @@ struct ReminderEditorView: View {
             draft.recurrence = reminder.recurrence?.frequency
             draft.timeZoneMode = reminder.schedule?.mode ?? .floating
             draft.timeZoneIdentifier = reminder.schedule?.timeZone ?? TimeZone.current.identifier
+            draft.executionPolicyID = reminder.executionPolicyID
         }
         _draft = State(initialValue: draft)
         title = reminder == nil ? "New reminder" : "Edit reminder"

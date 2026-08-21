@@ -49,6 +49,7 @@ final class StateDatabase: Sendable {
         let comments = try detail.comments.map { ($0, try StateJSON.encoder.encode($0)) }
         let occurrences = try detail.occurrences.map { ($0, try StateJSON.encoder.encode($0)) }
         let history = try detail.history.map { ($0, try StateJSON.encoder.encode($0)) }
+        let runs = try detail.runs.map { ($0, try StateJSON.encoder.encode($0)) }
         try await pool.write { database in
             try database.execute(
                 sql: """
@@ -77,6 +78,7 @@ final class StateDatabase: Sendable {
             try database.execute(sql: "DELETE FROM comment_cache WHERE reminder_id = ?", arguments: [detail.reminder.id])
             try database.execute(sql: "DELETE FROM occurrence_cache WHERE reminder_id = ?", arguments: [detail.reminder.id])
             try database.execute(sql: "DELETE FROM audit_cache WHERE reminder_id = ?", arguments: [detail.reminder.id])
+            try database.execute(sql: "DELETE FROM run_cache WHERE reminder_id = ?", arguments: [detail.reminder.id])
             for (comment, encoded) in comments {
                 try database.execute(
                     sql: "INSERT INTO comment_cache (id, reminder_id, created_at, json) VALUES (?, ?, ?, ?)",
@@ -92,7 +94,13 @@ final class StateDatabase: Sendable {
             for (event, encoded) in history {
                 try database.execute(
                     sql: "INSERT INTO audit_cache (id, reminder_id, server_time, action, json) VALUES (?, ?, ?, ?, ?)",
-                    arguments: [event.id, event.reminderID, event.serverTime, event.action, encoded]
+                    arguments: [event.id, event.reminderID ?? detail.reminder.id, event.serverTime, event.action, encoded]
+                )
+            }
+            for (run, encoded) in runs {
+                try database.execute(
+                    sql: "INSERT INTO run_cache (id, reminder_id, status, updated_at, json) VALUES (?, ?, ?, ?, ?)",
+                    arguments: [run.id, run.reminderID, run.status.rawValue, run.updatedAt, encoded]
                 )
             }
             if let cursor {
@@ -177,7 +185,9 @@ final class StateDatabase: Sendable {
                 .map { try StateJSON.decoder.decode(Occurrence.self, from: $0) }
             let history = try Data.fetchAll(database, sql: "SELECT json FROM audit_cache WHERE reminder_id = ? ORDER BY server_time", arguments: [id])
                 .map { try StateJSON.decoder.decode(AuditEvent.self, from: $0) }
-            return ReminderDetail(reminder: reminder, comments: comments, occurrences: occurrences, history: history)
+            let runs = try Data.fetchAll(database, sql: "SELECT json FROM run_cache WHERE reminder_id = ? ORDER BY updated_at DESC", arguments: [id])
+                .map { try StateJSON.decoder.decode(AgentRun.self, from: $0) }
+            return ReminderDetail(reminder: reminder, comments: comments, occurrences: occurrences, history: history, runs: runs)
         }
     }
 
@@ -208,6 +218,96 @@ final class StateDatabase: Sendable {
                 return nil
             }
             return try StateJSON.decoder.decode(Occurrence.self, from: data)
+        }
+    }
+
+    func runs(for reminderID: String) async throws -> [AgentRun] {
+        try await pool.read { database in
+            try Data.fetchAll(database, sql: "SELECT json FROM run_cache WHERE reminder_id = ? ORDER BY updated_at DESC", arguments: [reminderID])
+                .map { try StateJSON.decoder.decode(AgentRun.self, from: $0) }
+        }
+    }
+
+    func run(id: String) async throws -> AgentRun? {
+        try await pool.read { database in
+            guard let data: Data = try Data.fetchOne(database, sql: "SELECT json FROM run_cache WHERE id = ?", arguments: [id]) else {
+                return nil
+            }
+            return try StateJSON.decoder.decode(AgentRun.self, from: data)
+        }
+    }
+
+    func projects() async throws -> [Project] {
+        try await pool.read { database in
+            try Data.fetchAll(database, sql: "SELECT json FROM project_cache ORDER BY name")
+                .map { try StateJSON.decoder.decode(Project.self, from: $0) }
+        }
+    }
+
+    func policies() async throws -> [ExecutionPolicy] {
+        try await pool.read { database in
+            try Data.fetchAll(database, sql: "SELECT json FROM policy_cache ORDER BY name")
+                .map { try StateJSON.decoder.decode(ExecutionPolicy.self, from: $0) }
+        }
+    }
+
+    func runners() async throws -> [Runner] {
+        try await pool.read { database in
+            try Data.fetchAll(database, sql: "SELECT json FROM runner_cache ORDER BY display_name")
+                .map { try StateJSON.decoder.decode(Runner.self, from: $0) }
+        }
+    }
+
+    /// Replaces the project cache with the server's global list.
+    func apply(projects: [Project]) async throws {
+        let encoded = try projects.map { ($0, try StateJSON.encoder.encode($0)) }
+        try await pool.write { database in
+            try database.execute(sql: "DELETE FROM project_cache")
+            for (project, json) in encoded {
+                try database.execute(
+                    sql: "INSERT INTO project_cache (id, name, json) VALUES (?, ?, ?)",
+                    arguments: [project.id, project.name, json]
+                )
+            }
+        }
+    }
+
+    /// Replaces the policy cache with the server's global list.
+    func apply(policies: [ExecutionPolicy]) async throws {
+        let encoded = try policies.map { ($0, try StateJSON.encoder.encode($0)) }
+        try await pool.write { database in
+            try database.execute(sql: "DELETE FROM policy_cache")
+            for (policy, json) in encoded {
+                try database.execute(
+                    sql: "INSERT INTO policy_cache (id, name, enabled, json) VALUES (?, ?, ?, ?)",
+                    arguments: [policy.id, policy.name, policy.enabled, json]
+                )
+            }
+        }
+    }
+
+    /// Replaces the runner cache with the server's global list.
+    func apply(runners: [Runner]) async throws {
+        let encoded = try runners.map { ($0, try StateJSON.encoder.encode($0)) }
+        try await pool.write { database in
+            try database.execute(sql: "DELETE FROM runner_cache")
+            for (runner, json) in encoded {
+                try database.execute(
+                    sql: "INSERT INTO runner_cache (id, display_name, json) VALUES (?, ?, ?)",
+                    arguments: [runner.id, runner.displayName, json]
+                )
+            }
+        }
+    }
+
+    /// Advances the sync cursor without a reminder detail, for change pages
+    /// that carry only policy/project/runner events (no reminder ID).
+    func advanceCursor(to cursor: Int64) async throws {
+        try await pool.write { database in
+            try database.execute(
+                sql: "INSERT INTO metadata (key, value) VALUES ('cursor', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                arguments: [String(cursor)]
+            )
         }
     }
 
@@ -319,6 +419,31 @@ final class StateDatabase: Sendable {
                 table.column("fields", .blob).notNull()
                 table.column("created_at", .datetime).notNull()
                 table.column("resolved", .boolean).notNull().defaults(to: false)
+            }
+        }
+        migrator.registerMigration("v2") { database in
+            try database.create(table: "project_cache") { table in
+                table.column("id", .text).primaryKey()
+                table.column("name", .text).notNull()
+                table.column("json", .blob).notNull()
+            }
+            try database.create(table: "policy_cache") { table in
+                table.column("id", .text).primaryKey()
+                table.column("name", .text).notNull()
+                table.column("enabled", .boolean).notNull()
+                table.column("json", .blob).notNull()
+            }
+            try database.create(table: "runner_cache") { table in
+                table.column("id", .text).primaryKey()
+                table.column("display_name", .text).notNull()
+                table.column("json", .blob).notNull()
+            }
+            try database.create(table: "run_cache") { table in
+                table.column("id", .text).primaryKey()
+                table.column("reminder_id", .text).notNull().indexed().references("reminder_cache", onDelete: .cascade)
+                table.column("status", .text).notNull().indexed()
+                table.column("updated_at", .datetime).notNull()
+                table.column("json", .blob).notNull()
             }
         }
         return migrator
