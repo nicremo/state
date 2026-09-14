@@ -632,6 +632,40 @@ platform :ios do
     )
   end
 
+  desc "Upload an already verified archive to the existing internal test group"
+  lane :upload_local_update do
+    ipa = File.join(IOS_ROOT, "build/State.ipa")
+    UI.user_error!("Build State.ipa before uploading") unless File.file?(ipa)
+    upload_to_testflight(
+      api_key: connect_api_key,
+      ipa: ipa,
+      app_identifier: BUNDLE_ID,
+      distribute_external: false,
+      groups: ["Internal"],
+      changelog: "Lokale Verbindung zur neuen State Server Mac-App: Sichere Kopplung per QR-Code, Prüfung des Serverzertifikats und automatische Synchronisierung bei geöffneter App.",
+      skip_waiting_for_build_processing: false
+    )
+  end
+
+  desc "Read back one uploaded build and its internal testing state"
+  lane :local_update_status do
+    app = state_app!
+    expected = required_env("BUILD_NUMBER", "the build to verify")
+    build = Spaceship::ConnectAPI::Build.all(app_id: app.id, build_number: expected).first
+    if build.nil?
+      UI.message("Build #{expected}: not visible yet")
+      next
+    end
+    UI.message("Build #{build.version}: #{build.processing_state}, version #{build.app_version}")
+    UI.message("Internal state: #{build.build_beta_detail&.internal_build_state}")
+    available = %w[READY_FOR_BETA_TESTING IN_BETA_TESTING].include?(build.build_beta_detail&.internal_build_state)
+    UI.message("Available for internal testing: #{available}")
+    app.get_beta_groups.select(&:is_internal_group).each do |group|
+      assigned = group.fetch_builds.any? { |candidate| candidate.id == build.id }
+      UI.message("Internal group: #{group.name}, all builds: #{group.has_access_to_all_builds}, build assigned: #{assigned}")
+    end
+  end
+
   desc "Capture deterministic German and English 6.9-inch screenshots"
   lane :screenshots do
     capture_screenshots(

@@ -79,6 +79,16 @@ private struct StateLifecycle: ViewModifier {
                     await notificationCoordinator.activate(model: model)
                 }
             }
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                    guard !Task.isCancelled else { return }
+                    if model.session?.certificateFingerprint != nil, !model.isDemo {
+                        await resynchronize()
+                    }
+                }
+            }
             .onChange(of: model.session?.actor.id) { _, actorID in
                 guard actorID != nil, !model.isDemo else { return }
                 Task { await notificationCoordinator.activate(model: model) }

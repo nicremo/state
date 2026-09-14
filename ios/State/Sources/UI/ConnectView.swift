@@ -17,6 +17,8 @@ struct ConnectView: View {
     @State private var server = ""
     @State private var bootstrapToken = ""
     @State private var pairingCode = ""
+    @State private var certificateFingerprint: String?
+    @State private var scannedServer = ""
     @State private var displayName = ""
     @State private var deviceName = UIDevice.current.name
     @State private var scansCode = false
@@ -267,7 +269,8 @@ struct ConnectView: View {
                 bootstrapToken: method == .bootstrap ? bootstrapToken : nil,
                 pairingCode: method == .pairingCode ? pairingCode : nil,
                 displayName: displayName,
-                deviceName: deviceName
+                deviceName: deviceName,
+                certificateFingerprint: server.trimmingCharacters(in: .whitespacesAndNewlines) == scannedServer ? certificateFingerprint : nil
             )
             isConnecting = false
         }
@@ -279,6 +282,8 @@ struct ConnectView: View {
             return
         }
         server = payload.serverURL.absoluteString
+        scannedServer = server
+        certificateFingerprint = payload.certificateFingerprint
         if let token = payload.bootstrapToken, !token.isEmpty {
             bootstrapToken = token
             method = .bootstrap
