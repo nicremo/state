@@ -43,7 +43,20 @@ func TestDesktopCertificatePersistsAndRejectsUnsafeFiles(t *testing.T) {
 
 func TestDesktopRejectsPublicNetworkAndInvalidHost(t *testing.T) {
 	handler := desktopLANOnly(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
-	for address, expected := range map[string]int{"192.168.1.2:5000": 204, "127.0.0.1:5000": 204, "[::1]:5000": 204, "8.8.8.8:5000": 403, "garbage": 403} {
+	for address, expected := range map[string]int{
+		"192.168.1.2:5000":                204,
+		"127.0.0.1:5000":                  204,
+		"[::1]:5000":                      204,
+		"[fe80::1]:5000":                  204,
+		"[fe80::1%en0]:5000":              204,
+		"[fd00::1]:5000":                  204,
+		"[::ffff:192.168.1.2]:5000":       204,
+		"8.8.8.8:5000":                    403,
+		"[::ffff:8.8.8.8]:5000":           403,
+		"[2606:4700:4700::1111]:5000":     403,
+		"[2606:4700:4700::1111%en0]:5000": 403,
+		"garbage":                         403,
+	} {
 		r := httptest.NewRequest("GET", "/", nil)
 		r.RemoteAddr = address
 		w := httptest.NewRecorder()

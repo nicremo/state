@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/signal"
@@ -241,9 +242,10 @@ func validDesktopHost(host string) bool {
 
 func desktopLANOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		ip := net.ParseIP(host)
-		if err != nil || ip == nil || !(ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()) {
+		peer, err := netip.ParseAddrPort(r.RemoteAddr)
+		// Preserve IPv6 interface zones and normalize IPv4-mapped addresses.
+		ip := peer.Addr().Unmap()
+		if err != nil || !(ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()) {
 			http.Error(w, "local network only", http.StatusForbidden)
 			return
 		}
