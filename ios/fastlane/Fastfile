@@ -641,6 +641,7 @@ platform :ios do
       ipa: ipa,
       app_identifier: BUNDLE_ID,
       distribute_external: false,
+      submit_beta_review: false,
       groups: ["Internal"],
       changelog: "Lokale Verbindung zur neuen State Server Mac-App: Sichere Kopplung per QR-Code, Prüfung des Serverzertifikats und automatische Synchronisierung bei geöffneter App.",
       skip_waiting_for_build_processing: false
