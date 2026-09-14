@@ -73,23 +73,27 @@ final class AppModel {
         bootstrapToken: String?,
         pairingCode: String?,
         displayName: String,
-        deviceName: String
+        deviceName: String,
+        certificateFingerprint: String? = nil
     ) async {
         do {
+            let transport = try LocalServerTrust.session(serverURL: serverURL, fingerprint: certificateFingerprint)
+            defer { transport.finishTasksAndInvalidate() }
             let credential: Credential
             if let bootstrapToken, !bootstrapToken.isEmpty {
                 credential = try await APIClient.bootstrapOwner(
                     serverURL: serverURL,
                     bootstrapToken: bootstrapToken,
                     displayName: displayName,
-                    deviceName: deviceName
+                    deviceName: deviceName,
+                    session: transport
                 )
             } else if let pairingCode, !pairingCode.isEmpty {
-                credential = try await APIClient.exchangePairingCode(serverURL: serverURL, code: pairingCode)
+                credential = try await APIClient.exchangePairingCode(serverURL: serverURL, code: pairingCode, session: transport)
             } else {
                 throw StateAPIError.invalidResponse
             }
-            let newSession = ServerSession(serverURL: serverURL, actor: credential.actor)
+            let newSession = ServerSession(serverURL: serverURL, actor: credential.actor, certificateFingerprint: certificateFingerprint)
             try sessionRepository.save(session: newSession, token: credential.token)
             try configure(session: newSession, token: credential.token)
             await synchronize()
@@ -688,7 +692,7 @@ final class AppModel {
     }
 
     private func configure(session: ServerSession, token: String) throws {
-        let api = try APIClient(serverURL: session.serverURL, token: token)
+        let api = try APIClient(serverURL: session.serverURL, token: token, session: LocalServerTrust.session(serverURL: session.serverURL, fingerprint: session.certificateFingerprint))
         isDemo = false
         self.session = session
         self.api = api

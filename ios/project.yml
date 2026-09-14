@@ -25,6 +25,7 @@ targets:
     platform: iOS
     sources:
       - path: State/Sources
+      - path: ../shared/LocalTransport
       - path: State/Resources
     dependencies:
       - package: GRDB

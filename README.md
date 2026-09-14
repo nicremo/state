@@ -36,6 +36,13 @@ flowchart LR
 - Local rolling notifications with encrypted server push fallback.
 - German and English UI, Dark Mode, Dynamic Type and VoiceOver labels.
 
+## Native Mac server
+
+The [State Server menu bar app](macos/README.md) runs the server locally, displays
+an iPhone pairing QR code and keeps working when its window is closed. Build it
+with `bash macos/build.sh`. The updated iPhone client is required for local TLS
+pairing. Data stays on the Mac; synchronization requires an awake, reachable Mac.
+
 ## Quick start
 
 Requirements are Go 1.25, Docker Compose 2.39 or later and Xcode 26 for iOS development.

@@ -10,6 +10,8 @@ struct OnboardingView: View {
     @State private var deviceName = UIDevice.current.name
     @State private var scansCode = false
     @State private var isConnecting = false
+    @State private var certificateFingerprint: String?
+    @State private var scannedServer = ""
 
     var body: some View {
         NavigationStack {
@@ -45,6 +47,11 @@ struct OnboardingView: View {
                             SecureField(String(localized: "Bootstrap token"), text: $bootstrapToken)
                                 .textFieldStyle(.roundedBorder)
                                 .padding(.top, 10)
+                        }
+
+                        if certificateFingerprint != nil, server == scannedServer {
+                            Label("Lokaler Mac: Zertifikat aus dem QR-Code wird geprüft.", systemImage: "lock.shield")
+                                .font(.footnote).foregroundStyle(.secondary)
                         }
 
                         TextField(String(localized: "Your name"), text: $displayName)
@@ -136,7 +143,8 @@ struct OnboardingView: View {
                 bootstrapToken: bootstrapToken,
                 pairingCode: pairingCode,
                 displayName: displayName,
-                deviceName: deviceName
+                deviceName: deviceName,
+                certificateFingerprint: server == scannedServer ? certificateFingerprint : nil
             )
             isConnecting = false
         }
@@ -148,6 +156,8 @@ struct OnboardingView: View {
             return
         }
         server = payload.serverURL.absoluteString
+        scannedServer = server
+        certificateFingerprint = payload.certificateFingerprint
         bootstrapToken = payload.bootstrapToken ?? ""
         pairingCode = payload.pairingCode ?? ""
     }

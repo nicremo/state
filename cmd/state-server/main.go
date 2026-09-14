@@ -32,6 +32,7 @@ type applicationConfig struct {
 }
 
 type application struct {
+	auth       *stateauth.Manager
 	handler    http.Handler
 	pocketBase *pocketbase.PocketBase
 	repository *store.PocketBaseRepository
@@ -56,6 +57,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger)
 	switch command {
 	case "serve":
 		return runServe(args, stderr, logger)
+	case "desktop":
+		return runDesktop(args, os.Stdin, stdout, stderr, logger)
 	case "bootstrap-token":
 		return runBootstrapToken(args, stdout, stderr)
 	case "verify-audit":
@@ -204,6 +207,7 @@ func newApplication(config applicationConfig) (*application, error) {
 	handler.Handle("/mcp", mcpHandler)
 	handler.Handle("/", restHandler)
 	return &application{
+		auth:       authManager,
 		handler:    handler,
 		pocketBase: pb,
 		repository: repository,
