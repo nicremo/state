@@ -250,7 +250,10 @@ final class PushRegistrationService {
         var relay = components
         relay.user = nil
         relay.password = nil
+        relay.query = nil
+        relay.fragment = nil
         relay.host = host.hasPrefix("state.") ? "relay." + host.dropFirst("state.".count) : "relay." + host
+        if relay.path == "/" { relay.path = "" }
         guard let url = relay.url, isUsableRelay(url) else { return nil }
         return url
     }

@@ -46,7 +46,9 @@ struct SettingsView: View {
 
                 connectionSection
                 syncSection
+                #if os(iOS)
                 pushRelaySection
+                #endif
 
                 if model.session?.actor.kind == .owner {
                     agentSection

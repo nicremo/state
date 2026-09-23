@@ -7,6 +7,7 @@ final class PushRelayTests: XCTestCase {
         let cases: [(server: String, configured: String?, expected: String?)] = [
             ("https://state.example.com", nil, "https://relay.example.com"),
             ("https://example.com", nil, "https://relay.example.com"),
+            ("https://state.example.com/?x=1", nil, "https://relay.example.com"),
             ("https://mac.local:9847", nil, nil),
             ("https://192.168.1.20:9847", nil, nil),
             ("https://mac.local:9847", "https://relay.example.com", "https://relay.example.com"),

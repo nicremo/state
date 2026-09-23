@@ -22,6 +22,31 @@ State synchronizes on foreground and every 15 seconds while the app is active.
 The Mac must be awake and reachable. Previously synchronized reminders and local
 notifications remain available offline; no continuous iOS background polling is promised.
 
+## Push outside the home network
+
+A Mac server stays in the local network, so the iPhone cannot reach it while it is away.
+The optional State relay closes that gap: the iPhone registers its APNs route at a public
+relay, and the Mac server sends end to end encrypted envelopes to that address. The relay
+only forwards sealed envelopes and never sees plaintext (see
+`docs/adr/0003-plaintext-blind-push-relay.md`), and the Mac needs outbound access to the
+relay, no inbound connection from the internet.
+
+Run the relay from the VPS deploy kit in `deploy/` and give it its own public name, for
+example `https://relay.example.com`. On the Mac open State Server, enter that address under
+**Push unterwegs (optional)** and press **Übernehmen**. The app stores the address as
+`state.desktop.relay-url`, restarts the server with `--relay-url`, and the status line and
+every new pairing QR code then carry it as the `relay` parameter. An empty field keeps the
+server in local-only mode, and the server rejects anything that is not an absolute HTTPS
+address without credentials, query or fragment.
+
+The iPhone stores the address with the server session, not globally. Scanning the QR code
+copies it into the session, and the **Push relay** section in the settings shows it, changes
+it or removes it later. A session without a relay does not register for push at all: the
+settings then say `Kein Relay: Mitteilungen nur lokal und im WLAN`, which is the normal
+state for a Mac in the home network. Addresses are never derived from a `.local` name or a
+private IP address any more, because `relay.<name>.local` does not exist and a failed
+registration would look like a broken relay.
+
 ## Release evidence
 
 - Version 1.0.0, build 2609140030.
