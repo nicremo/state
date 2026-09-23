@@ -31,6 +31,7 @@ type relayConfig struct {
 	apnsTopic          string
 	apnsPrivateKeyPath string
 	version            string
+	logger             *slog.Logger
 }
 
 type relayApplication struct {
@@ -88,6 +89,7 @@ func runServe(args []string, stderr io.Writer, logger *slog.Logger) error {
 		apnsTopic:          *apnsTopic,
 		apnsPrivateKeyPath: *apnsPrivateKeyPath,
 		version:            version,
+		logger:             logger,
 	})
 	if err != nil {
 		return err
@@ -175,7 +177,7 @@ func newRelayApplication(config relayConfig) (*relayApplication, error) {
 	handler := relay.NewHandler(relay.Config{
 		Repository: repository,
 		Attestor:   attestor,
-		Dispatcher: dispatcher,
+		Dispatcher: relay.NewLoggingDispatcher(dispatcher, config.logger),
 		Limiter:    relay.NewTokenBucketLimiter(120, time.Minute, time.Now),
 		Version:    config.version,
 	})
