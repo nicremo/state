@@ -1,5 +1,9 @@
+# The listing needs both device classes while TARGETED_DEVICE_FAMILY is "1,2".
+# The iPad captures are the raw material for the framed 13 inch set, so the
+# screenshots lane copies the iPhone files only and leaves the frames alone.
 devices([
-  "iPhone 16 Pro Max"
+  "iPhone 16 Pro Max",
+  "iPad Pro 13-inch (M4)"
 ])
 
 languages([

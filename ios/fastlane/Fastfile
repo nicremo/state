@@ -226,19 +226,29 @@ def validate_privacy_declaration!
   UI.success("Privacy declaration validated: #{declaration.length} categories.")
 end
 
-platform :ios do
-  before_all do
-    sh("xcodegen generate --spec #{File.join(IOS_ROOT, 'project.yml')} --project #{IOS_ROOT}")
-  end
+# Every lane builds on the project that project.yml describes, and the macOS
+# lanes are not part of `platform :ios`, so the regeneration happens outside the
+# platform blocks. A block at that level runs for platform lanes as well.
+before_all do
+  sh("xcodegen generate --spec #{File.join(IOS_ROOT, 'project.yml')} --project #{IOS_ROOT}")
+end
 
+# The App Store Connect key is requested outside the platform blocks because the
+# macOS beta lane runs at the top level and cannot call the lane below, which
+# belongs to `platform :ios`.
+def request_api_key!
+  app_store_connect_api_key(
+    key_id: asc_key_id,
+    issuer_id: asc_issuer_id,
+    key_filepath: asc_key_path,
+    duration: 1_200,
+    in_house: false
+  )
+end
+
+platform :ios do
   private_lane :connect_api_key do
-    app_store_connect_api_key(
-      key_id: asc_key_id,
-      issuer_id: asc_issuer_id,
-      key_filepath: asc_key_path,
-      duration: 1_200,
-      in_house: false
-    )
+    request_api_key!
   end
 
   desc "Verify the local release toolchain and run all tests"
@@ -593,7 +603,7 @@ platform :ios do
     UI.message("PRIVACY      #{PRIVACY_DETAILS_PATH} exists=#{File.exist?(PRIVACY_DETAILS_PATH)}")
   end
 
-  desc "Run unit and UI tests"
+  desc "Run unit and UI tests on iPhone and build the iPad layout"
   lane :test do
     scan(
       project: PROJECT_PATH,
@@ -601,6 +611,14 @@ platform :ios do
       device: ENV.fetch("SCAN_DEVICE", "iPhone 16 Pro"),
       clean: true,
       code_coverage: true
+    )
+    # The iPad has a layout of its own, so it has to keep compiling even when
+    # only the iPhone test suite runs. Testing it as well would double the
+    # duration of every invocation for no additional coverage.
+    sh(
+      "xcodebuild -project #{PROJECT_PATH} -scheme State " \
+      "-destination 'platform=iOS Simulator,name=iPad (A16),OS=18.5' " \
+      "CODE_SIGNING_ALLOWED=NO build"
     )
   end
 
@@ -948,4 +966,55 @@ platform :ios do
     })
     UI.success("State is now a free app with #{BASE_TERRITORY} as the base territory.")
   end
+end
+
+# The macOS app is the same app for a different platform: same project, same
+# bundle identifier, same version. Its lanes sit at the top level instead of in
+# a `platform :mac` block because `default_platform(:ios)` only resolves a bare
+# `fastlane mac_beta` against lanes that are not inside a platform block, and
+# the release checklist calls these lanes without a platform prefix.
+MAC_SCHEME = "StateMac"
+MAC_DERIVED_DATA_PATH = File.join(IOS_ROOT, "build/DerivedData-mac")
+MAC_OUTPUT_PATH = File.join(IOS_ROOT, "build/mac")
+MAC_PKG_PATH = File.join(MAC_OUTPUT_PATH, "State.pkg")
+
+desc "Build the macOS app without signing as a smoke test"
+lane :mac_test do
+  sh(
+    "xcodebuild -project #{PROJECT_PATH} -scheme #{MAC_SCHEME} " \
+    "-destination 'platform=macOS' -derivedDataPath #{MAC_DERIVED_DATA_PATH} " \
+    "CODE_SIGNING_ALLOWED=NO build"
+  )
+end
+
+desc "Create a signed macOS App Store package"
+lane :mac_build do
+  # The Mac app carries the same version as the iOS app, so the build number
+  # comes from the same source: BUILD_NUMBER if it is set, a UTC stamp otherwise.
+  build_number = state_build_number
+  UI.message("Packaging State for macOS with CURRENT_PROJECT_VERSION=#{build_number}")
+  build_mac_app(
+    project: PROJECT_PATH,
+    scheme: MAC_SCHEME,
+    configuration: "Release",
+    export_method: "app-store",
+    output_directory: MAC_OUTPUT_PATH,
+    output_name: "State",
+    xcargs: "-allowProvisioningUpdates CURRENT_PROJECT_VERSION=#{build_number}"
+  )
+end
+
+desc "Upload an internal TestFlight build of the macOS app"
+lane :mac_beta do
+  api_key = request_api_key!
+  mac_build
+  # A pkg can carry the platform, but reading it back is a guess and an
+  # unreadable package turns into an interactive prompt, so name it here.
+  upload_to_testflight(
+    api_key: api_key,
+    pkg: MAC_PKG_PATH,
+    app_platform: "osx",
+    distribute_external: false,
+    skip_waiting_for_build_processing: true
+  )
 end
