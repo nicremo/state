@@ -31,7 +31,7 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger) error {
 	if len(args) == 0 {
-		return errors.New("usage: statectl <pair|mcp|doctor|rotate|revoke|install|uninstall|unpair|project|version>")
+		return errors.New("usage: statectl <pair|mcp|doctor|rotate|revoke|install|uninstall|unpair|project|reminder|version>")
 	}
 	switch args[0] {
 	case "pair":
@@ -52,6 +52,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger)
 		return runUnpair(args[1:], stdout, stderr)
 	case "project":
 		return runProject(args[1:], stdout, stderr)
+	case "reminder":
+		return runReminder(args[1:], stdout, stderr)
 	case "version":
 		_, err := fmt.Fprintln(stdout, version)
 		return err
