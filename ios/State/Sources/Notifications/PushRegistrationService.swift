@@ -125,7 +125,7 @@ private actor RelayClient {
 
 @MainActor
 final class PushRegistrationService {
-    private let defaults = UserDefaults(suiteName: "group.com.fabincrm.state") ?? .standard
+    private let defaults = Platform.sharedDefaults
     private let routeCapabilityAccount = "relay-route-capability"
     private let routeIDKey = "state.relay-route-id"
     /// Builds before this change cached a derived relay globally. The relay now

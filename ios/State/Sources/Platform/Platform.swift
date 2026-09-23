@@ -20,6 +20,31 @@ enum Platform {
         #endif
     }
 
+    /// Where the database lives. iPhone and iPad share it with the
+    /// notification extension through the app group; the sandboxed Mac app
+    /// has no extension and no app group entitlement, so it uses its own
+    /// container. macOS returns a group path even without the entitlement,
+    /// and the sandbox then denies every write to it.
+    nonisolated static var sharedContainerURL: URL {
+        #if os(iOS)
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        #else
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        #endif
+    }
+
+    /// Settings the app and, on iOS, its extension both read.
+    nonisolated static var sharedDefaults: UserDefaults {
+        #if os(iOS)
+        UserDefaults(suiteName: appGroup) ?? .standard
+        #else
+        .standard
+        #endif
+    }
+
+    nonisolated private static let appGroup = "group.com.fabincrm.state"
+
     /// The owner's name where the system knows it (the Mac account's full
     /// name), otherwise empty so the field asks for it.
     static var ownerName: String {
