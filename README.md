@@ -98,6 +98,19 @@ statectl revoke --profile codex
 statectl uninstall --harness codex
 ```
 
+### Terminal fallback
+
+Agents without MCP support, and humans in a terminal, use the same reminder tools through `statectl`. These commands are another client of the same audited contract, never a second store:
+
+```bash
+statectl reminder create --profile codex \
+  --title "Monthly reporting" \
+  --source-text "I need to do the monthly report every month" \
+  --date 2026-10-01 --time 09:00 --tz Europe/Berlin --repeat monthly
+```
+
+`statectl reminder add-context`, `schedule`, `show` and `search` cover the rest. Every write carries the original wording in `--source-text`, and `--json` prints the raw server response for scripts.
+
 ## MCP tools
 
 The Streamable HTTP endpoint is `/mcp`. It exposes:
