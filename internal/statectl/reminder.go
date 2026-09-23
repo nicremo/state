@@ -2,6 +2,7 @@ package statectl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -197,4 +198,261 @@ func validateReminderDate(field string, value string) error {
 		return fmt.Errorf("%s %q must be YYYY-MM-DD", field, value)
 	}
 	return nil
+}
+
+// StoredReminder is the confirmation of a write, decoded from the reminder the
+// server returned. Raw keeps the untouched object for JSON output.
+type StoredReminder struct {
+	ID       string          `json:"id"`
+	Title    string          `json:"title"`
+	Revision int64           `json:"revision"`
+	Schedule *state.Schedule `json:"schedule,omitempty"`
+	Raw      json.RawMessage `json:"-"` // full reminder object as returned
+}
+
+const (
+	defaultSearchLimit = 20
+	maxSearchLimit     = 100
+)
+
+// ReminderService is the terminal client of the State reminder tools. It owns
+// no persistence: every method maps to exactly one MCP tool call on the
+// session given to NewReminderService.
+type ReminderService struct {
+	caller    ToolCaller
+	localZone string
+	newID     func() (string, error)
+}
+
+func NewReminderService(caller ToolCaller, localZone string, newID func() (string, error)) *ReminderService {
+	return &ReminderService{caller: caller, localZone: localZone, newID: newID}
+}
+
+// Create captures one reminder through create_reminder. Success is reported
+// only after the server confirms storage.
+func (service *ReminderService) Create(ctx context.Context, options CreateReminderOptions) (StoredReminder, error) {
+	arguments, err := BuildCreateReminderArguments(options, service.localZone, service.newID)
+	if err != nil {
+		return StoredReminder{}, err
+	}
+	result, err := service.caller.CallTool(ctx, &mcp.CallToolParams{Name: "create_reminder", Arguments: arguments})
+	if err != nil {
+		return StoredReminder{}, err
+	}
+	return decodeStoredReminder(result)
+}
+
+// AddContext appends comment context to an existing reminder.
+func (service *ReminderService) AddContext(ctx context.Context, reminderID, body, sourceText string) error {
+	if strings.TrimSpace(reminderID) == "" {
+		return errors.New("reminder id is required")
+	}
+	if strings.TrimSpace(body) == "" {
+		return errors.New("comment body is required")
+	}
+	requestID, err := resolveRequestID("", service.newID)
+	if err != nil {
+		return err
+	}
+	result, err := service.caller.CallTool(ctx, &mcp.CallToolParams{
+		Name: "add_comment",
+		Arguments: map[string]any{
+			"reminder_id":       reminderID,
+			"body":              body,
+			"source_text":       sourceText,
+			"client_request_id": requestID,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = decodeConfirmation(result)
+	return err
+}
+
+// Reschedule reads the current revision and writes the new schedule with
+// optimistic revision checking. Clear flags win over replacement values.
+func (service *ReminderService) Reschedule(ctx context.Context, reminderID string, options ScheduleOptions, clearSchedule, clearRepeat bool, sourceText string) (StoredReminder, error) {
+	if strings.TrimSpace(reminderID) == "" {
+		return StoredReminder{}, errors.New("reminder id is required")
+	}
+	if clearSchedule && options.Date != "" {
+		return StoredReminder{}, errors.New("--clear cannot be combined with --date")
+	}
+	if clearRepeat && options.Repeat != "" {
+		return StoredReminder{}, errors.New("--clear-repeat cannot be combined with --repeat")
+	}
+	schedule, recurrence, err := BuildSchedule(options, service.localZone)
+	if err != nil {
+		return StoredReminder{}, err
+	}
+	revision, err := service.currentRevision(ctx, reminderID)
+	if err != nil {
+		return StoredReminder{}, err
+	}
+	requestID, err := resolveRequestID("", service.newID)
+	if err != nil {
+		return StoredReminder{}, err
+	}
+	arguments := map[string]any{
+		"reminder_id":       reminderID,
+		"expected_revision": revision,
+		"client_request_id": requestID,
+		"source_text":       sourceText,
+	}
+	switch {
+	case clearSchedule:
+		arguments["clear_schedule"] = true
+	case schedule != nil:
+		arguments["schedule"] = schedule
+	}
+	switch {
+	case clearRepeat:
+		arguments["clear_recurrence"] = true
+	case recurrence != nil:
+		arguments["recurrence"] = recurrence
+	}
+	result, err := service.caller.CallTool(ctx, &mcp.CallToolParams{Name: "update_reminder", Arguments: arguments})
+	if err != nil {
+		return StoredReminder{}, err
+	}
+	return decodeStoredReminder(result)
+}
+
+// Show returns the complete reminder detail exactly as the server sent it.
+func (service *ReminderService) Show(ctx context.Context, reminderID string) (json.RawMessage, error) {
+	if strings.TrimSpace(reminderID) == "" {
+		return nil, errors.New("reminder id is required")
+	}
+	return service.callRaw(ctx, "get_reminder", map[string]any{"reminder_id": reminderID})
+}
+
+// Search returns the raw search result. A missing limit becomes 20 and an
+// oversized limit is clamped to 100.
+func (service *ReminderService) Search(ctx context.Context, query string, limit int) (json.RawMessage, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, errors.New("query is required")
+	}
+	if limit <= 0 {
+		limit = defaultSearchLimit
+	}
+	if limit > maxSearchLimit {
+		limit = maxSearchLimit
+	}
+	return service.callRaw(ctx, "search_reminders", map[string]any{"query": query, "limit": limit})
+}
+
+func (service *ReminderService) callRaw(ctx context.Context, name string, arguments map[string]any) (json.RawMessage, error) {
+	result, err := service.caller.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: arguments})
+	if err != nil {
+		return nil, err
+	}
+	if result.IsError {
+		return nil, errors.New(toolErrorText(result))
+	}
+	var raw json.RawMessage
+	if err := decodeToolResult(result, &raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func (service *ReminderService) currentRevision(ctx context.Context, reminderID string) (int64, error) {
+	raw, err := service.Show(ctx, reminderID)
+	if err != nil {
+		return 0, err
+	}
+	detail := struct {
+		Reminder struct {
+			Revision int64 `json:"revision"`
+		} `json:"reminder"`
+	}{}
+	if err := json.Unmarshal(raw, &detail); err != nil {
+		return 0, fmt.Errorf("decode current revision: %w", err)
+	}
+	return detail.Reminder.Revision, nil
+}
+
+func decodeStoredReminder(result *mcp.CallToolResult) (StoredReminder, error) {
+	reminder, err := decodeConfirmation(result)
+	if err != nil {
+		return StoredReminder{}, err
+	}
+	if len(reminder) == 0 {
+		return StoredReminder{}, errors.New("server did not return the reminder")
+	}
+	stored := StoredReminder{Raw: reminder}
+	if err := json.Unmarshal(reminder, &stored); err != nil {
+		return StoredReminder{}, fmt.Errorf("decode stored reminder: %w", err)
+	}
+	return stored, nil
+}
+
+// decodeConfirmation reads the stored flag every mutating tool returns and
+// hands back the reminder object when the tool sent one.
+func decodeConfirmation(result *mcp.CallToolResult) (json.RawMessage, error) {
+	if result == nil {
+		return nil, errors.New("tool returned no result")
+	}
+	if result.IsError {
+		return nil, errors.New(toolErrorText(result))
+	}
+	confirmation := struct {
+		Stored   bool            `json:"stored"`
+		Reminder json.RawMessage `json:"reminder"`
+	}{}
+	if err := decodeToolResult(result, &confirmation); err != nil {
+		return nil, err
+	}
+	if !confirmation.Stored {
+		return nil, errors.New("server did not confirm the reminder")
+	}
+	return confirmation.Reminder, nil
+}
+
+// decodeToolResult decodes whatever shape a tool result carries: structured
+// content when the server sent it, otherwise the JSON text block.
+func decodeToolResult(result *mcp.CallToolResult, target any) error {
+	if result == nil {
+		return errors.New("tool returned no result")
+	}
+	if result.StructuredContent != nil {
+		encoded, err := json.Marshal(result.StructuredContent)
+		if err != nil {
+			return fmt.Errorf("encode tool result: %w", err)
+		}
+		if err := json.Unmarshal(encoded, target); err != nil {
+			return fmt.Errorf("decode tool result: %w", err)
+		}
+		return nil
+	}
+	for _, content := range result.Content {
+		text, ok := content.(*mcp.TextContent)
+		if !ok {
+			continue
+		}
+		if err := json.Unmarshal([]byte(text.Text), target); err != nil {
+			return fmt.Errorf("decode tool result text: %w", err)
+		}
+		return nil
+	}
+	return errors.New("tool returned no structured content")
+}
+
+func toolErrorText(result *mcp.CallToolResult) string {
+	parts := make([]string, 0, len(result.Content))
+	for _, content := range result.Content {
+		text, ok := content.(*mcp.TextContent)
+		if !ok {
+			continue
+		}
+		if trimmed := strings.TrimSpace(text.Text); trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	if len(parts) == 0 {
+		return "tool call failed"
+	}
+	return strings.Join(parts, ": ")
 }

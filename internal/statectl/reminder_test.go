@@ -2,6 +2,8 @@ package statectl
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -370,3 +372,342 @@ func TestBuildCreateReminderArgumentsPropagatesIDFailure(t *testing.T) {
 }
 
 var _ ToolCaller = (*mcp.ClientSession)(nil)
+
+// fakeCaller records every tool call and answers from a fixed result table.
+type fakeCaller struct {
+	calls   []*mcp.CallToolParams
+	results map[string]*mcp.CallToolResult
+}
+
+func (fake *fakeCaller) CallTool(_ context.Context, params *mcp.CallToolParams) (*mcp.CallToolResult, error) {
+	fake.calls = append(fake.calls, params)
+	result, ok := fake.results[params.Name]
+	if !ok {
+		return nil, fmt.Errorf("unexpected tool %s", params.Name)
+	}
+	return result, nil
+}
+
+func (fake *fakeCaller) callNames() []string {
+	names := make([]string, 0, len(fake.calls))
+	for _, call := range fake.calls {
+		names = append(names, call.Name)
+	}
+	return names
+}
+
+func (fake *fakeCaller) call(t *testing.T, name string) *mcp.CallToolParams {
+	t.Helper()
+
+	for _, call := range fake.calls {
+		if call.Name == name {
+			return call
+		}
+	}
+	t.Fatalf("no call to %s, got %v", name, fake.callNames())
+	return nil
+}
+
+// storedReminderResult mirrors the exact shape the state MCP server returns.
+func storedReminderResult(stored bool, id string, title string, revision int64) *mcp.CallToolResult {
+	reminder := map[string]any{
+		"id":       id,
+		"title":    title,
+		"status":   "active",
+		"revision": revision,
+		"archived": false,
+	}
+	if stored {
+		reminder["schedule"] = map[string]any{
+			"local_date":         "2026-10-01",
+			"local_time":         "09:00",
+			"time_zone":          "Europe/Berlin",
+			"mode":               "fixed",
+			"prewarning_minutes": 30,
+		}
+	}
+	return &mcp.CallToolResult{StructuredContent: map[string]any{"stored": stored, "reminder": reminder}}
+}
+
+func toolErrorResult(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+	}
+}
+
+func sequenceID() func() (string, error) {
+	index := 0
+	return func() (string, error) {
+		index++
+		return fmt.Sprintf("01990000-0000-7000-8000-%012d", index), nil
+	}
+}
+
+func newTestService(caller ToolCaller) *ReminderService {
+	return NewReminderService(caller, "Europe/Berlin", sequenceID())
+}
+
+func TestCreateRequiresStoredConfirmation(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCaller{results: map[string]*mcp.CallToolResult{
+		"create_reminder": storedReminderResult(false, testReminderID, "Monthly reporting", 1),
+	}}
+	_, err := newTestService(fake).Create(context.Background(), CreateReminderOptions{
+		Title:      "Monthly reporting",
+		SourceText: "I need to do the monthly report every month",
+	})
+	if err == nil || !strings.Contains(err.Error(), "server did not confirm the reminder") {
+		t.Fatalf("Create() error = %v, want a missing stored confirmation", err)
+	}
+}
+
+func TestCreateReturnsReminder(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCaller{results: map[string]*mcp.CallToolResult{
+		"create_reminder": storedReminderResult(true, testReminderID, "Monthly reporting", 1),
+	}}
+	stored, err := newTestService(fake).Create(context.Background(), CreateReminderOptions{
+		Title:       "Monthly reporting",
+		Description: "Prepare the report for the board.",
+		SourceText:  "I need to do the monthly report every month",
+		RequestID:   testReminderID,
+		Schedule: ScheduleOptions{
+			Date:       "2026-10-01",
+			Time:       "09:00",
+			TimeZone:   "Europe/Berlin",
+			Prewarning: 30,
+			Repeat:     "monthly",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if stored.ID != testReminderID || stored.Title != "Monthly reporting" || stored.Revision != 1 {
+		t.Fatalf("Create() = %#v", stored)
+	}
+	if stored.Schedule == nil || stored.Schedule.LocalTime != "09:00" {
+		t.Fatalf("Create() schedule = %#v", stored.Schedule)
+	}
+	if len(stored.Raw) == 0 {
+		t.Fatal("Create() kept no raw reminder")
+	}
+	if names := fake.callNames(); len(names) != 1 || names[0] != "create_reminder" {
+		t.Fatalf("Create() calls = %v", names)
+	}
+}
+
+func TestCreateSurfacesToolErrors(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCaller{results: map[string]*mcp.CallToolResult{
+		"create_reminder": toolErrorResult("validation failed"),
+	}}
+	_, err := newTestService(fake).Create(context.Background(), CreateReminderOptions{
+		Title:      "Monthly reporting",
+		SourceText: "I need to do the monthly report every month",
+	})
+	if err == nil || !strings.Contains(err.Error(), "validation failed") {
+		t.Fatalf("Create() error = %v, want the tool error text", err)
+	}
+}
+
+func TestAddContextRejectsEmptyBody(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCaller{results: map[string]*mcp.CallToolResult{}}
+	err := newTestService(fake).AddContext(context.Background(), testReminderID, "   ", "add context")
+	if err == nil || !strings.Contains(err.Error(), "body") {
+		t.Fatalf("AddContext() error = %v, want an empty body error", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("AddContext() called %v, want no tool call", fake.callNames())
+	}
+}
+
+func TestAddContextCallsAddComment(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCaller{results: map[string]*mcp.CallToolResult{
+		"add_comment": {StructuredContent: map[string]any{"stored": true, "comment": map[string]any{"id": "comment-1"}}},
+	}}
+	err := newTestService(fake).AddContext(context.Background(), testReminderID, "Ask finance for the numbers.", "add context to the report")
+	if err != nil {
+		t.Fatalf("AddContext() error = %v", err)
+	}
+	call := fake.call(t, "add_comment")
+	arguments := call.Arguments.(map[string]any)
+	if arguments["reminder_id"] != testReminderID {
+		t.Fatalf("add_comment reminder_id = %#v", arguments["reminder_id"])
+	}
+	if arguments["body"] != "Ask finance for the numbers." {
+		t.Fatalf("add_comment body = %#v", arguments["body"])
+	}
+	if arguments["source_text"] != "add context to the report" {
+		t.Fatalf("add_comment source_text = %#v", arguments["source_text"])
+	}
+	if arguments["client_request_id"] == "" || arguments["client_request_id"] == nil {
+		t.Fatalf("add_comment client_request_id = %#v", arguments["client_request_id"])
+	}
+}
+
+func TestRescheduleUsesCurrentRevision(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCaller{results: map[string]*mcp.CallToolResult{
+		"get_reminder": {StructuredContent: map[string]any{
+			"reminder": map[string]any{"id": testReminderID, "title": "Monthly reporting", "revision": 7},
+		}},
+		"update_reminder": storedReminderResult(true, testReminderID, "Monthly reporting", 8),
+	}}
+	stored, err := newTestService(fake).Reschedule(context.Background(), testReminderID, ScheduleOptions{
+		Date:     "2026-11-01",
+		Time:     "09:00",
+		TimeZone: "Europe/Berlin",
+	}, false, false, "move the report to November")
+	if err != nil {
+		t.Fatalf("Reschedule() error = %v", err)
+	}
+	if stored.Revision != 8 {
+		t.Fatalf("Reschedule() revision = %d, want 8", stored.Revision)
+	}
+	if names := fake.callNames(); len(names) != 2 || names[0] != "get_reminder" || names[1] != "update_reminder" {
+		t.Fatalf("Reschedule() calls = %v", names)
+	}
+	arguments := fake.call(t, "update_reminder").Arguments.(map[string]any)
+	if arguments["expected_revision"] != int64(7) {
+		t.Fatalf("update_reminder expected_revision = %#v, want 7", arguments["expected_revision"])
+	}
+	if arguments["reminder_id"] != testReminderID {
+		t.Fatalf("update_reminder reminder_id = %#v", arguments["reminder_id"])
+	}
+	schedule, ok := arguments["schedule"].(*state.Schedule)
+	if !ok || schedule.LocalDate != "2026-11-01" {
+		t.Fatalf("update_reminder schedule = %#v", arguments["schedule"])
+	}
+	if _, present := arguments["clear_schedule"]; present {
+		t.Fatal("update_reminder sent clear_schedule for a dated reschedule")
+	}
+	if _, present := arguments["title"]; present {
+		t.Fatal("update_reminder sent an unchanged title")
+	}
+}
+
+func TestRescheduleSendsClearFlags(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCaller{results: map[string]*mcp.CallToolResult{
+		"get_reminder": {StructuredContent: map[string]any{
+			"reminder": map[string]any{"id": testReminderID, "title": "Monthly reporting", "revision": 3},
+		}},
+		"update_reminder": storedReminderResult(true, testReminderID, "Monthly reporting", 4),
+	}}
+	_, err := newTestService(fake).Reschedule(context.Background(), testReminderID, ScheduleOptions{}, true, true, "drop the schedule")
+	if err != nil {
+		t.Fatalf("Reschedule() error = %v", err)
+	}
+	arguments := fake.call(t, "update_reminder").Arguments.(map[string]any)
+	if arguments["clear_schedule"] != true || arguments["clear_recurrence"] != true {
+		t.Fatalf("update_reminder arguments = %#v", arguments)
+	}
+	if _, present := arguments["schedule"]; present {
+		t.Fatal("update_reminder sent a schedule while clearing it")
+	}
+	if _, present := arguments["recurrence"]; present {
+		t.Fatal("update_reminder sent a recurrence while clearing it")
+	}
+}
+
+func TestRescheduleRejectsClearWithDate(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCaller{results: map[string]*mcp.CallToolResult{}}
+	_, err := newTestService(fake).Reschedule(context.Background(), testReminderID, ScheduleOptions{Date: "2026-11-01"}, true, false, "reschedule")
+	if err == nil {
+		t.Fatal("Reschedule() accepted --clear together with a date")
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("Reschedule() called %v, want no tool call", fake.callNames())
+	}
+}
+
+func TestShowReturnsReminderDetail(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCaller{results: map[string]*mcp.CallToolResult{
+		"get_reminder": {StructuredContent: map[string]any{
+			"reminder": map[string]any{"id": testReminderID, "title": "Monthly reporting", "revision": 2},
+			"comments": []any{map[string]any{"id": "comment-1", "body": "Ask finance."}},
+		}},
+	}}
+	raw, err := newTestService(fake).Show(context.Background(), testReminderID)
+	if err != nil {
+		t.Fatalf("Show() error = %v", err)
+	}
+	detail := struct {
+		Reminder struct {
+			ID    string `json:"id"`
+			Title string `json:"title"`
+		} `json:"reminder"`
+		Comments []struct {
+			Body string `json:"body"`
+		} `json:"comments"`
+	}{}
+	if err := json.Unmarshal(raw, &detail); err != nil {
+		t.Fatalf("Show() returned undecodable JSON: %v (%s)", err, raw)
+	}
+	if detail.Reminder.ID != testReminderID || len(detail.Comments) != 1 || detail.Comments[0].Body != "Ask finance." {
+		t.Fatalf("Show() = %s", raw)
+	}
+	arguments := fake.call(t, "get_reminder").Arguments.(map[string]any)
+	if arguments["reminder_id"] != testReminderID {
+		t.Fatalf("get_reminder arguments = %#v", arguments)
+	}
+}
+
+func TestSearchDefaultsAndClampsTheLimit(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		limit     int
+		wantLimit int
+	}{
+		{name: "default", limit: 0, wantLimit: 20},
+		{name: "explicit", limit: 5, wantLimit: 5},
+		{name: "clamped", limit: 500, wantLimit: 100},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fakeCaller{results: map[string]*mcp.CallToolResult{
+				"search_reminders": {StructuredContent: map[string]any{"reminders": []any{}}},
+			}}
+			if _, err := newTestService(fake).Search(context.Background(), "report", test.limit); err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			arguments := fake.call(t, "search_reminders").Arguments.(map[string]any)
+			if arguments["query"] != "report" {
+				t.Fatalf("search_reminders query = %#v", arguments["query"])
+			}
+			if arguments["limit"] != test.wantLimit {
+				t.Fatalf("search_reminders limit = %#v, want %d", arguments["limit"], test.wantLimit)
+			}
+		})
+	}
+}
+
+func TestSearchRejectsEmptyQuery(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCaller{results: map[string]*mcp.CallToolResult{}}
+	if _, err := newTestService(fake).Search(context.Background(), "   ", 20); err == nil {
+		t.Fatal("Search() accepted an empty query")
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("Search() called %v, want no tool call", fake.callNames())
+	}
+}
