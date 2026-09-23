@@ -131,37 +131,56 @@ struct ReminderCollectionView: View {
         )
     }
 
-    /// A row either pushes onto the navigation stack or carries the selection
-    /// the split layout reads, and either way it looks and behaves the same.
+    /// A row either pushes onto the navigation stack or sets the selection the
+    /// split layout reads, and either way it looks and behaves the same. The
+    /// selection branch carries a real button as well as its tag, because a tag
+    /// alone does not make a Mac list row respond to a click.
     @ViewBuilder
     private func row(_ reminder: Reminder, selection: Binding<String?>?) -> some View {
-        let content = ReminderRow(
+        if let selection {
+            Button {
+                selection.wrappedValue = reminder.id
+            } label: {
+                rowContent(reminder)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .listRowInsets(Self.rowInsets)
+            .listRowBackground(
+                selection.wrappedValue == reminder.id ? StateTheme.accentSoft : Color.clear
+            )
+            .swipeActions(edge: .trailing) { archiveAction(reminder) }
+            .tag(reminder.id)
+        } else {
+            NavigationLink(value: reminder.id) {
+                rowContent(reminder)
+            }
+            .listRowInsets(Self.rowInsets)
+            .swipeActions(edge: .trailing) { archiveAction(reminder) }
+        }
+    }
+
+    private func rowContent(_ reminder: Reminder) -> some View {
+        ReminderRow(
             reminder: reminder,
             latestEvent: model.activity.first { $0.reminderID == reminder.id }
         )
-        Group {
-            if selection == nil {
-                NavigationLink(value: reminder.id) { content }
-            } else {
-                content.tag(reminder.id)
-            }
-        }
-        .listRowInsets(
-            EdgeInsets(
-                top: StateTheme.Space.group,
-                leading: StateTheme.Space.block,
-                bottom: StateTheme.Space.group,
-                trailing: StateTheme.Space.block
-            )
-        )
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                Task { await model.archiveReminder(reminder, archived: true) }
-            } label: {
-                Label(String(localized: "Archive"), systemImage: "archivebox")
-            }
+    }
+
+    private func archiveAction(_ reminder: Reminder) -> some View {
+        Button(role: .destructive) {
+            Task { await model.archiveReminder(reminder, archived: true) }
+        } label: {
+            Label(String(localized: "Archive"), systemImage: "archivebox")
         }
     }
+
+    private static let rowInsets = EdgeInsets(
+        top: StateTheme.Space.group,
+        leading: StateTheme.Space.block,
+        bottom: StateTheme.Space.group,
+        trailing: StateTheme.Space.block
+    )
 
     private var editorIsPresented: Binding<Bool> {
         editorPresentation ?? $ownEditorPresentation
