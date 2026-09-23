@@ -1,5 +1,7 @@
 # Operations guide
 
+For a VPS that already runs Traefik, `docs/deploy-vps.md` is the step-by-step guide to bring up `state-server` and `state-relay` with TLS, real APNs, encrypted backups, updates and a smoke test.
+
 ## Compose deployment
 
 The supplied stack has no public host ports. Create the external proxy network once if Nginx Proxy Manager did not create it:
