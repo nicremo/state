@@ -70,7 +70,7 @@ struct ActivityView: View {
                             }
                         }
                     }
-                    .listStyle(.insetGrouped)
+                    .stateListStyle()
                     .stateBackground()
                     .animation(StateTheme.contentChange, value: model.activity.map(\.id))
                     .refreshable { await model.synchronize() }
@@ -135,7 +135,7 @@ struct ConflictResolutionView: View {
                 }
             }
             .navigationTitle("Conflicts")
-            .navigationBarTitleDisplayMode(.inline)
+            .stateInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

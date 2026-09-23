@@ -112,7 +112,7 @@ struct PolicyEditorView: View {
             Form {
                 Section("Policy") {
                     TextField("Name", text: $draft.name)
-                        .textInputAutocapitalization(.never)
+                        .stateNoAutocapitalization()
                         .autocorrectionDisabled()
                     if !draft.name.isEmpty, !PolicyDraft.isValidName(draft.name) {
                         Text("Use 2 to 64 characters: lower case letters, digits and inner hyphens.")
@@ -141,7 +141,7 @@ struct PolicyEditorView: View {
                     }
                     if adapterSelection == HarnessCatalog.customTag {
                         TextField("Adapter identifier", text: $customAdapter)
-                            .textInputAutocapitalization(.never)
+                            .stateNoAutocapitalization()
                             .autocorrectionDisabled()
                         if !customAdapter.isEmpty, !HarnessCatalog.isValid(HarnessCatalog.normalize(customAdapter)) {
                             Text("Use 2 to 32 characters: lower case letters, digits and inner hyphens.")
@@ -202,7 +202,7 @@ struct PolicyEditorView: View {
                 }
             }
             .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+            .stateInlineNavigationTitle()
             .interactiveDismissDisabled(isSaving)
             .task {
                 // The project picker reads the synced list; a fresh install may

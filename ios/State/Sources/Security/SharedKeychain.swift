@@ -52,6 +52,10 @@ enum SharedKeychain {
             kSecAttrService as String: "com.fabincrm.state",
             kSecAttrAccount as String: account,
         ]
+        #if os(macOS)
+        // Access groups exist only in the data protection keychain on macOS.
+        query[kSecUseDataProtectionKeychain as String] = true
+        #endif
         if let accessGroup {
             query[kSecAttrAccessGroup as String] = accessGroup
         }

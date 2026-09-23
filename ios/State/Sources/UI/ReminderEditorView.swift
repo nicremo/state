@@ -34,7 +34,7 @@ struct ReminderEditorView: View {
             Form {
                 Section("Reminder") {
                     TextField("Title", text: $draft.title, axis: .vertical)
-                        .textInputAutocapitalization(.sentences)
+                        .stateSentenceAutocapitalization()
                     TextField("Description", text: $draft.description, axis: .vertical)
                         .lineLimit(3...8)
                 }
@@ -98,7 +98,7 @@ struct ReminderEditorView: View {
                 }
             }
             .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+            .stateInlineNavigationTitle()
             .stateBackground()
             .interactiveDismissDisabled(isSaving)
             .task {

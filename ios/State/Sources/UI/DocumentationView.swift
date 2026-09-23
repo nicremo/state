@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// The setup guide the owner needs before the connection form makes any sense.
 /// It lives in the app rather than only on the web, because the moment it is
@@ -84,10 +83,10 @@ struct DocumentationView: View {
                 Text("The full guide covers deployment, backups, notification delivery and how to revoke an agent.")
             }
         }
-        .listStyle(.insetGrouped)
+        .stateListStyle()
         .stateBackground()
         .navigationTitle("Documentation")
-        .navigationBarTitleDisplayMode(.inline)
+        .stateInlineNavigationTitle()
     }
 }
 
@@ -139,7 +138,7 @@ private struct DocumentationCode: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
-                UIPasteboard.general.string = command.replacingOccurrences(of: "\\\n  ", with: "")
+                Platform.copyToPasteboard(command.replacingOccurrences(of: "\\\n  ", with: ""))
                 withAnimation(StateTheme.stateChange) { copied = true }
             } label: {
                 Label(

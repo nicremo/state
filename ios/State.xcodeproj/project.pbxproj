@@ -15,53 +15,97 @@
 		16B7841A2AD057191FD575E2 /* UUIDv7Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A53151A5538CF22AA06C2F59 /* UUIDv7Tests.swift */; };
 		177EE7BD41FDB6650B5856B8 /* PolicyDraftValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0B57D33EA9C96E17EC2644 /* PolicyDraftValidationTests.swift */; };
 		17D74956B8F952DD3161515D /* PushEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3FF11D16348C43C9D86F1D /* PushEnvelope.swift */; };
+		18E574F71830761D0A8AE95C /* UUIDv7.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596270393A6CEA01AD29FA15 /* UUIDv7.swift */; };
+		1A5AF51AD8921ADB96FFF6CF /* ReminderEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84F67F48E8E4FD028AC4060 /* ReminderEditorView.swift */; };
 		1D1FF0B35C4BC8A0738F7E71 /* RunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 703233419435A6EC390D6127 /* RunDetailView.swift */; };
+		1D53B7D90296C8ED9DDD8EEC /* MacAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 245015566E7DE84F196D0EB8 /* MacAssets.xcassets */; };
+		1E0F4DF3D8D4E8981C5FC809 /* StateMacAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8CAF0CF63874C62A6478DF1 /* StateMacAppDelegate.swift */; };
+		21019D3AB423CC29BB09A252 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A95BED5A46CC435F7A6B7E /* SyncEngine.swift */; };
+		23927DCE60C7F630CACE6506 /* StateRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2AEBBEB07BE6383A7241E37 /* StateRootView.swift */; };
 		24AB9ED657748C538A145AD3 /* SharedKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525378143D0F69591632200B /* SharedKeychain.swift */; };
+		25A2415B1F0EA7C3A9A482C5 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD29B2FE68C071169C15DCF /* Platform.swift */; };
 		2B1DC5D1C8B6E6240A4694BC /* PushPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA9FBD89EF008034E44EA62 /* PushPayloadTests.swift */; };
+		2B4BF3743BF2D2D51EB9D5DC /* PolicyEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57C4DB7021BD019A1C887BF6 /* PolicyEditorView.swift */; };
 		2D12E5CAAC48135B1DEAB66B /* StateApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00EBED32EA6304F9ADF2D84B /* StateApp.swift */; };
 		354C25C2AB37D4B05FD99D40 /* DocumentationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00F339B1193BA9DC90183A0E /* DocumentationView.swift */; };
 		35CF6489A313E355ED2711FB /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5457F1BB657C0C37A60A3676 /* InfoPlist.strings */; };
+		38DD1E4EEB0CE95CAA3D8417 /* RunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 703233419435A6EC390D6127 /* RunDetailView.swift */; };
+		3E4E650C8F5F9D647C4C8763 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B260373D5854890462B580B1 /* APIClient.swift */; };
 		40969094DFE641A03E1CA239 /* SessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED80418839D065D0FCB106DD /* SessionRepository.swift */; };
 		46F34D35BD3072605534E920 /* SharedKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525378143D0F69591632200B /* SharedKeychain.swift */; };
 		479055869CC0FC054779E56E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8E6B844029635B1CC04B9E40 /* PrivacyInfo.xcprivacy */; };
+		487E8F0CF276C545D65E7ECE /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5457F1BB657C0C37A60A3676 /* InfoPlist.strings */; };
 		4DFE6A85FD80ED737339A2EC /* PolicyEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57C4DB7021BD019A1C887BF6 /* PolicyEditorView.swift */; };
 		5038B093F736157AE986F748 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B260373D5854890462B580B1 /* APIClient.swift */; };
+		528FCCE48D518247022C2A83 /* StateDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95434DB52CE79EC0ACBCA873 /* StateDatabase.swift */; };
 		56E28BB30E886ACDC0A34484 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A95BED5A46CC435F7A6B7E /* SyncEngine.swift */; };
+		574CAF15454C2892F7DD3722 /* NotificationCenterDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4827F88B0E5B1AB9EA09BCB3 /* NotificationCenterDelegate.swift */; };
 		5AE63DFE1161FC727E0BC459 /* PushPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 545A001C0089B05C97B8C14E /* PushPayloads.swift */; };
 		5C4F24DC983A3BBAE12BB576 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E6897370AAEB5437D3B7DAD /* OnboardingFlowView.swift */; };
 		61B3DC6AFE76B63F8BE3F55D /* HarnessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F45C19CFDD1BE98ECD5882 /* HarnessCatalog.swift */; };
+		64CD4EFB08402E1174B900D6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CBB0341B714371E25C8C921C /* Assets.xcassets */; };
 		656A443223F52DA2BFC071CF /* StateDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95434DB52CE79EC0ACBCA873 /* StateDatabase.swift */; };
 		657BE7BC07589A53E444F263 /* PushEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3FF11D16348C43C9D86F1D /* PushEnvelope.swift */; };
+		664B362D898AD3B4C076D608 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F808B6F2B8A329996C25508 /* AppModel.swift */; };
 		66F71E9C9CE41EC22DE0765D /* PushPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 545A001C0089B05C97B8C14E /* PushPayloads.swift */; };
 		698C557C9964F3DE324750C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CBB0341B714371E25C8C921C /* Assets.xcassets */; };
 		6B5A1AC29E68439331B79B08 /* StateLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA627FA2180BE836B99F860F /* StateLaunch.swift */; };
+		6B7C8BA53B14E55368592BBE /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E6897370AAEB5437D3B7DAD /* OnboardingFlowView.swift */; };
+		6E1AC199ED7529B30DA8B9E7 /* NotificationCenterDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4827F88B0E5B1AB9EA09BCB3 /* NotificationCenterDelegate.swift */; };
+		6F676F5DFD4EFCDB0FE836E3 /* PushEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3FF11D16348C43C9D86F1D /* PushEnvelope.swift */; };
 		71514921E82149E1FEF126AB /* LocalServerTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34D5F59FE6D7FBABFA71D21B /* LocalServerTrust.swift */; };
 		739F03ABE01C34B752EFC4AF /* ReminderDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B2B6204A2A5749FD6D9286 /* ReminderDetailView.swift */; };
 		73AB7CBB0C637AC111FA698A /* UUIDv7.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596270393A6CEA01AD29FA15 /* UUIDv7.swift */; };
 		775F148622CD9D765C1976C9 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 306A7C2E5B307C14A82FC318 /* GRDB */; };
+		7E729144F0F422CA9192FF18 /* DocumentationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00F339B1193BA9DC90183A0E /* DocumentationView.swift */; };
+		7FD2E75374B5EABCE31D0457 /* StateLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 792F44A80F58FEEC0D77421F /* StateLinks.swift */; };
+		8077ADF6E19CB367D0927240 /* StateNotificationNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA649C1AC389C3658D2E36D3 /* StateNotificationNames.swift */; };
 		8295B166723E5EA90038E4D4 /* StateLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 792F44A80F58FEEC0D77421F /* StateLinks.swift */; };
+		8779F6DF22DA9C8C5BDC1B3C /* PushPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 545A001C0089B05C97B8C14E /* PushPayloads.swift */; };
+		8861FABE79B3DAD177495A1C /* ReminderDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B2B6204A2A5749FD6D9286 /* ReminderDetailView.swift */; };
 		8E0C1182D2046BF405D62292 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12289CA407B35AD8F259EAF /* SnapshotHelper.swift */; };
+		91DAE1DAF67603FB2FAFE04B /* HarnessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F45C19CFDD1BE98ECD5882 /* HarnessCatalog.swift */; };
+		92018204AA272CF0CAB4D2BC /* SharedKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525378143D0F69591632200B /* SharedKeychain.swift */; };
 		931130E49387A21ECA23A92F /* StateTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018038764FE0FC5AA2A1718D /* StateTheme.swift */; };
+		94BC1A1E6F901307285A52EC /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BBB357F0392F998BB99044C /* MainTabView.swift */; };
 		96FDC642DAF2CB21D922A85C /* NotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37E22432DA6BAAD47D855756 /* NotificationCoordinator.swift */; };
 		975DD550DD8859DF237FF5A2 /* RunnerStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A92850BCEB20D4342B139F1 /* RunnerStatusTests.swift */; };
 		98782D21EA2621E190AF8947 /* PushRelayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB71A0907E2D975C332FBE82 /* PushRelayTests.swift */; };
+		9C90A83DFD1662C4962657CA /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 656A4FA0659ECE08F8503F5B /* GRDB */; };
+		A754B687DDADA7E86781E1E3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BD4050889C2AD09C3EDFA81 /* SettingsView.swift */; };
+		A7E733E2941C02196183583A /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DC5696C6332BF15523978F /* Models.swift */; };
 		A963E01C464A6B13F1742981 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DC5696C6332BF15523978F /* Models.swift */; };
 		A9F71CEF2025A3E0A46BB834 /* StateRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2AEBBEB07BE6383A7241E37 /* StateRootView.swift */; };
 		AC816DB6CC17F748F4D10A1D /* PushRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7761E726011D22475832A98 /* PushRegistrationService.swift */; };
+		AE5624F36BE4BCF29609A62A /* SessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED80418839D065D0FCB106DD /* SessionRepository.swift */; };
 		AF82C316F62EFF9C006B989D /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 574FAD91A293EEC31A716F5B /* SplashView.swift */; };
+		B90403DB66808FEE28D3BA85 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA25B43007EB3C718B4BD00 /* ActivityView.swift */; };
 		BD398F99C8710A54B8CB7270 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F808B6F2B8A329996C25508 /* AppModel.swift */; };
 		C10D681C9E4FCC0C231CE373 /* HarnessCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D06FBE82110384711CA15F1 /* HarnessCatalogTests.swift */; };
 		C82047D4B74E1AB597C6DDE4 /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E81B32712DEE8711FF7BFA5D /* ConnectView.swift */; };
+		C8CDC421EA8C30A97C57AF18 /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E81B32712DEE8711FF7BFA5D /* ConnectView.swift */; };
+		CBACE8F75917E8D5312631C5 /* StateLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA627FA2180BE836B99F860F /* StateLaunch.swift */; };
+		CE4DFBC81281968BF3ABF9E6 /* StateNotificationNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA649C1AC389C3658D2E36D3 /* StateNotificationNames.swift */; };
 		CEC16552BAB58CE1347A6132 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 78A5CF91662D6EEDD28F9B1E /* GRDB */; };
+		D2B2506648E0DDE12E6BD952 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD29B2FE68C071169C15DCF /* Platform.swift */; };
+		D3C58D232A649216F699559D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8E6B844029635B1CC04B9E40 /* PrivacyInfo.xcprivacy */; };
+		D46838E0D09578412AFBE3FE /* PushRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7761E726011D22475832A98 /* PushRegistrationService.swift */; };
+		D8E58A6CEC7FCCF18B81E961 /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 574FAD91A293EEC31A716F5B /* SplashView.swift */; };
 		E1D6F26BE43800FFF44F5652 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BBB357F0392F998BB99044C /* MainTabView.swift */; };
+		E39B131D12E9AF11AB591103 /* StateAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDAFF6318988EE63851DFD1 /* StateAppDelegate.swift */; };
 		EB0B572FBA71649C79BFBF29 /* StateScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = C27E6B9D51CED9A367DD60F3 /* StateScreenshots.swift */; };
 		EB8F3CB0F95C4824D5230DE8 /* StateAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDAFF6318988EE63851DFD1 /* StateAppDelegate.swift */; };
 		F09EC862041F195F8EA4F4CC /* ExecutionModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6BA0685CDCD6EEFC45E2381 /* ExecutionModelTests.swift */; };
 		F0AB0F334034910139CA33AD /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA25B43007EB3C718B4BD00 /* ActivityView.swift */; };
+		F1B977D3F6247B189694F705 /* StateTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018038764FE0FC5AA2A1718D /* StateTheme.swift */; };
 		F3797EC1F58849DCED8E95D6 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 2E09C1F897A91393A521BAED /* Localizable.xcstrings */; };
+		F43D7E53F6761D99819C0678 /* NotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37E22432DA6BAAD47D855756 /* NotificationCoordinator.swift */; };
 		F5344EA7424A8AB3FDB3D185 /* ReminderEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84F67F48E8E4FD028AC4060 /* ReminderEditorView.swift */; };
 		F624CB13CFF06570A79128A3 /* DatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B330D47D344AF973FD64CD46 /* DatabaseTests.swift */; };
+		F6AF10D2947AA647E046D82B /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 2E09C1F897A91393A521BAED /* Localizable.xcstrings */; };
 		F8423B6955E1B3CD9DCF7729 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD9AACF1D0B18231F274E0E2 /* NotificationService.swift */; };
+		F89FDFF35080B552FC18C0E9 /* LocalServerTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34D5F59FE6D7FBABFA71D21B /* LocalServerTrust.swift */; };
+		FDE6AA841D59C80DF9CFADA2 /* StateApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00EBED32EA6304F9ADF2D84B /* StateApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -107,10 +151,12 @@
 		00F339B1193BA9DC90183A0E /* DocumentationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentationView.swift; sourceTree = "<group>"; };
 		018038764FE0FC5AA2A1718D /* StateTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateTheme.swift; sourceTree = "<group>"; };
 		0D06FBE82110384711CA15F1 /* HarnessCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessCatalogTests.swift; sourceTree = "<group>"; };
+		245015566E7DE84F196D0EB8 /* MacAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = MacAssets.xcassets; sourceTree = "<group>"; };
 		2E09C1F897A91393A521BAED /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		34D5F59FE6D7FBABFA71D21B /* LocalServerTrust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServerTrust.swift; sourceTree = "<group>"; };
 		37E22432DA6BAAD47D855756 /* NotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCoordinator.swift; sourceTree = "<group>"; };
 		3BDAFF6318988EE63851DFD1 /* StateAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateAppDelegate.swift; sourceTree = "<group>"; };
+		4827F88B0E5B1AB9EA09BCB3 /* NotificationCenterDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCenterDelegate.swift; sourceTree = "<group>"; };
 		525378143D0F69591632200B /* SharedKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedKeychain.swift; sourceTree = "<group>"; };
 		545A001C0089B05C97B8C14E /* PushPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPayloads.swift; sourceTree = "<group>"; };
 		574FAD91A293EEC31A716F5B /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
@@ -137,10 +183,12 @@
 		A2AEBBEB07BE6383A7241E37 /* StateRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateRootView.swift; sourceTree = "<group>"; };
 		A53151A5538CF22AA06C2F59 /* UUIDv7Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UUIDv7Tests.swift; sourceTree = "<group>"; };
 		A7761E726011D22475832A98 /* PushRegistrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrationService.swift; sourceTree = "<group>"; };
+		A8CAF0CF63874C62A6478DF1 /* StateMacAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateMacAppDelegate.swift; sourceTree = "<group>"; };
 		B260373D5854890462B580B1 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		B330D47D344AF973FD64CD46 /* DatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseTests.swift; sourceTree = "<group>"; };
 		B6BA0685CDCD6EEFC45E2381 /* ExecutionModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionModelTests.swift; sourceTree = "<group>"; };
 		BB71A0907E2D975C332FBE82 /* PushRelayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRelayTests.swift; sourceTree = "<group>"; };
+		C132DC4BAD2C6AAA62CAB080 /* StateMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StateMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C27E6B9D51CED9A367DD60F3 /* StateScreenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateScreenshots.swift; sourceTree = "<group>"; };
 		C84F67F48E8E4FD028AC4060 /* ReminderEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderEditorView.swift; sourceTree = "<group>"; };
 		C8A95BED5A46CC435F7A6B7E /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
@@ -150,16 +198,26 @@
 		D5A01D884A344E691753D3C4 /* StateNotificationService.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StateNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA627FA2180BE836B99F860F /* StateLaunch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateLaunch.swift; sourceTree = "<group>"; };
 		DD9AACF1D0B18231F274E0E2 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		DDD29B2FE68C071169C15DCF /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
 		E0B2B6204A2A5749FD6D9286 /* ReminderDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderDetailView.swift; sourceTree = "<group>"; };
 		E5AF3B8CF8003905F16D3465 /* LocalPairingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPairingTests.swift; sourceTree = "<group>"; };
 		E5DC5696C6332BF15523978F /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		E81B32712DEE8711FF7BFA5D /* ConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectView.swift; sourceTree = "<group>"; };
+		EA649C1AC389C3658D2E36D3 /* StateNotificationNames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateNotificationNames.swift; sourceTree = "<group>"; };
 		ED80418839D065D0FCB106DD /* SessionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRepository.swift; sourceTree = "<group>"; };
 		EEA74FBAC0A4D8299F73D22A /* SyncEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineTests.swift; sourceTree = "<group>"; };
 		F8F8A5EC9BA2EEE8E52DACAA /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		3A588D0AA22D21871BF2503A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9C90A83DFD1662C4962657CA /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AE65ED947F0365390956E907 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -179,6 +237,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		31D048EBAAC0F635FA199E26 /* Platform */ = {
+			isa = PBXGroup;
+			children = (
+				DDD29B2FE68C071169C15DCF /* Platform.swift */,
+			);
+			path = Platform;
+			sourceTree = "<group>";
+		};
 		3BC773C05628BAE1ACE4408B /* UI */ = {
 			isa = PBXGroup;
 			children = (
@@ -198,10 +264,20 @@
 			path = UI;
 			sourceTree = "<group>";
 		};
+		3C3C5EBE5CD01F7CC1989918 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				245015566E7DE84F196D0EB8 /* MacAssets.xcassets */,
+			);
+			name = Resources;
+			path = StateMac/Resources;
+			sourceTree = "<group>";
+		};
 		3E848C3E096A88FE5D48B1E3 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				935830B8F2C2878AE68984B0 /* State.app */,
+				C132DC4BAD2C6AAA62CAB080 /* StateMac.app */,
 				D5A01D884A344E691753D3C4 /* StateNotificationService.appex */,
 				6395893E6E8D9F4870E9D30C /* StateTests.xctest */,
 				9E1EDE45CB4D909427D3FA61 /* StateUITests.xctest */,
@@ -249,8 +325,10 @@
 			children = (
 				ED944753F1B484DEBEB8BBFE /* LocalTransport */,
 				AC341B854977381DE5E711E1 /* Resources */,
+				3C3C5EBE5CD01F7CC1989918 /* Resources */,
 				A011D52B2C36417A65A28911 /* Sources */,
 				D6483721DE883E90D54B6504 /* Sources */,
+				C793C981BC90035091B1E15E /* Sources */,
 				4DF750B829D5A50F561D88CC /* StateTests */,
 				77FCB614373C0CA16D582EF6 /* StateUITests */,
 				3E848C3E096A88FE5D48B1E3 /* Products */,
@@ -302,6 +380,7 @@
 				4249F22F1B166DEBA82AFDF7 /* Models */,
 				48FC7B38F6E669A2415BD0F3 /* Networking */,
 				C330429BDFD098F87D6D15DD /* Notifications */,
+				31D048EBAAC0F635FA199E26 /* Platform */,
 				FC2F88254EBF6AE0BC8F1D05 /* Security */,
 				B9627867BA4EA61E1560A618 /* Session */,
 				97E76B2FEB7BBF7E2A94A7B2 /* Sync */,
@@ -343,21 +422,32 @@
 		C330429BDFD098F87D6D15DD /* Notifications */ = {
 			isa = PBXGroup;
 			children = (
+				4827F88B0E5B1AB9EA09BCB3 /* NotificationCenterDelegate.swift */,
 				37E22432DA6BAAD47D855756 /* NotificationCoordinator.swift */,
 				545A001C0089B05C97B8C14E /* PushPayloads.swift */,
 				A7761E726011D22475832A98 /* PushRegistrationService.swift */,
 				3BDAFF6318988EE63851DFD1 /* StateAppDelegate.swift */,
+				EA649C1AC389C3658D2E36D3 /* StateNotificationNames.swift */,
 			);
 			path = Notifications;
 			sourceTree = "<group>";
 		};
-		D6483721DE883E90D54B6504 /* Sources */ = {
+		C793C981BC90035091B1E15E /* Sources */ = {
 			isa = PBXGroup;
 			children = (
 				DD9AACF1D0B18231F274E0E2 /* NotificationService.swift */,
 			);
 			name = Sources;
 			path = StateNotificationService/Sources;
+			sourceTree = "<group>";
+		};
+		D6483721DE883E90D54B6504 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				A8CAF0CF63874C62A6478DF1 /* StateMacAppDelegate.swift */,
+			);
+			name = Sources;
+			path = StateMac/Sources;
 			sourceTree = "<group>";
 		};
 		ED944753F1B484DEBEB8BBFE /* LocalTransport */ = {
@@ -458,6 +548,26 @@
 			productReference = 935830B8F2C2878AE68984B0 /* State.app */;
 			productType = "com.apple.product-type.application";
 		};
+		F180D7501997EA26ACBF6D92 /* StateMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 33C3CD1499234349BE9A3C94 /* Build configuration list for PBXNativeTarget "StateMac" */;
+			buildPhases = (
+				95E9218044673A7D017A4DE5 /* Sources */,
+				91C41B19CAF95CC0D81889B5 /* Resources */,
+				3A588D0AA22D21871BF2503A /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StateMac;
+			packageProductDependencies = (
+				656A4FA0659ECE08F8503F5B /* GRDB */,
+			);
+			productName = StateMac;
+			productReference = C132DC4BAD2C6AAA62CAB080 /* StateMac.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -478,6 +588,9 @@
 						DevelopmentTeam = 5DKU7FFK4X;
 					};
 					A31F44AD2B9EF39062710886 = {
+						DevelopmentTeam = 5DKU7FFK4X;
+					};
+					F180D7501997EA26ACBF6D92 = {
 						DevelopmentTeam = 5DKU7FFK4X;
 					};
 				};
@@ -501,6 +614,7 @@
 			projectRoot = "";
 			targets = (
 				A31F44AD2B9EF39062710886 /* State */,
+				F180D7501997EA26ACBF6D92 /* StateMac */,
 				7F59B830B2D765957446D063 /* StateNotificationService */,
 				818C0D50A4BC6F74CD2704EC /* StateTests */,
 				104EC70C7496741E7C0C2453 /* StateUITests */,
@@ -517,6 +631,18 @@
 				35CF6489A313E355ED2711FB /* InfoPlist.strings in Resources */,
 				F3797EC1F58849DCED8E95D6 /* Localizable.xcstrings in Resources */,
 				479055869CC0FC054779E56E /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		91C41B19CAF95CC0D81889B5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				64CD4EFB08402E1174B900D6 /* Assets.xcassets in Resources */,
+				487E8F0CF276C545D65E7ECE /* InfoPlist.strings in Resources */,
+				F6AF10D2947AA647E046D82B /* Localizable.xcstrings in Resources */,
+				1D53B7D90296C8ED9DDD8EEC /* MacAssets.xcassets in Resources */,
+				D3C58D232A649216F699559D /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -545,8 +671,10 @@
 				71514921E82149E1FEF126AB /* LocalServerTrust.swift in Sources */,
 				E1D6F26BE43800FFF44F5652 /* MainTabView.swift in Sources */,
 				A963E01C464A6B13F1742981 /* Models.swift in Sources */,
+				574CAF15454C2892F7DD3722 /* NotificationCenterDelegate.swift in Sources */,
 				96FDC642DAF2CB21D922A85C /* NotificationCoordinator.swift in Sources */,
 				5C4F24DC983A3BBAE12BB576 /* OnboardingFlowView.swift in Sources */,
+				D2B2506648E0DDE12E6BD952 /* Platform.swift in Sources */,
 				4DFE6A85FD80ED737339A2EC /* PolicyEditorView.swift in Sources */,
 				657BE7BC07589A53E444F263 /* PushEnvelope.swift in Sources */,
 				66F71E9C9CE41EC22DE0765D /* PushPayloads.swift in Sources */,
@@ -563,6 +691,7 @@
 				656A443223F52DA2BFC071CF /* StateDatabase.swift in Sources */,
 				6B5A1AC29E68439331B79B08 /* StateLaunch.swift in Sources */,
 				8295B166723E5EA90038E4D4 /* StateLinks.swift in Sources */,
+				8077ADF6E19CB367D0927240 /* StateNotificationNames.swift in Sources */,
 				A9F71CEF2025A3E0A46BB834 /* StateRootView.swift in Sources */,
 				931130E49387A21ECA23A92F /* StateTheme.swift in Sources */,
 				56E28BB30E886ACDC0A34484 /* SyncEngine.swift in Sources */,
@@ -578,6 +707,48 @@
 				17D74956B8F952DD3161515D /* PushEnvelope.swift in Sources */,
 				5AE63DFE1161FC727E0BC459 /* PushPayloads.swift in Sources */,
 				46F34D35BD3072605534E920 /* SharedKeychain.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		95E9218044673A7D017A4DE5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3E4E650C8F5F9D647C4C8763 /* APIClient.swift in Sources */,
+				B90403DB66808FEE28D3BA85 /* ActivityView.swift in Sources */,
+				664B362D898AD3B4C076D608 /* AppModel.swift in Sources */,
+				C8CDC421EA8C30A97C57AF18 /* ConnectView.swift in Sources */,
+				7E729144F0F422CA9192FF18 /* DocumentationView.swift in Sources */,
+				91DAE1DAF67603FB2FAFE04B /* HarnessCatalog.swift in Sources */,
+				F89FDFF35080B552FC18C0E9 /* LocalServerTrust.swift in Sources */,
+				94BC1A1E6F901307285A52EC /* MainTabView.swift in Sources */,
+				A7E733E2941C02196183583A /* Models.swift in Sources */,
+				6E1AC199ED7529B30DA8B9E7 /* NotificationCenterDelegate.swift in Sources */,
+				F43D7E53F6761D99819C0678 /* NotificationCoordinator.swift in Sources */,
+				6B7C8BA53B14E55368592BBE /* OnboardingFlowView.swift in Sources */,
+				25A2415B1F0EA7C3A9A482C5 /* Platform.swift in Sources */,
+				2B4BF3743BF2D2D51EB9D5DC /* PolicyEditorView.swift in Sources */,
+				6F676F5DFD4EFCDB0FE836E3 /* PushEnvelope.swift in Sources */,
+				8779F6DF22DA9C8C5BDC1B3C /* PushPayloads.swift in Sources */,
+				D46838E0D09578412AFBE3FE /* PushRegistrationService.swift in Sources */,
+				8861FABE79B3DAD177495A1C /* ReminderDetailView.swift in Sources */,
+				1A5AF51AD8921ADB96FFF6CF /* ReminderEditorView.swift in Sources */,
+				38DD1E4EEB0CE95CAA3D8417 /* RunDetailView.swift in Sources */,
+				AE5624F36BE4BCF29609A62A /* SessionRepository.swift in Sources */,
+				A754B687DDADA7E86781E1E3 /* SettingsView.swift in Sources */,
+				92018204AA272CF0CAB4D2BC /* SharedKeychain.swift in Sources */,
+				D8E58A6CEC7FCCF18B81E961 /* SplashView.swift in Sources */,
+				FDE6AA841D59C80DF9CFADA2 /* StateApp.swift in Sources */,
+				E39B131D12E9AF11AB591103 /* StateAppDelegate.swift in Sources */,
+				528FCCE48D518247022C2A83 /* StateDatabase.swift in Sources */,
+				CBACE8F75917E8D5312631C5 /* StateLaunch.swift in Sources */,
+				7FD2E75374B5EABCE31D0457 /* StateLinks.swift in Sources */,
+				1E0F4DF3D8D4E8981C5FC809 /* StateMacAppDelegate.swift in Sources */,
+				CE4DFBC81281968BF3ABF9E6 /* StateNotificationNames.swift in Sources */,
+				23927DCE60C7F630CACE6506 /* StateRootView.swift in Sources */,
+				F1B977D3F6247B189694F705 /* StateTheme.swift in Sources */,
+				21019D3AB423CC29BB09A252 /* SyncEngine.swift in Sources */,
+				18E574F71830761D0A8AE95C /* UUIDv7.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -688,18 +859,37 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
+		};
+		32F9CFF95CD34E06030ED21E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIconMac;
+				CODE_SIGN_ENTITLEMENTS = StateMac/StateMac.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = StateMac/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fabincrm.state;
+				PRODUCT_NAME = State;
+				SDKROOT = macosx;
+			};
+			name = Release;
 		};
 		40FD3A1DDBDB34EE2D5B6B18 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -719,6 +909,25 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
+		};
+		429EF7E3E1FA3466C6DF81AC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIconMac;
+				CODE_SIGN_ENTITLEMENTS = StateMac/StateMac.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = StateMac/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fabincrm.state;
+				PRODUCT_NAME = State;
+				SDKROOT = macosx;
+			};
+			name = Debug;
 		};
 		43D795776A0E672EA7F9F253 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -875,11 +1084,11 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -913,6 +1122,15 @@
 			buildConfigurations = (
 				72CDB6A63D2393884454F502 /* Debug */,
 				B0DFAAC2F4B242C928C54902 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		33C3CD1499234349BE9A3C94 /* Build configuration list for PBXNativeTarget "StateMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				429EF7E3E1FA3466C6DF81AC /* Debug */,
+				32F9CFF95CD34E06030ED21E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -968,6 +1186,11 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		306A7C2E5B307C14A82FC318 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DDBDEDB0262899E351BAD40A /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+		656A4FA0659ECE08F8503F5B /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DDBDEDB0262899E351BAD40A /* XCRemoteSwiftPackageReference "GRDB.swift" */;
 			productName = GRDB;
