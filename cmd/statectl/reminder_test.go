@@ -255,3 +255,38 @@ func TestSummarizeScheduleWithoutSchedule(t *testing.T) {
 		t.Fatalf("summarizeSchedule(nil) = %q, want an empty string", summary)
 	}
 }
+
+func TestRunReminderCreateValidatesTheScheduleBeforeConnecting(t *testing.T) {
+	t.Parallel()
+
+	// Every case points --config at a path that does not exist, so a missing
+	// pre-flight check would surface as a config error instead.
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "invalid date", args: []string{"--date", "2026-13-01"}, want: "date"},
+		{name: "time without date", args: []string{"--time", "09:00"}, want: "time requires a date"},
+		{name: "unknown time zone", args: []string{"--date", "2026-10-01", "--tz", "Mars/Base"}, want: "time zone"},
+		{name: "repeat without date", args: []string{"--repeat", "monthly"}, want: "repeat requires a date"},
+		{name: "until before date", args: []string{"--date", "2026-10-01", "--tz", "Europe/Berlin", "--repeat", "daily", "--until", "2026-09-01"}, want: "until"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			args := append([]string{
+				"reminder", "create",
+				"--profile", "codex",
+				"--config", missingConfig(t),
+				"--title", "Monthly reporting",
+				"--source-text", "every month",
+			}, test.args...)
+			_, _, err := runStatectl(t, args...)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("run(%v) error = %v, want %q before connecting", args, err, test.want)
+			}
+		})
+	}
+}

@@ -77,6 +77,18 @@ func runReminderCreate(args []string, stdout io.Writer, stderr io.Writer) error 
 	if err != nil {
 		return err
 	}
+	schedule := statectl.ScheduleOptions{
+		Date:       *date,
+		Time:       *localTime,
+		TimeZone:   *timeZone,
+		Prewarning: *prewarning,
+		Repeat:     *repeat,
+		Interval:   *interval,
+		Until:      *until,
+	}
+	if err := preflightSchedule(schedule); err != nil {
+		return err
+	}
 	service, closeSession, err := connectReminderService(*configPath, *profileName)
 	if err != nil {
 		return err
@@ -90,15 +102,7 @@ func runReminderCreate(args []string, stdout io.Writer, stderr io.Writer) error 
 		Description: resolvedDescription,
 		SourceText:  *sourceText,
 		RequestID:   *requestID,
-		Schedule: statectl.ScheduleOptions{
-			Date:       *date,
-			Time:       *localTime,
-			TimeZone:   *timeZone,
-			Prewarning: *prewarning,
-			Repeat:     *repeat,
-			Interval:   *interval,
-			Until:      *until,
-		},
+		Schedule:    schedule,
 	})
 	if err != nil {
 		return err
@@ -195,6 +199,18 @@ func runReminderSchedule(args []string, stdout io.Writer, stderr io.Writer) erro
 	if !*clear && !*clearRepeat && *date == "" {
 		return errors.New("statectl reminder schedule requires --clear, --clear-repeat or --date")
 	}
+	schedule := statectl.ScheduleOptions{
+		Date:       *date,
+		Time:       *localTime,
+		TimeZone:   *timeZone,
+		Prewarning: *prewarning,
+		Repeat:     *repeat,
+		Interval:   *interval,
+		Until:      *until,
+	}
+	if err := preflightSchedule(schedule); err != nil {
+		return err
+	}
 	service, closeSession, err := connectReminderService(*configPath, *profileName)
 	if err != nil {
 		return err
@@ -203,15 +219,7 @@ func runReminderSchedule(args []string, stdout io.Writer, stderr io.Writer) erro
 
 	ctx, cancel := context.WithTimeout(context.Background(), reminderCallTimeout)
 	defer cancel()
-	stored, err := service.Reschedule(ctx, *reminderID, statectl.ScheduleOptions{
-		Date:       *date,
-		Time:       *localTime,
-		TimeZone:   *timeZone,
-		Prewarning: *prewarning,
-		Repeat:     *repeat,
-		Interval:   *interval,
-		Until:      *until,
-	}, *clear, *clearRepeat, *sourceText)
+	stored, err := service.Reschedule(ctx, *reminderID, schedule, *clear, *clearRepeat, *sourceText)
 	if err != nil {
 		return err
 	}
@@ -292,6 +300,13 @@ func requireReminderProfile(profileName string) error {
 		return errors.New("profile is required")
 	}
 	return nil
+}
+
+// preflightSchedule rejects a broken schedule before any connection is opened.
+// The service validates again when it builds the tool arguments.
+func preflightSchedule(options statectl.ScheduleOptions) error {
+	_, _, err := statectl.BuildSchedule(options, detectLocalTimeZone())
+	return err
 }
 
 // connectReminderService pairs the local profile with a live MCP session. The
