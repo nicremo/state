@@ -30,6 +30,7 @@
 		354C25C2AB37D4B05FD99D40 /* DocumentationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00F339B1193BA9DC90183A0E /* DocumentationView.swift */; };
 		35CF6489A313E355ED2711FB /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5457F1BB657C0C37A60A3676 /* InfoPlist.strings */; };
 		38DD1E4EEB0CE95CAA3D8417 /* RunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 703233419435A6EC390D6127 /* RunDetailView.swift */; };
+		3907EBC8B978FDAEAF51D065 /* SplitRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026A464848D4A3E763727E64 /* SplitRootView.swift */; };
 		3E4E650C8F5F9D647C4C8763 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B260373D5854890462B580B1 /* APIClient.swift */; };
 		40969094DFE641A03E1CA239 /* SessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED80418839D065D0FCB106DD /* SessionRepository.swift */; };
 		46F34D35BD3072605534E920 /* SharedKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525378143D0F69591632200B /* SharedKeychain.swift */; };
@@ -63,6 +64,7 @@
 		8295B166723E5EA90038E4D4 /* StateLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 792F44A80F58FEEC0D77421F /* StateLinks.swift */; };
 		8779F6DF22DA9C8C5BDC1B3C /* PushPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 545A001C0089B05C97B8C14E /* PushPayloads.swift */; };
 		8861FABE79B3DAD177495A1C /* ReminderDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B2B6204A2A5749FD6D9286 /* ReminderDetailView.swift */; };
+		89DDC9D2BAF8916330B7B67D /* SplitRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026A464848D4A3E763727E64 /* SplitRootView.swift */; };
 		8E0C1182D2046BF405D62292 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12289CA407B35AD8F259EAF /* SnapshotHelper.swift */; };
 		91DAE1DAF67603FB2FAFE04B /* HarnessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F45C19CFDD1BE98ECD5882 /* HarnessCatalog.swift */; };
 		92018204AA272CF0CAB4D2BC /* SharedKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525378143D0F69591632200B /* SharedKeychain.swift */; };
@@ -87,6 +89,7 @@
 		CBACE8F75917E8D5312631C5 /* StateLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA627FA2180BE836B99F860F /* StateLaunch.swift */; };
 		CE4DFBC81281968BF3ABF9E6 /* StateNotificationNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA649C1AC389C3658D2E36D3 /* StateNotificationNames.swift */; };
 		CEC16552BAB58CE1347A6132 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 78A5CF91662D6EEDD28F9B1E /* GRDB */; };
+		D24FA93835016835E00F6E16 /* AdaptiveRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079104A3F695B8A3044C7A01 /* AdaptiveRootView.swift */; };
 		D2B2506648E0DDE12E6BD952 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD29B2FE68C071169C15DCF /* Platform.swift */; };
 		D3C58D232A649216F699559D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8E6B844029635B1CC04B9E40 /* PrivacyInfo.xcprivacy */; };
 		D46838E0D09578412AFBE3FE /* PushRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7761E726011D22475832A98 /* PushRegistrationService.swift */; };
@@ -95,6 +98,7 @@
 		E39B131D12E9AF11AB591103 /* StateAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDAFF6318988EE63851DFD1 /* StateAppDelegate.swift */; };
 		EB0B572FBA71649C79BFBF29 /* StateScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = C27E6B9D51CED9A367DD60F3 /* StateScreenshots.swift */; };
 		EB8F3CB0F95C4824D5230DE8 /* StateAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDAFF6318988EE63851DFD1 /* StateAppDelegate.swift */; };
+		EE82D4C1FE16550707753ABC /* AdaptiveRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079104A3F695B8A3044C7A01 /* AdaptiveRootView.swift */; };
 		F09EC862041F195F8EA4F4CC /* ExecutionModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6BA0685CDCD6EEFC45E2381 /* ExecutionModelTests.swift */; };
 		F0AB0F334034910139CA33AD /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA25B43007EB3C718B4BD00 /* ActivityView.swift */; };
 		F1B977D3F6247B189694F705 /* StateTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018038764FE0FC5AA2A1718D /* StateTheme.swift */; };
@@ -150,6 +154,8 @@
 		00EBED32EA6304F9ADF2D84B /* StateApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateApp.swift; sourceTree = "<group>"; };
 		00F339B1193BA9DC90183A0E /* DocumentationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentationView.swift; sourceTree = "<group>"; };
 		018038764FE0FC5AA2A1718D /* StateTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateTheme.swift; sourceTree = "<group>"; };
+		026A464848D4A3E763727E64 /* SplitRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitRootView.swift; sourceTree = "<group>"; };
+		079104A3F695B8A3044C7A01 /* AdaptiveRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveRootView.swift; sourceTree = "<group>"; };
 		0D06FBE82110384711CA15F1 /* HarnessCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessCatalogTests.swift; sourceTree = "<group>"; };
 		245015566E7DE84F196D0EB8 /* MacAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = MacAssets.xcassets; sourceTree = "<group>"; };
 		2E09C1F897A91393A521BAED /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
@@ -249,6 +255,7 @@
 			isa = PBXGroup;
 			children = (
 				5FA25B43007EB3C718B4BD00 /* ActivityView.swift */,
+				079104A3F695B8A3044C7A01 /* AdaptiveRootView.swift */,
 				E81B32712DEE8711FF7BFA5D /* ConnectView.swift */,
 				00F339B1193BA9DC90183A0E /* DocumentationView.swift */,
 				7BBB357F0392F998BB99044C /* MainTabView.swift */,
@@ -259,6 +266,7 @@
 				703233419435A6EC390D6127 /* RunDetailView.swift */,
 				8BD4050889C2AD09C3EDFA81 /* SettingsView.swift */,
 				574FAD91A293EEC31A716F5B /* SplashView.swift */,
+				026A464848D4A3E763727E64 /* SplitRootView.swift */,
 				018038764FE0FC5AA2A1718D /* StateTheme.swift */,
 			);
 			path = UI;
@@ -664,6 +672,7 @@
 			files = (
 				5038B093F736157AE986F748 /* APIClient.swift in Sources */,
 				F0AB0F334034910139CA33AD /* ActivityView.swift in Sources */,
+				D24FA93835016835E00F6E16 /* AdaptiveRootView.swift in Sources */,
 				BD398F99C8710A54B8CB7270 /* AppModel.swift in Sources */,
 				C82047D4B74E1AB597C6DDE4 /* ConnectView.swift in Sources */,
 				354C25C2AB37D4B05FD99D40 /* DocumentationView.swift in Sources */,
@@ -686,6 +695,7 @@
 				06D9B7D04C940870DA13C8E9 /* SettingsView.swift in Sources */,
 				24AB9ED657748C538A145AD3 /* SharedKeychain.swift in Sources */,
 				AF82C316F62EFF9C006B989D /* SplashView.swift in Sources */,
+				89DDC9D2BAF8916330B7B67D /* SplitRootView.swift in Sources */,
 				2D12E5CAAC48135B1DEAB66B /* StateApp.swift in Sources */,
 				EB8F3CB0F95C4824D5230DE8 /* StateAppDelegate.swift in Sources */,
 				656A443223F52DA2BFC071CF /* StateDatabase.swift in Sources */,
@@ -716,6 +726,7 @@
 			files = (
 				3E4E650C8F5F9D647C4C8763 /* APIClient.swift in Sources */,
 				B90403DB66808FEE28D3BA85 /* ActivityView.swift in Sources */,
+				EE82D4C1FE16550707753ABC /* AdaptiveRootView.swift in Sources */,
 				664B362D898AD3B4C076D608 /* AppModel.swift in Sources */,
 				C8CDC421EA8C30A97C57AF18 /* ConnectView.swift in Sources */,
 				7E729144F0F422CA9192FF18 /* DocumentationView.swift in Sources */,
@@ -738,6 +749,7 @@
 				A754B687DDADA7E86781E1E3 /* SettingsView.swift in Sources */,
 				92018204AA272CF0CAB4D2BC /* SharedKeychain.swift in Sources */,
 				D8E58A6CEC7FCCF18B81E961 /* SplashView.swift in Sources */,
+				3907EBC8B978FDAEAF51D065 /* SplitRootView.swift in Sources */,
 				FDE6AA841D59C80DF9CFADA2 /* StateApp.swift in Sources */,
 				E39B131D12E9AF11AB591103 /* StateAppDelegate.swift in Sources */,
 				528FCCE48D518247022C2A83 /* StateDatabase.swift in Sources */,

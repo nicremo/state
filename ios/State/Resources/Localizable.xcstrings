@@ -2481,6 +2481,16 @@
         }
       }
     },
+    "Select a reminder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle eine Erinnerung"
+          }
+        }
+      }
+    },
     "Server" : {
       "localizations" : {
         "de" : {
@@ -2757,6 +2767,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beaufsichtigte Läufe dürfen alle gewählten Fähigkeiten nutzen und fragen bei riskanten Schritten nach. Unbeaufsichtigte Läufe fragen nie, daher sind nur risikoarme Fähigkeiten erlaubt."
+          }
+        }
+      }
+    },
+    "Sync" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisieren"
           }
         }
       }
