@@ -601,12 +601,12 @@
         }
       }
     },
-    "Connect this iPhone to your own server." : {
+    "Connect %@ to your own server." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verbinde dieses iPhone mit deinem eigenen Server."
+            "value" : "Verbinde %@ mit deinem eigenen Server."
           }
         }
       }
@@ -1921,12 +1921,12 @@
         }
       }
     },
-    "Printed once by your server with state-server bootstrap-token. It makes this iPhone the owner." : {
+    "Printed once by your server with state-server bootstrap-token. It makes %@ the owner." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dein Server gibt ihn einmal mit state-server bootstrap-token aus. Er macht dieses iPhone zum Besitzer."
+            "value" : "Dein Server gibt ihn einmal mit state-server bootstrap-token aus. Er macht %@ zum Besitzer."
           }
         }
       }
@@ -2531,12 +2531,12 @@
         }
       }
     },
-    "Set up the server, pair this iPhone, connect your agents." : {
+    "Set up the server, pair %@, connect your agents." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Server einrichten, iPhone koppeln, Agenten verbinden."
+            "value" : "Server einrichten, %@ koppeln, Agenten verbinden."
           }
         }
       }
@@ -2681,12 +2681,12 @@
         }
       }
     },
-    "State needs a server of your own. Your agents and this iPhone both talk to it." : {
+    "State needs a server of your own. It connects your agents and %@." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "State braucht einen eigenen Server. Deine Agenten und dieses iPhone sprechen beide mit ihm."
+            "value" : "State braucht einen eigenen Server. Er verbindet deine Agenten und %@."
           }
         }
       }
@@ -3277,6 +3277,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "statectl speichert die Zugangsdaten und gibt den MCP-Server-Eintrag für diesen Agenten aus. Trage ihn in dessen eigene Konfiguration ein."
+          }
+        }
+      }
+    },
+    "this Mac" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "diesen Mac"
+          }
+        }
+      }
+    },
+    "this iPad" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dieses iPad"
+          }
+        }
+      }
+    },
+    "this iPhone" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dieses iPhone"
           }
         }
       }

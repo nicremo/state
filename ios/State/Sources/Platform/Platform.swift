@@ -44,6 +44,24 @@ enum Platform {
         false
         #endif
     }
+
+    /// The demonstrative device phrase the connect and onboarding screens use
+    /// mid sentence, such as "Connect this Mac to your own server." German
+    /// declines "this" by grammatical gender ("dieses iPad" but "diesen
+    /// Mac"), so the whole phrase is localized per platform here instead of
+    /// substituting a bare device name into one shared sentence template.
+    static var deviceNoun: String {
+        #if os(macOS)
+        String(localized: "this Mac")
+        #else
+        switch UIDevice.current.userInterfaceIdiom {
+        case .pad:
+            String(localized: "this iPad")
+        default:
+            String(localized: "this iPhone")
+        }
+        #endif
+    }
 }
 
 extension Color {
