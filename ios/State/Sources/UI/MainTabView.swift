@@ -53,83 +53,118 @@ enum ReminderCollectionMode {
 struct ReminderCollectionView: View {
     @Bindable var model: AppModel
     let mode: ReminderCollectionMode
+    /// When set, the list drives an external selection instead of pushing onto
+    /// its own navigation stack. The split layout uses this for its detail
+    /// column; the iPhone passes nothing and keeps the navigation stack.
+    var selection: Binding<String?>?
+    /// The split layout owns one editor sheet for the whole window, so the Mac
+    /// menu command and the toolbar button open the same sheet.
+    var editorPresentation: Binding<Bool>?
+
     @State private var search = ""
-    @State private var showsEditor = false
+    @State private var ownEditorPresentation = false
     @State private var path: [String] = []
     @State private var createdReminderID: String?
 
     var body: some View {
-        NavigationStack(path: $path) {
-            Group {
-                if filteredReminders.isEmpty {
-                    emptyState
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(StateTheme.warmBackground.ignoresSafeArea())
-                } else {
-                    List {
-                        ForEach(filteredReminders) { reminder in
-                            NavigationLink(value: reminder.id) {
-                                ReminderRow(
-                                    reminder: reminder,
-                                    latestEvent: model.activity.first { $0.reminderID == reminder.id }
-                                )
-                            }
-                            .listRowInsets(
-                                EdgeInsets(
-                                    top: StateTheme.Space.group,
-                                    leading: StateTheme.Space.block,
-                                    bottom: StateTheme.Space.group,
-                                    trailing: StateTheme.Space.block
-                                )
-                            )
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    Task { await model.archiveReminder(reminder, archived: true) }
-                                } label: {
-                                    Label(String(localized: "Archive"), systemImage: "archivebox")
-                                }
-                            }
-                        }
+        if let selection {
+            list(selection: selection)
+        } else {
+            NavigationStack(path: $path) {
+                list(selection: nil)
+                    .navigationDestination(for: String.self) { reminderID in
+                        ReminderDetailView(model: model, reminderID: reminderID)
                     }
-                    .stateListStyle()
-                    .stateBackground()
-                    .animation(StateTheme.contentChange, value: filteredReminders.map(\.id))
-                    .refreshable { await model.synchronize() }
-                }
             }
-            .navigationTitle(mode.title)
-            .navigationDestination(for: String.self) { reminderID in
-                ReminderDetailView(model: model, reminderID: reminderID)
-            }
-            .searchable(text: $search, prompt: String(localized: "Search reminders"))
-            .toolbar {
-                ToolbarItem(placement: .stateLeading) {
-                    if model.isSyncing {
-                        ProgressView()
-                            .controlSize(.small)
-                            .transition(.opacity)
-                            .accessibilityLabel(String(localized: "Synchronizing"))
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showsEditor = true
-                    } label: {
-                        Label(String(localized: "New reminder"), systemImage: "plus")
-                    }
-                }
-            }
-            .animation(StateTheme.stateChange, value: model.isSyncing)
-            .sheet(
-                isPresented: $showsEditor,
-                onDismiss: revealCreatedReminder,
-                content: {
-                    ReminderEditorView(model: model) { draft in
-                        createdReminderID = await model.createReminder(draft)
-                    }
-                }
-            )
         }
+    }
+
+    /// The list itself. The navigation variant and the selection variant share
+    /// it; only the row wrapper and the surrounding stack differ.
+    @ViewBuilder
+    private func list(selection: Binding<String?>?) -> some View {
+        Group {
+            if filteredReminders.isEmpty {
+                emptyState
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(StateTheme.warmBackground.ignoresSafeArea())
+            } else {
+                List(selection: selection) {
+                    ForEach(filteredReminders) { reminder in
+                        row(reminder, selection: selection)
+                    }
+                }
+                .stateListStyle()
+                .stateBackground()
+                .animation(StateTheme.contentChange, value: filteredReminders.map(\.id))
+                .refreshable { await model.synchronize() }
+            }
+        }
+        .navigationTitle(mode.title)
+        .searchable(text: $search, prompt: String(localized: "Search reminders"))
+        .toolbar {
+            ToolbarItem(placement: .stateLeading) {
+                if model.isSyncing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .transition(.opacity)
+                        .accessibilityLabel(String(localized: "Synchronizing"))
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    editorIsPresented.wrappedValue = true
+                } label: {
+                    Label(String(localized: "New reminder"), systemImage: "plus")
+                }
+            }
+        }
+        .animation(StateTheme.stateChange, value: model.isSyncing)
+        .sheet(
+            isPresented: editorIsPresented,
+            onDismiss: revealCreatedReminder,
+            content: {
+                ReminderEditorView(model: model) { draft in
+                    createdReminderID = await model.createReminder(draft)
+                }
+            }
+        )
+    }
+
+    /// A row either pushes onto the navigation stack or carries the selection
+    /// the split layout reads, and either way it looks and behaves the same.
+    @ViewBuilder
+    private func row(_ reminder: Reminder, selection: Binding<String?>?) -> some View {
+        let content = ReminderRow(
+            reminder: reminder,
+            latestEvent: model.activity.first { $0.reminderID == reminder.id }
+        )
+        Group {
+            if selection == nil {
+                NavigationLink(value: reminder.id) { content }
+            } else {
+                content.tag(reminder.id)
+            }
+        }
+        .listRowInsets(
+            EdgeInsets(
+                top: StateTheme.Space.group,
+                leading: StateTheme.Space.block,
+                bottom: StateTheme.Space.group,
+                trailing: StateTheme.Space.block
+            )
+        )
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                Task { await model.archiveReminder(reminder, archived: true) }
+            } label: {
+                Label(String(localized: "Archive"), systemImage: "archivebox")
+            }
+        }
+    }
+
+    private var editorIsPresented: Binding<Bool> {
+        editorPresentation ?? $ownEditorPresentation
     }
 
     @ViewBuilder
@@ -141,7 +176,7 @@ struct ReminderCollectionView: View {
                 Text("Reminders you or your agents create appear here.")
             } actions: {
                 Button {
-                    showsEditor = true
+                    editorIsPresented.wrappedValue = true
                 } label: {
                     Text("New reminder")
                 }
@@ -157,7 +192,11 @@ struct ReminderCollectionView: View {
     /// nothing happened.
     private func revealCreatedReminder() {
         guard let createdReminderID else { return }
-        path = [createdReminderID]
+        if let selection {
+            selection.wrappedValue = createdReminderID
+        } else {
+            path = [createdReminderID]
+        }
         self.createdReminderID = nil
     }
 
