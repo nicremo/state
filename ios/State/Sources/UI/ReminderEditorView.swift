@@ -99,6 +99,7 @@ struct ReminderEditorView: View {
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .stateBackground()
             .interactiveDismissDisabled(isSaving)
             .task {
                 // The policy list arrives with the sync; a fresh install opens
