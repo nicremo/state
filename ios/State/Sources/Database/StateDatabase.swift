@@ -238,6 +238,29 @@ final class StateDatabase: Sendable {
         }
     }
 
+    /// Per reminder: its earliest open occurrence and whether it has any.
+    func occurrenceSummaries() async throws -> [String: OccurrenceSummary] {
+        let occurrences = try await pool.read { database in
+            try Data.fetchAll(database, sql: "SELECT json FROM occurrence_cache")
+                .map { try StateJSON.decoder.decode(Occurrence.self, from: $0) }
+        }
+        var summaries: [String: OccurrenceSummary] = [:]
+        for occurrence in occurrences {
+            var summary = summaries[occurrence.reminderID] ?? OccurrenceSummary(next: nil, hasAny: false)
+            summary.hasAny = true
+            if occurrence.status != .completed {
+                let key = (occurrence.localDate, occurrence.localTime ?? "")
+                if let current = summary.next {
+                    if key < (current.localDate, current.localTime ?? "") { summary.next = occurrence }
+                } else {
+                    summary.next = occurrence
+                }
+            }
+            summaries[occurrence.reminderID] = summary
+        }
+        return summaries
+    }
+
     func occurrence(id: String) async throws -> Occurrence? {
         try await pool.read { database in
             guard let data: Data = try Data.fetchOne(

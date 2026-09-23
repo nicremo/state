@@ -43,6 +43,7 @@ final class AppModel {
     private(set) var conflicts: [StoredConflict] = []
     private(set) var agents: [Actor] = []
     private(set) var devices: [Actor] = []
+    private(set) var occurrenceSummaries: [String: OccurrenceSummary] = [:]
     private(set) var projects: [Project] = []
     private(set) var policies: [ExecutionPolicy] = []
     private(set) var runners: [Runner] = []
@@ -487,6 +488,12 @@ final class AppModel {
         }
     }
 
+    /// Checks off what the list shows: the reminder's next open occurrence.
+    func completeNextOccurrence(of reminder: Reminder) async {
+        guard let next = occurrenceSummaries[reminder.id]?.next else { return }
+        await completeOccurrence(id: next.id)
+    }
+
     func completeOccurrence(id: String) async {
         await mutateOccurrence(id: id, snoozeUntil: nil)
     }
@@ -808,6 +815,7 @@ final class AppModel {
         do {
             let loadedReminders = try await database.reminders()
             let loadedActivity = try await database.activity()
+            occurrenceSummaries = try await database.occurrenceSummaries()
             projects = try await database.projects()
             policies = try await database.policies()
             runners = try await database.runners()

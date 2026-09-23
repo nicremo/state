@@ -35,126 +35,41 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    NavigationLink {
-                        DocumentationView()
-                    } label: {
-                        Label("Documentation", systemImage: "book")
-                    }
-                }
-
                 connectionSection
                 syncSection
-                #if os(iOS)
-                pushRelaySection
-                #endif
 
                 if model.session?.actor.kind == .owner {
-                    agentSection
-                    actorSection(title: "Agents", actors: model.agents)
-                    actorSection(title: "Devices", actors: model.devices.filter { $0.id != model.session?.actor.id })
-
-                    Section("Runners") {
-                        if model.runners.isEmpty {
-                            Text("None connected")
-                                .foregroundStyle(.secondary)
-                        }
-                        ForEach(model.runners) { runner in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(runner.displayName)
-                                    if !runner.projects.isEmpty || !runner.adapters.isEmpty {
-                                        HStack {
-                                            ForEach(runner.projects, id: \.self) { projectID in
-                                                chip(projectName(for: projectID))
-                                            }
-                                            ForEach(runner.adapters, id: \.self) { adapter in
-                                                chip(adapter)
-                                            }
-                                        }
-                                    }
-                                    runnerStatus(for: runner)
-                                }
-                                Spacer()
-                                Button(role: .destructive) {
-                                    Task { await model.revokeRunner(runner) }
-                                } label: {
-                                    Image(systemName: "xmark.circle")
-                                }
-                                .accessibilityLabel("Revoke access")
+                    Section("Agents") {
+                        NavigationLink {
+                            List {
+                                agentSection
+                                actorSection(title: "Connected agents", actors: model.agents)
                             }
-                            .accessibilityIdentifier("runner-\(runner.id)")
-                        }
-                        TextField("Runner name", text: $runnerName)
-                        Button {
-                            Task {
-                                runnerPairingCode = await model.createRunnerPairingCode(
-                                    displayName: runnerName.trimmingCharacters(in: .whitespacesAndNewlines)
-                                )
-                            }
+                            .navigationTitle("Agents")
+                            .stateInlineNavigationTitle()
+                            .stateBackground()
                         } label: {
-                            Label("Create one-time code", systemImage: "link.badge.plus")
+                            SettingsRowLabel(title: "Agents", systemImage: "terminal", count: model.agents.count)
                         }
-                        .disabled(runnerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                        if let runnerPairingCode {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(runnerPairingCode.code)
-                                    .font(.title3.monospaced().weight(.semibold))
-                                    .textSelection(.enabled)
-                                LabeledContent("Expires") {
-                                    Text(runnerPairingCode.expiresAt, style: .relative)
-                                }
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                Button {
-                                    Platform.copyToPasteboard(runnerPairingCommand(code: runnerPairingCode.code))
-                                } label: {
-                                    Label("Copy state-runner command", systemImage: "doc.on.doc")
-                                }
-                                Text("Run the command on the machine that should execute runs. state-runner stores the credential there.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text("Adjust $HOME/Projects to the folder that holds your checkouts. The command pairs the runner and installs the launch agent.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        NavigationLink {
+                            List {
+                                actorSection(title: "Devices", actors: model.devices.filter { $0.id != model.session?.actor.id })
                             }
-                            .padding(.vertical, 4)
-                        }
-                    }
-
-                    Section("Execution policies") {
-                        if model.policies.isEmpty {
-                            Text("None created yet")
-                                .foregroundStyle(.secondary)
-                        }
-                        ForEach(model.policies) { policy in
-                            HStack {
-                                Button {
-                                    editingPolicy = policy
-                                } label: {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(policy.name)
-                                                .foregroundStyle(StateTheme.graphite)
-                                            Text(policySubtitle(policy))
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        Spacer(minLength: 8)
-                                    }
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                Toggle("Enabled", isOn: policyEnabledBinding(policy))
-                                    .labelsHidden()
-                            }
-                            .accessibilityIdentifier("policy-\(policy.id)")
-                        }
-                        Button {
-                            createsPolicy = true
+                            .navigationTitle("Devices")
+                            .stateInlineNavigationTitle()
+                            .stateBackground()
                         } label: {
-                            Label("New policy…", systemImage: "plus")
+                            SettingsRowLabel(title: "Devices", systemImage: "iphone", count: model.devices.count)
+                        }
+
+                        NavigationLink {
+                            List { executionSections }
+                                .navigationTitle("Agent tasks")
+                                .stateInlineNavigationTitle()
+                                .stateBackground()
+                        } label: {
+                            SettingsRowLabel(title: "Agent tasks", systemImage: "play.circle", count: model.policies.count)
                         }
                     }
                 }
@@ -165,12 +80,27 @@ struct SettingsView: View {
                     } label: {
                         Label("Delivery and privacy", systemImage: "bell.badge")
                     }
+                    #if os(iOS)
+                    NavigationLink {
+                        List { pushRelaySection }
+                            .navigationTitle("Push relay")
+                            .stateInlineNavigationTitle()
+                            .stateBackground()
+                    } label: {
+                        Label("Push relay", systemImage: "antenna.radiowaves.left.and.right")
+                    }
+                    #endif
                 }
                 .navigationDestination(isPresented: $opensNotificationSettings) {
                     NotificationSettingsView()
                 }
 
-                Section("About") {
+                Section("Help") {
+                    NavigationLink {
+                        DocumentationView()
+                    } label: {
+                        Label("Documentation", systemImage: "book")
+                    }
                     LabeledContent("Version", value: appVersion)
                     Link(destination: StateLinks.repository) {
                         Label("Source code", systemImage: "chevron.left.forwardslash.chevron.right")
@@ -199,6 +129,115 @@ struct SettingsView: View {
                 PolicyEditorView(model: model)
             }
         }
+    }
+
+    /// Runners and execution policies: the machinery behind scheduled agent
+    /// tasks, one level down because most days nobody touches it.
+    @ViewBuilder
+    private var executionSections: some View {
+            Section("Runners") {
+                if model.runners.isEmpty {
+                    Text("None connected")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.runners) { runner in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(runner.displayName)
+                            if !runner.projects.isEmpty || !runner.adapters.isEmpty {
+                                HStack {
+                                    ForEach(runner.projects, id: \.self) { projectID in
+                                        chip(projectName(for: projectID))
+                                    }
+                                    ForEach(runner.adapters, id: \.self) { adapter in
+                                        chip(adapter)
+                                    }
+                                }
+                            }
+                            runnerStatus(for: runner)
+                        }
+                        Spacer()
+                        Button(role: .destructive) {
+                            Task { await model.revokeRunner(runner) }
+                        } label: {
+                            Image(systemName: "xmark.circle")
+                        }
+                        .accessibilityLabel("Revoke access")
+                    }
+                    .accessibilityIdentifier("runner-\(runner.id)")
+                }
+                TextField("Runner name", text: $runnerName)
+                Button {
+                    Task {
+                        runnerPairingCode = await model.createRunnerPairingCode(
+                            displayName: runnerName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        )
+                    }
+                } label: {
+                    Label("Create one-time code", systemImage: "link.badge.plus")
+                }
+                .disabled(runnerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if let runnerPairingCode {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(runnerPairingCode.code)
+                            .font(.title3.monospaced().weight(.semibold))
+                            .textSelection(.enabled)
+                        LabeledContent("Expires") {
+                            Text(runnerPairingCode.expiresAt, style: .relative)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        Button {
+                            Platform.copyToPasteboard(runnerPairingCommand(code: runnerPairingCode.code))
+                        } label: {
+                            Label("Copy state-runner command", systemImage: "doc.on.doc")
+                        }
+                        Text("Run the command on the machine that should execute runs. state-runner stores the credential there.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("Adjust $HOME/Projects to the folder that holds your checkouts. The command pairs the runner and installs the launch agent.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            Section("Execution policies") {
+                if model.policies.isEmpty {
+                    Text("None created yet")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.policies) { policy in
+                    HStack {
+                        Button {
+                            editingPolicy = policy
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(policy.name)
+                                        .foregroundStyle(StateTheme.graphite)
+                                    Text(policySubtitle(policy))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 8)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Toggle("Enabled", isOn: policyEnabledBinding(policy))
+                            .labelsHidden()
+                    }
+                    .accessibilityIdentifier("policy-\(policy.id)")
+                }
+                Button {
+                    createsPolicy = true
+                } label: {
+                    Label("New policy…", systemImage: "plus")
+                }
+            }
     }
 
     // MARK: Connection
@@ -375,7 +414,7 @@ struct SettingsView: View {
 
     private var agentSection: some View {
         Section {
-            Picker("Harness", selection: $harnessSelection) {
+            Picker("Agent", selection: $harnessSelection) {
                 ForEach(HarnessCatalog.presets, id: \.id) { preset in
                     Text(preset.label).tag(preset.id)
                 }
@@ -702,5 +741,23 @@ extension Runner {
 
     func isOnline(now: Date = Date()) -> Bool {
         Runner.isOnline(lastSeenAt: lastSeenAt, now: now)
+    }
+}
+
+/// A settings row that leads to a sub page and shows how many items it holds.
+private struct SettingsRowLabel: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let count: Int
+
+    var body: some View {
+        LabeledContent {
+            if count > 0 {
+                Text(count, format: .number)
+                    .foregroundStyle(.secondary)
+            }
+        } label: {
+            Label(title, systemImage: systemImage)
+        }
     }
 }

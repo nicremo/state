@@ -391,15 +391,31 @@ struct AuditEventRow: View {
                         .lineLimit(3)
                 }
 
-                if !event.changedFields.isEmpty {
-                    Text(event.changedFields.joined(separator: " · "))
-                        .font(.caption2.monospaced())
+                if event.action == "reminder.updated", !changedFieldNames.isEmpty {
+                    Text(changedFieldNames)
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// The changed fields in the owner's words, not the API's.
+    private var changedFieldNames: String {
+        event.changedFields.compactMap { field -> String? in
+            switch field {
+            case "title": String(localized: "Title")
+            case "description": String(localized: "Description")
+            case "schedule": String(localized: "Date")
+            case "recurrence": String(localized: "Repeat")
+            case "execution_policy_id", "executionPolicyID": String(localized: "Agent task")
+            case "status", "archived": nil
+            default: nil
+            }
+        }
+        .joined(separator: ", ")
     }
 
     /// Names the kind of change at a glance, so the feed is scannable without

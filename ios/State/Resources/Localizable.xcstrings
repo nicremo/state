@@ -201,6 +201,16 @@
         }
       }
     },
+    "Agent" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent"
+          }
+        }
+      }
+    },
     "Agent and app reminders appear here." : {
       "localizations" : {
         "de" : {
@@ -247,6 +257,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent-Läufe"
+          }
+        }
+      }
+    },
+    "Agent task" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent-Aufgabe"
+          }
+        }
+      }
+    },
+    "Agent tasks" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent-Aufgaben"
           }
         }
       }
@@ -561,6 +591,16 @@
         }
       }
     },
+    "Complete reminder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erledigen"
+          }
+        }
+      }
+    },
     "Completed" : {
       "localizations" : {
         "de" : {
@@ -647,6 +687,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verbunden"
+          }
+        }
+      }
+    },
+    "Connected agents" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbundene Agenten"
           }
         }
       }
@@ -1217,6 +1267,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Harness-Kennung"
+          }
+        }
+      }
+    },
+    "Help" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hilfe"
           }
         }
       }
