@@ -193,6 +193,11 @@ STATE_AGE_IDENTITY_FILE=~/state-backup-identity.txt \
 The script decrypts into temporary Docker volumes, starts isolated server and relay containers, waits for both
 readiness endpoints and verifies the restored audit chain. It removes only its own containers and volumes.
 
+Both verification and restore start their isolated containers from `STATE_SERVER_IMAGE` and `STATE_RELAY_IMAGE`, which
+default to `ghcr.io/nicremo/state-server:0.1.0` and `ghcr.io/nicremo/state-relay:0.1.0`. The locally built images carry
+exactly those tags while `STATE_VERSION=0.1.0`. If you changed `STATE_VERSION`, pass the matching image names as
+variables to both scripts, otherwise they try to pull an image that does not exist.
+
 Restore only during a maintenance window. The restore script stops both services itself, checks the checksum,
 decrypts, replaces the content of both data volumes and starts the services again:
 
