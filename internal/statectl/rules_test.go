@@ -27,7 +27,7 @@ func TestDefaultAgentRulesCoverCaptureProtocol(t *testing.T) {
 }
 
 func TestDefaultAgentRulesStayBounded(t *testing.T) {
-	if length := len(DefaultAgentRules()); length > 4000 {
+	if length := len(DefaultAgentRules()); length > 1400 {
 		t.Fatalf("rules grew to %d bytes; every agent pays for them on each turn", length)
 	}
 }
