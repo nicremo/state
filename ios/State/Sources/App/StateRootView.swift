@@ -52,7 +52,7 @@ struct StateRootView: View {
             ConnectView(model: model)
                 .transition(.opacity)
         } else {
-            MainTabView(model: model)
+            AdaptiveRootView(model: model)
                 .transition(.opacity)
         }
     }
