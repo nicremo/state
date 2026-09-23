@@ -13,6 +13,33 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 # Available Actions
 
+### mac_test
+
+```sh
+[bundle exec] fastlane mac_test
+```
+
+Build the macOS app without signing as a smoke test
+
+### mac_build
+
+```sh
+[bundle exec] fastlane mac_build
+```
+
+Create a signed macOS App Store package
+
+### mac_beta
+
+```sh
+[bundle exec] fastlane mac_beta
+```
+
+Upload an internal TestFlight build of the macOS app
+
+----
+
+
 ## iOS
 
 ### ios diagnose
@@ -109,7 +136,7 @@ Print the resolved release asset paths
 [bundle exec] fastlane ios test
 ```
 
-Run unit and UI tests
+Run unit and UI tests on iPhone and build the iPad layout
 
 ### ios build
 
@@ -126,6 +153,22 @@ Create a signed App Store archive
 ```
 
 Upload an internal TestFlight build
+
+### ios upload_local_update
+
+```sh
+[bundle exec] fastlane ios upload_local_update
+```
+
+Upload an already verified archive to the existing internal test group
+
+### ios local_update_status
+
+```sh
+[bundle exec] fastlane ios local_update_status
+```
+
+Read back one uploaded build and its internal testing state
 
 ### ios screenshots
 
