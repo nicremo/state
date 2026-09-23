@@ -2,11 +2,13 @@
 
 **Status:** PARTIAL
 **Branch:** wp/07-relay-for-local-server
+**PR:** #46 (Draft)
+**Basis:** `origin/main` (`7ace307` WP10), gestartet auf `wp/02-mac-server-app` und nach dem Merge von WP02 (#36) per Cherry-Pick neu aufgesetzt
 **Letzter Commit:** 868562d chore: register the new relay tests in the xcode project (danach folgen nur Report-Commits)
 
 ## Ergebnis in drei Sätzen
 
-Die Relay-Adresse gehört jetzt zur Server-Sitzung: Das iPhone leitet für `.local`-Server und private IP-Adressen keine Relay-Adresse mehr ab, registriert sich ohne Relay gar nicht für Push und zeigt diesen Zustand in den Einstellungen an. Der Mac Server kann optional ein öffentliches Relay konfigurieren (`--relay-url`), das im Status und im Pairing-QR als `relay=` auftaucht und beim Pairing in die iPhone-Sitzung übernommen wird. Alle fünf Tasks sind umgesetzt und getestet; offen ist einzig der Prüfbefehl `xcodebuild -scheme StateMac`, weil WP06 (macOS-Target) noch nicht auf `main` liegt.
+Die Relay-Adresse gehört jetzt zur Server-Sitzung: Das iPhone leitet für `.local`-Server und private IP-Adressen keine Relay-Adresse mehr ab, registriert sich ohne Relay gar nicht für Push und zeigt diesen Zustand in den Einstellungen an. Der Mac Server kann optional ein öffentliches Relay konfigurieren (`--relay-url`), das im Status und im Pairing-QR als `relay=` auftaucht und beim Pairing in die iPhone-Sitzung übernommen wird. Alle fünf Tasks sind umgesetzt und getestet; der einzige auf diesem Branch nicht ausführbare Prüfbefehl (`-scheme StateMac`, Target aus WP06) war auf einem temporären Merge mit WP06 grün, siehe Nachtrag.
 
 ## Erledigte Tasks
 
@@ -55,9 +57,22 @@ Die Relay-Adresse gehört jetzt zur Server-Sitzung: Das iPhone leitet für `.loc
 | `swift test` | grün, 12 Tests in 4 Suites |
 | `xcodegen generate` | grün, Projekt neu erzeugt |
 | `xcodebuild ... -scheme State ... test` | grün im zweiten Anlauf: 55 Unit-Tests und 1 UI-Test, "TEST SUCCEEDED" |
-| `xcodebuild ... -scheme StateMac ... build` | nicht ausführbar: das Schema `StateMac` entsteht erst in WP06 und liegt noch nicht auf `main` |
+| `xcodebuild ... -scheme StateMac ... build` | auf dem Branch nicht ausführbar (Schema fehlt bis WP06); auf einem temporären Merge mit WP06 grün, siehe Nachtrag |
 
 Hinweis zu den Läufen: Der Rechner war während der Prüfungen stark ausgelastet (Load Average über 60, mehrere fremde `xcodebuild`-Prozesse aus den parallel laufenden Arbeitspaketen). Vier Läufe der iOS-Suite brachen beim Start der Test-App ab (`Early unexpected exit`, `signal kill` beziehungsweise `signal term before establishing connection`), ohne dass ein Test fehlschlug. In ruhigeren Läufen war dieselbe Suite grün, zuletzt vollständig mit 55 Unit-Tests und dem UI-Test. Ein `go test -race ./...` schlug einmal fehl, während parallel ein iOS-Build lief; der Wiederholungslauf mit `-count=1` war in allen 15 Paketen grün.
+
+## Nachtrag: Mac-Build mit WP06 vorab geprüft
+
+Weil der im Plan geforderte StateMac-Build auf dem Branch nicht laufen kann, habe ich ihn auf einem temporären Merge geprüft. Der Nachweis liegt **nicht** im Branch und ist kein Bestandteil des PR:
+
+```bash
+git worktree add /tmp/wp07-mac-check -b verify/wp07-with-wp06 wp/07-relay-for-local-server
+cd /tmp/wp07-mac-check && git merge wp/06-macos-client-target   # WP06-Stand d2d4dff, Merge 710d83c
+cd ios && xcodegen generate && cd ..
+xcodebuild -project ios/State.xcodeproj -scheme StateMac -destination 'platform=macOS' -derivedDataPath build/DerivedData-mac CODE_SIGNING_ALLOWED=NO build
+```
+
+Zwei Konflikte: `project.pbxproj` (per `xcodegen generate` neu erzeugt) und `PushRegistrationService.swift`. Der erste Build schlug fehl mit `SessionRepository.swift:85: error: type 'PushRegistrationService' has no member 'isUsableRelay'`, weil WP06 den `#if os(iOS)`-Block um alles von `registerWithAppAttest` bis `environment` legt und meine Helfer damit ebenfalls umschließt, während `PairingPayload` `isUsableRelay` auf jeder Plattform aufruft. Nach dem Verschieben der vier Helfer hinter das `#endif` war der Build grün: `** BUILD SUCCEEDED **`. Die iOS-Suite lief auf dem Merge nicht erneut, die Auflösung verschiebt nur Deklarationen zwischen Scope-Blöcken.
 
 ## Abweichungen vom Plan
 
@@ -72,18 +87,17 @@ Hinweis zu den Läufen: Der Rechner war während der Prüfungen stark ausgelaste
 
 ## Offene Fragen und Risiken
 
-1. **Konflikt mit WP06.** WP06 hat in seinem Branch (`30e407c`) dieselben drei iOS-Dateien angefasst. Beim Merge von WP06 vor WP07 sind folgende Auflösungen nötig:
-   - `PushRegistrationService.swift`: WP06 teilt `registerIfSupported` in eine Plattform-Hülle und ein unter `#if os(iOS)` stehendes `registerWithAppAttest`. Meine Prüfungen auf fehlendes Relay (`pushStatus = .noRelay`, `removeLegacyCachedRelay`) gehören in `registerWithAppAttest`. Die statischen Helfer `relayURL(for:configured:)`, `isUsableRelay`, `removeLegacyCachedRelay` und `isPublicHost` müssen außerhalb des `#if os(iOS)`-Blocks bleiben, weil `PairingPayload` in `SessionRepository.swift` sie auch auf dem Mac aufruft.
-   - `SettingsView.swift`: WP06 entfernt `import UIKit` und nutzt `Platform.copyToPasteboard`, `.stateNoAutocapitalization()` und `.stateInlineNavigationTitle()`. Mein Abschnitt steht hinter `#if os(iOS)` und nutzt `.textInputAutocapitalization(.never)` und `.keyboardType(.URL)`. Beim Merge entweder so lassen oder auf die Plattform-Helfer umstellen.
-   - `ConnectView.swift`: WP06 ergänzt `pairingLink` und `applyPairingLink()`, ich ergänze `scannedRelayURL` und den `relayURL:`-Parameter. Beide Ergänzungen bleiben.
-   - `Localizable.xcstrings` und `project.pbxproj`: nach dem Merge `xcodegen generate` laufen lassen.
-2. **Reihenfolge.** Der Plan sieht WP06 vor WP07 vor. Solange WP06 fehlt, kann der StateMac-Build nicht laufen; die iOS-Prüfung deckt die geänderten Dateien für iOS ab.
+1. **Konflikt mit WP06.** WP06 hat in seinem Branch (Stand `d2d4dff`) dieselben drei iOS-Dateien angefasst. Der Merge wurde im Nachtrag vorab durchgespielt, dabei blieben zwei Konflikte:
+   - `PushRegistrationService.swift`: WP06 teilt `registerIfSupported` in eine Plattform-Hülle und ein unter `#if os(iOS)` stehendes `registerWithAppAttest`. Meine Prüfungen auf fehlendes Relay (`pushStatus = .noRelay`, `removeLegacyCachedRelay`) gehören in `registerWithAppAttest`. Die statischen Helfer `relayURL(for:configured:)`, `isUsableRelay`, `removeLegacyCachedRelay` und `isPublicHost` müssen hinter WP06s `#endif` stehen, weil `PairingPayload` in `SessionRepository.swift` sie auch auf dem Mac aufruft; innerhalb des Blocks bricht der Mac-Build mit `has no member 'isUsableRelay'` ab.
+   - `project.pbxproj`: nach dem Merge `xcodegen generate` laufen lassen.
+   - `SettingsView.swift`, `ConnectView.swift` und `Localizable.xcstrings` gingen im Probelauf ohne Konflikt zusammen. Falls der Koordinator es einheitlich will, kann mein Abschnitt noch auf `Platform`-Helfer (`.stateNoAutocapitalization()`) umgestellt werden; innerhalb von `#if os(iOS)` ist das nicht nötig.
+2. **Reihenfolge.** Der Plan sieht WP06 vor WP07 vor. Solange WP06 nicht auf `main` liegt, lässt sich der StateMac-Build nur auf dem im Nachtrag beschriebenen Weg prüfen.
 3. **Abgeleitete Adresse behält den Port.** `https://state.example.com:9847` ergibt `https://relay.example.com:9847`. Das ist das Verhalten von vorher, aber für einen Relay hinter Traefik auf 443 vermutlich falsch. Wer das ändern will, sollte den Port auf 443 normalisieren und das hier dokumentieren.
 4. **Erneute Registrierung nach Relay-Wechsel.** Die Einstellungen stoßen die Registrierung über `UIApplication.shared.registerForRemoteNotifications()` an; APNs liefert das Token erneut an den App Delegate, der Lauf aus `StateRootView` registriert dann mit der neuen Adresse. Wenn iOS das Token nicht erneut zustellt, bleibt der Zustand `.unknown`, bis die App das nächste Mal ein Token erhält. Ein dauerhaft gespeichertes Token wäre der robustere Weg, war aber nicht Teil des Auftrags.
 
 ## Manuelle Schritte für Fabian oder den Koordinator
 
-1. WP06 mergen, dann diesen Branch: `git merge origin/main` im WP07-Worktree, Konflikte wie oben beschrieben auflösen, danach `cd ios && xcodegen generate`.
-2. Anschließend die letzte Prüfung nachholen:
+1. WP06 mergen, dann diesen Branch: `git merge origin/main` im WP07-Worktree, die zwei Konflikte wie oben beschrieben auflösen, danach `cd ios && xcodegen generate`.
+2. Anschließend die letzte Prüfung nachholen, sie war im Probelauf grün:
    `xcodebuild -project ios/State.xcodeproj -scheme StateMac -destination 'platform=macOS' -derivedDataPath build/DerivedData-wp07 CODE_SIGNING_ALLOWED=NO build`
 3. Für den echten Betrieb den Relay aus dem WP03-Kit auf dem VPS starten, die öffentliche Adresse in der Mac Server App unter "Push unterwegs (optional)" eintragen und danach auf dem iPhone einmal die Einstellungen öffnen, damit die Route neu registriert wird.
