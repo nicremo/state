@@ -16,7 +16,7 @@ final class SessionRepository {
     private let profileKey = "state.server-session"
     private let credentialAccount = "server-credential"
 
-    init(defaults: UserDefaults = UserDefaults(suiteName: "group.com.fabincrm.state") ?? .standard) {
+    init(defaults: UserDefaults = Platform.sharedDefaults) {
         self.defaults = defaults
     }
 

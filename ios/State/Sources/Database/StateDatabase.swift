@@ -33,8 +33,7 @@ final class StateDatabase: Sendable {
     }
 
     static func applicationDatabase() throws -> StateDatabase {
-        let baseURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.fabincrm.state")
-            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let baseURL = Platform.sharedContainerURL
         try FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
         return try StateDatabase(path: databasePath(baseURL: baseURL))
     }
