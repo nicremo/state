@@ -33,7 +33,7 @@ Die CLI kann Reminder jetzt anlegen, Kontext ergänzen, umplanen, anzeigen und s
 
 - `README.md`: von Task 5 ausdrücklich verlangt. Nur der neue Unterabschnitt `### Terminal fallback` zwischen "Useful commands" und "## MCP tools". WP01 besitzt am README nur den Abschnitt Components, es überlappt also nichts.
 - `docs/plans/2026-09-23-product-lineup/reports/WP04-report.md`: der Report-Pfad aus dem Master-Plan. Der Ordner `docs/plans/` liegt nicht auf `origin/main`, deshalb wurde er in diesem Branch neu angelegt.
-- `cmd/statectl/main.go` gehörte zu meinem Bereich, aber nur für Switch und Usage. `git diff origin/main -- cmd/statectl/main.go` zeigt genau zwei Zeilen.
+- `cmd/statectl/main.go` gehörte zu meinem Bereich, aber nur für Switch und Usage. `git diff ae6ab23 -- cmd/statectl/main.go` gegen die Merge-Base zeigt genau zwei Hunks, drei eingefügte und eine gelöschte Zeile.
 
 ## Prüfungen
 
@@ -57,12 +57,21 @@ Die CLI kann Reminder jetzt anlegen, Kontext ergänzen, umplanen, anzeigen und s
 7. **`docs/plans/` fehlt auf `origin/main`.** Der Report wurde im Worktree neu angelegt. Da der Koordinator die Pläne laut Master-Plan vor Welle 1 nach `main` bringt, ist mit einem Konflikt nur zu rechnen, wenn er dieselbe Report-Datei dort schon angelegt hat.
 8. **`--clear-repeat` ohne `--date` ist erlaubt.** Die Usage-Zeile im Plan verlangt `(--clear | --date ...)` und erlaubt `--clear-repeat` nur als Zusatz. Die Umsetzung akzeptiert auch `--clear-repeat` allein, weil das eine sinnvolle Teiländerung ist und kein Risiko erzeugt.
 
+## Unabhängige Prüfung
+
+Eine zweite, ausschließlich lesend arbeitende Session hat die Umsetzung gegen diese Spezifikation geprüft. Ergebnis: alle acht Prüfpunkte bestanden, keine Abweichung.
+
+Geprüft wurden: exakte Tool-Namen und JSON-Feldnamen gegen `internal/mcpserver/server.go`, alle 14 Validierungszeilen mit ihren Fehler-Substrings, Signaturgleichheit mit dem Spec-Block, die erwartete Argument-Map per `reflect.DeepEqual`, alle sieben benannten Tests, der Integrationstest gegen den echten In-Memory-Server, der Zwei-Hunk-Diff in `main.go`, die Reihenfolge Validierung vor Verbindungsaufbau, die 64-KB-Grenze, stdin, der 30-Sekunden-Timeout und das Ausgabeformat. Zusätzlich geprüft: kein `internal/store` und kein PocketBase in den Nicht-Test-Dateien, kein Secret-Zugriff, keine KI-Attribution in Commits oder Code.
+
+Zwei Anmerkungen der Prüfung ohne Befund: Der 30-Sekunden-Kontext von `schedule` umfasst zwei MCP-Aufrufe (`get_reminder` und `update_reminder`), der Timeout gilt also pro CLI-Aufruf. Und der Idempotenzschritt aus Task 3 liegt in `TestReminderServiceCreateIsIdempotent` statt im Haupttest.
+
 ## Offene Fragen und Risiken
 
 1. Der lokale Zeitzonenname hängt davon ab, ob `TZ` gesetzt ist oder `time.Local.String()` einen echten Namen liefert. Auf einem Mac ohne gesetztes `TZ` ergibt das `Local`, also verlangt jede Datumsangabe ohne `--tz` den Schalter. Das ist die im Plan beschriebene Regel, aber es ist eine Hürde im Alltag. Der Koordinator kann später einen Profil-Standard oder ein `--tz` aus der Konfiguration ergänzen.
 2. Die Idempotenz beruht auf `client_request_id` plus Actor. Ein zweiter Aufruf mit derselben Request-ID und demselben Profil liefert denselben Reminder, auch wenn sich Titel oder Datum unterscheiden. Für die CLI ist das gewollt, kann einen Nutzer aber überraschen, der `--request-id` wiederholt.
 3. Der CLI-Pfad selbst wird nur über Flag-Fehler getestet, nicht über eine echte Verbindung, weil `loadProfileAndCredential` den System-Keychain liest und Tests dort nichts anfassen dürfen. Die Verdrahtung Flag-Parsing zu Service ist damit nur durch Lesen und durch die Tests von `internal/statectl` belegt.
 4. `internal/statectl/reminder_test.go` importiert `internal/mcpserver`, `internal/store`, `internal/auth` und PocketBase. Das erweitert die Testabhängigkeiten des Pakets, erzeugt aber keinen Importzyklus.
+5. `origin/main` ist während der Arbeit auf `4254d1b` vorgerückt (PR #38 mit dem Produkt-Lineup-Plan). Merge-Base dieses Branches ist `ae6ab23`. `main` hat `README.md` an anderen Stellen geändert und `docs/plans/` neu angelegt, mein Report liegt in einem neuen Unterordner. Ein Test-Merge mit `git merge-tree --write-tree origin/main HEAD` liefert einen sauberen Baum ohne Konflikt. Der Koordinator mergt trotzdem selbst und lässt die Prüfbefehle danach erneut laufen.
 
 ## Manuelle Schritte für Fabian oder den Koordinator
 
