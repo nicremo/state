@@ -74,9 +74,6 @@ targets:
         MACOSX_DEPLOYMENT_TARGET: "15.0"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "Apple Development"
-      configs:
-        Release:
-          CODE_SIGN_IDENTITY: "Apple Distribution"
     scheme:
       gatherCoverageData: false
   StateNotificationService:

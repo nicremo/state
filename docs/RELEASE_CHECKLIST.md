@@ -144,3 +144,10 @@ If the export fails with `Copy failed`, check `rsync`. Xcode packages the IPA wi
 - Complete a physical-device accessibility pass for German and English, Dark Mode, Dynamic Type and VoiceOver.
 - Enable HSTS only after successful owner pairing and the final TLS smoke test.
 - Run and document an encrypted backup restore test for the deployed server.
+
+### One-time Mac setup (done on 23.09.2026)
+
+- The macOS target uses automatic signing with the `Apple Development` identity for every configuration. Do not pin `Apple Distribution` for Release: automatic signing picks the distribution certificate at export time, and a pinned identity fails the archive with "conflicting provisioning settings".
+- Automatic signing needs at least one registered Mac in the team before it can create a Mac development profile. Register the build Mac once with `register_device(platform: "mac")` using its Provisioning UDID from `system_profiler SPHardwareDataType`.
+- App Store Connect accepts a macOS package only after the app has a macOS platform. Adding a macOS App Store version (1.0.0) creates it.
+- After that, `fastlane mac_beta` uploads an internal TestFlight build.
