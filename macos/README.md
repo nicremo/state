@@ -62,6 +62,10 @@ self-signed certificate. The updated client stores the pin with its server sessi
 accepts only that exact certificate at that origin and rejects redirects. Standard
 HTTPS connections and older pairing QR codes remain supported.
 
+Renaming the Mac changes its Bonjour name, so the server replaces the stored
+certificate for the new name. The fingerprint changes with it, and paired iPhones
+pair again once with the new QR code.
+
 ## Background and offline limits
 
 The server runs while the user is logged in and the Mac is awake. It does not

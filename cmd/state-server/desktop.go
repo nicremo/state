@@ -118,6 +118,7 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 		serverErrors <- server.Serve(tls.NewListener(listener, &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12}))
 	}()
 	go func() { serverErrors <- localServer.Serve(localListener) }()
+	logger.Info("state-server desktop listening", "address", serverURL, "local_address", localURL, "version", version)
 	defer func() {
 		shutdown, stop := context.WithTimeout(context.Background(), 10*time.Second)
 		defer stop()
@@ -266,7 +267,15 @@ func desktopCertificate(path, host string) (tls.Certificate, string, error) {
 		if err != nil {
 			return tls.Certificate{}, "", err
 		}
-		return cert, certificateFingerprint(cert), nil
+		if certificateCoversHost(cert, host) {
+			return cert, certificateFingerprint(cert), nil
+		}
+		// The stored identity was issued for another Bonjour name, for example
+		// after the Mac was renamed. Replacing it changes the fingerprint, so
+		// paired iPhones have to pair again.
+		if err := os.Remove(path); err != nil {
+			return tls.Certificate{}, "", err
+		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return tls.Certificate{}, "", err
 	}
@@ -306,6 +315,22 @@ func desktopCertificate(path, host string) (tls.Certificate, string, error) {
 	}
 	cert, err := tls.X509KeyPair(contents, contents)
 	return cert, certificateFingerprint(cert), err
+}
+
+func certificateCoversHost(cert tls.Certificate, host string) bool {
+	if len(cert.Certificate) == 0 {
+		return false
+	}
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return false
+	}
+	for _, name := range leaf.DNSNames {
+		if strings.EqualFold(name, host) {
+			return true
+		}
+	}
+	return false
 }
 
 func certificateFingerprint(cert tls.Certificate) string {
