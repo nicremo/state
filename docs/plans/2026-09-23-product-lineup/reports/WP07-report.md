@@ -72,7 +72,7 @@ cd ios && xcodegen generate && cd ..
 xcodebuild -project ios/State.xcodeproj -scheme StateMac -destination 'platform=macOS' -derivedDataPath build/DerivedData-mac CODE_SIGNING_ALLOWED=NO build
 ```
 
-Zwei Konflikte: `project.pbxproj` (per `xcodegen generate` neu erzeugt) und `PushRegistrationService.swift`. Der erste Build schlug fehl mit `SessionRepository.swift:85: error: type 'PushRegistrationService' has no member 'isUsableRelay'`, weil WP06 den `#if os(iOS)`-Block um alles von `registerWithAppAttest` bis `environment` legt und meine Helfer damit ebenfalls umschließt, während `PairingPayload` `isUsableRelay` auf jeder Plattform aufruft. Nach dem Verschieben der vier Helfer hinter das `#endif` war der Build grün: `** BUILD SUCCEEDED **`. Die iOS-Suite lief auf dem Merge nicht erneut, die Auflösung verschiebt nur Deklarationen zwischen Scope-Blöcken.
+Zwei Konflikte: `project.pbxproj` (per `xcodegen generate` neu erzeugt) und `PushRegistrationService.swift`. Der erste Build schlug fehl mit `SessionRepository.swift:85: error: type 'PushRegistrationService' has no member 'isUsableRelay'`, weil WP06 den `#if os(iOS)`-Block um alles von `registerWithAppAttest` bis `environment` legt und meine Helfer damit ebenfalls umschließt, während `PairingPayload` `isUsableRelay` auf jeder Plattform aufruft. Nach dem Verschieben der vier Helfer hinter das `#endif` war der Build grün: `** BUILD SUCCEEDED **`. Die iOS-Suite lief auf dem Merge nicht erneut, die Auflösung verschiebt nur Deklarationen zwischen Scope-Blöcken. Die aufgelöste Fassung liegt lokal im Repository als Branch `verify/wp07-with-wp06` (`86a702d`), damit der Koordinator sie als Vorlage nehmen kann; sie ist nicht gepusht und nicht Teil des PR.
 
 ## Abweichungen vom Plan
 
