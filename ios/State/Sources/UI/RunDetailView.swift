@@ -230,9 +230,9 @@ struct RunDetailView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .stateListStyle()
         .navigationTitle("Agent run")
-        .navigationBarTitleDisplayMode(.inline)
+        .stateInlineNavigationTitle()
         .task { await reload() }
         .refreshable { await reload() }
         .confirmationDialog("Decline this request?", isPresented: $confirmsDecline) {

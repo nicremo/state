@@ -7,6 +7,9 @@ import AppKit
 
 /// The few platform services the shared UI needs. Everything else in the
 /// app is plain SwiftUI and compiles unchanged on iOS, iPadOS and macOS.
+/// Every member touches a main thread only framework, so the whole type is
+/// main actor isolated and callable from view bodies.
+@MainActor
 enum Platform {
     static func copyToPasteboard(_ text: String) {
         #if os(iOS)

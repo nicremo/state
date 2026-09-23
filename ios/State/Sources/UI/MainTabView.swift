@@ -91,7 +91,7 @@ struct ReminderCollectionView: View {
                             }
                         }
                     }
-                    .listStyle(.insetGrouped)
+                    .stateListStyle()
                     .stateBackground()
                     .animation(StateTheme.contentChange, value: filteredReminders.map(\.id))
                     .refreshable { await model.synchronize() }
@@ -103,7 +103,7 @@ struct ReminderCollectionView: View {
             }
             .searchable(text: $search, prompt: String(localized: "Search reminders"))
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .stateLeading) {
                     if model.isSyncing {
                         ProgressView()
                             .controlSize(.small)

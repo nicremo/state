@@ -109,7 +109,7 @@ struct SettingsView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 Button {
-                                    UIPasteboard.general.string = runnerPairingCommand(code: runnerPairingCode.code)
+                                    Platform.copyToPasteboard(runnerPairingCommand(code: runnerPairingCode.code))
                                 } label: {
                                     Label("Copy state-runner command", systemImage: "doc.on.doc")
                                 }
@@ -386,7 +386,7 @@ struct SettingsView: View {
 
             if harnessSelection == HarnessCatalog.customTag {
                 TextField("Harness identifier", text: $customHarness)
-                    .textInputAutocapitalization(.never)
+                    .stateNoAutocapitalization()
                     .autocorrectionDisabled()
                     .onChange(of: customHarness) { _, _ in refreshSuggestedName() }
                 if !customHarness.isEmpty, !HarnessCatalog.isValid(harness) {
@@ -462,7 +462,7 @@ struct SettingsView: View {
             )
 
             Button {
-                UIPasteboard.general.string = pairingCommand(code: code.code)
+                Platform.copyToPasteboard(pairingCommand(code: code.code))
                 withAnimation(StateTheme.stateChange) { copiedCommand = true }
             } label: {
                 Label(
@@ -657,7 +657,7 @@ struct NotificationSettingsView: View {
             }
         }
         .navigationTitle("Notifications")
-        .navigationBarTitleDisplayMode(.inline)
+        .stateInlineNavigationTitle()
         .task {
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             status = switch settings.authorizationStatus {
