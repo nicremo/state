@@ -30,7 +30,13 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:3.23.3 AS runtime
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -g 10001 -S state \
-    && adduser -u 10001 -S -D -H -G state state
+    && adduser -u 10001 -S -D -H -G state state \
+    && mkdir -p /data /backups \
+    && chown 10001:10001 /data /backups \
+    && chmod 0700 /data
+# Docker seeds an empty named volume from the image directory it mounts over,
+# ownership included. Without these directories a fresh volume is root-owned
+# and the unprivileged server cannot create its secrets directory.
 USER 10001:10001
 
 FROM runtime AS state-server
