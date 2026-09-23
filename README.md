@@ -4,6 +4,8 @@ State gives coding agents a durable, auditable memory for reminders while keepin
 
 State is built for technical self-hosters. It is not an agent chat app, and execution never runs on the server: a workstation pulls its own work through an outbound-only runner.
 
+New here? [`DOCUMENTATION.md`](DOCUMENTATION.md) walks through the whole setup: running the server, pairing the iOS app, connecting Codex, Claude Code and OpenCode, and what the one-time codes and the pairing QR code actually are.
+
 ## Components
 
 - `state-server`: One Go binary with embedded PocketBase, REST, Streamable HTTP MCP, scheduling, full-text search and a signed audit chain.
@@ -35,6 +37,13 @@ flowchart LR
 - Offline iOS reads, queued writes and explicit conflict resolution.
 - Local rolling notifications with encrypted server push fallback.
 - German and English UI, Dark Mode, Dynamic Type and VoiceOver labels.
+
+## Native Mac server
+
+The [State Server menu bar app](macos/README.md) runs the server locally, displays
+an iPhone pairing QR code and keeps working when its window is closed. Build it
+with `bash macos/build.sh`. The updated iPhone client is required for local TLS
+pairing. Data stays on the Mac; synchronization requires an awake, reachable Mac.
 
 ## Quick start
 
