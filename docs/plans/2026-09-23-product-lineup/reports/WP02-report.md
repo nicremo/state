@@ -2,7 +2,9 @@
 
 **Status:** DONE
 **Branch:** wp/02-mac-server-app
-**Letzter Commit:** 9fcdec2 docs: document mac server logs, restarts and troubleshooting
+**Letzter Commit:** 34609e1 docs: add WP02 report (davor 9fcdec2 docs: document mac server logs, restarts and troubleshooting)
+
+**Hinweis zur PR-Basis:** Dieser Branch basiert auf dem Integrationsbranch `feat/local-mac-server-and-ios-refresh` (Commit `bc42fbe`), nicht auf `origin/main`, weil `macos/**` auf `origin/main` noch fehlt. Der Draft-PR gegen `main` zeigt deshalb zusätzlich die Commits des Integrationsbranches. Sobald der Koordinator Phase 1 gemergt hat, enthält der Diff nur noch die WP02 Commits.
 
 ## Ergebnis in drei Sätzen
 
