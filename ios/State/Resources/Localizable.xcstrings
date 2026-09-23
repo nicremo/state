@@ -171,6 +171,16 @@
         }
       }
     },
+    "Adjust $HOME/Projects to the folder that holds your checkouts. The command pairs the runner and installs the launch agent." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passe $HOME/Projects auf den Ordner mit deinen Checkouts an. Der Befehl koppelt den Runner und installiert den LaunchAgent, der ihn ab dem nächsten Login dauerhaft ausführt."
+          }
+        }
+      }
+    },
     "Advance notice" : {
       "localizations" : {
         "de" : {
@@ -1697,6 +1707,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Einmaliger Kopplungscode"
+          }
+        }
+      }
+    },
+    "Online" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Online"
           }
         }
       }

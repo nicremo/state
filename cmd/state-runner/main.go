@@ -31,13 +31,15 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger) error {
 	if len(args) == 0 {
-		return errors.New("usage: state-runner <pair|run|version>")
+		return errors.New("usage: state-runner <pair|run|service|version>")
 	}
 	switch args[0] {
 	case "pair":
 		return runPair(args[1:], stdout, stderr)
 	case "run":
 		return runLoop(args[1:], stdout, stderr)
+	case "service":
+		return runService(args[1:], stdout, stderr)
 	case "version":
 		_, err := fmt.Fprintln(stdout, version)
 		return err
