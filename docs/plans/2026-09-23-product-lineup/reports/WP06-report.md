@@ -56,6 +56,8 @@ Es gibt jetzt ein natives macOS-Target `StateMac` im selben Xcode-Projekt, das d
 | `xcodebuild -scheme StateMac -destination 'platform=macOS' build` | `** BUILD SUCCEEDED **` |
 | Mac-App starten, 10 Sekunden warten, `kill -0` | `RUNNING_OK`, kein Absturz |
 | Skript über alle Swift-Dateien: jeder Treffer von `UIKit`, `UIDevice`, `UIPasteboard`, `UIApplication`, `UIColor`, `DeviceCheck`, `DCAppAttest`, `VisionKit`, `navigationBarTitleDisplayMode`, `textInputAutocapitalization`, `insetGrouped` innerhalb eines `#if os(iOS)`-Blocks | 0 ungeschützte Treffer |
+| Unabhängige Gegenprüfung durch die Lead-Session auf diesem Commit: `xcodebuild -scheme State -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.5' test` | `** TEST SUCCEEDED **`, 55 Unit-Tests grün, `StateUITests.StateScreenshots` grün (20,9 s) |
+| Unabhängige Gegenprüfung durch die Lead-Session auf diesem Commit: `xcodebuild -scheme StateMac -destination 'platform=macOS' build` | `** BUILD SUCCEEDED **`, nur die bekannte `timeSensitive`-Deprecation-Warnung |
 | `git status` | sauber |
 
 ### Screenshot der Mac-App
@@ -65,6 +67,10 @@ Aufgenommen mit `screencapture -x -R <Fensterrahmen>` nach `screencapture`-Bild 
 Zu sehen ist ein natives Mac-Fenster mit dem Titel `State` in dunkler Darstellung. Oben links das App-Icon und die Wortmarke `State`, darunter die Karte `Noch kein Server? Hier starten`, danach das Feld `Serveradresse` mit dem Platzhalter `https://state.example.com`, der Segmentumschalter `Art der Verbindung` mit `Ersteinrichtung` und `Kopplungscode`, das Feld `Bootstrap-Token` und der Hilfetext zu `state-server bootstrap-token`. Die geteilte SwiftUI-Oberfläche rendert also unverändert auf dem Mac, inklusive der Farben aus `StateTheme`, die über `Color(light:dark:)` in dunkler Erscheinung aufgelöst werden.
 
 Bekannte Kosmetik: Die Wortmarke sagt auf dem Mac `Verbinde dieses iPhone mit deinem eigenen Server`. Der Text ist iPhone-spezifisch, aber WP06 darf den sichtbaren Text der iPhone-App nicht ändern. Eine plattformabhängige Formulierung ist ein eigener kleiner Task und steht unter Offene Fragen.
+
+### Demo-Modus (Task 5.4)
+
+Einen Demo-Knopf gibt es nicht im Onboarding, sondern unten auf der Verbindungsmaske: `Look around without a server` mit dem Accessibility-Identifier `explore-demo`. Er ruft `model.enterDemo()` auf, also geteilten Code für iPhone und Mac, und wird laut Plan nur beschrieben, nicht automatisiert. Für iOS ist der Pfad belegt: `StateUITests.StateScreenshots.testAppStoreScreenshots()` tippt genau diesen Knopf und erreicht danach die Tab-Leiste. Auf dem Mac wurde er in diesem WP bewusst nicht automatisiert.
 
 ## Abweichungen vom Plan
 
