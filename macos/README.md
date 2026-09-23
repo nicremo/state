@@ -61,6 +61,10 @@ iPhone code is removed from the UI after the next status update. Expired codes
 are renewed while the pairing panel is visible. Hiding a QR does not revoke its
 code; it remains valid until consumed or expired. Program codes can be copied as
 a `statectl pair` command; running that command installs the selected integration.
+The runner option mints a runner code instead and copies a `state-runner pair`
+command that also installs the runner as a launch agent (see
+[runner-service](../docs/runner-service.md)); `state-runner` must be installed with
+`scripts/install-agent-tools.sh` first.
 
 The iPhone must run the updated client in this repository. The existing released
 client does not understand the QR certificate fingerprint and will reject the

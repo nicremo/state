@@ -37,6 +37,8 @@ import (
 type desktopRequest struct {
 	Action  string `json:"action"`
 	Harness string `json:"harness,omitempty"`
+	Kind    string `json:"kind,omitempty"`
+	Name    string `json:"name,omitempty"`
 }
 
 type desktopStatus struct {
@@ -56,6 +58,7 @@ type desktopPairing struct {
 	Code      string    `json:"code"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Harness   string    `json:"harness,omitempty"`
+	Kind      string    `json:"kind,omitempty"`
 }
 
 // runDesktop communicates exclusively through inherited pipes. Pairing codes
@@ -202,10 +205,23 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 			case "status":
 			case "pair":
 				// Reuse unexpired codes so repeated UI actions cannot flood the table.
-				if pairing == nil || pairing.Harness != request.Harness || time.Now().After(pairing.ExpiresAt) {
+				kind := string(state.ActorKindDevice)
+				if request.Kind == string(state.ActorKindRunner) {
+					kind = request.Kind
+				} else if request.Harness != "" {
+					kind = string(state.ActorKindHarness)
+				}
+				if pairing == nil || pairing.Kind != kind || pairing.Harness != request.Harness || time.Now().After(pairing.ExpiresAt) {
 					pairRequest := stateauth.PairingCodeRequest{Kind: state.ActorKindDevice, DisplayName: "iPhone", DeviceName: "iPhone"}
-					if request.Harness != "" {
+					switch kind {
+					case string(state.ActorKindHarness):
 						pairRequest = stateauth.PairingCodeRequest{Kind: state.ActorKindHarness, Harness: request.Harness, DisplayName: request.Harness}
+					case string(state.ActorKindRunner):
+						name := strings.TrimSpace(request.Name)
+						if name == "" {
+							name = "Mac Runner"
+						}
+						pairRequest = stateauth.PairingCodeRequest{Kind: state.ActorKindRunner, DisplayName: name}
 					}
 					code, err := app.auth.CreatePairingCode(ctx, owner, pairRequest)
 					if err != nil {
@@ -214,7 +230,7 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 						}
 						continue
 					}
-					pairing = &desktopPairing{URL: desktopPairingURL(serverURL, code.Code, fingerprint, *relayURL), Code: code.Code, ExpiresAt: code.ExpiresAt, Harness: request.Harness}
+					pairing = &desktopPairing{URL: desktopPairingURL(serverURL, code.Code, fingerprint, *relayURL), Code: code.Code, ExpiresAt: code.ExpiresAt, Harness: request.Harness, Kind: kind}
 				}
 			default:
 				if err := emit("Unbekannte Aktion."); err != nil {
