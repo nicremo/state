@@ -3,7 +3,7 @@
 **Status:** DONE
 **Branch:** wp/05-agent-capture-rules
 **Basis:** `ae6ab23` (Stand beim Anlegen des Worktrees)
-**Commits:** c3c6bc0, bab4aed, c34d6fd, 764d4e1, be11312, plus der Nachtrag aus der unabhängigen Prüfung
+**Commits:** c3c6bc0, bab4aed, c34d6fd, 764d4e1, be11312, a6ad25a, danach dieser Report-Nachtrag
 
 ## Ergebnis in drei Sätzen
 
@@ -60,7 +60,7 @@
 4. **Mac Server App.** `macos/` liegt mittlerweile über PR #38 auf `origin/main`. Deren Pairing-Auswahl bietet nur iPhone, Claude Code, Codex und OpenCode, also keine freien Labels. Die Doku nennt das jetzt ausdrücklich und verweist für Pi Agent, DeepSeek Harness und eigene Labels auf die State App.
 5. **Bestehende Tests mit altem Regeltext.** Es gab keinen: `TestMarkedRuleBlockIsIdempotentAndRemovable` in `config_test.go` arbeitet mit eigenem Inline-Text. Statt einer Umstellung prüft der Codex-Installertest jetzt zusätzlich, dass die geschriebene Regeldatei `DefaultAgentRules()` enthält.
 6. **`internal/mcpserver/server_test.go`.** Nicht angefasst, weil nur `server.go` in meinem Bereich liegt. Kein Test erwartete den alten Beschreibungstext.
-7. **Nachtrag nach unabhängiger Prüfung.** Ein unabhängiger Review-Durchlauf hat vier Punkte gefunden, die danach korrigiert wurden: der Dash-Test in `rules_test.go` enthielt die beiden Dash-Zeichen als Literale statt als Escapes, und drei Formulierungen in `docs/agent-integration.md` waren ungenau (markierter Block auch für die JSON-Harness behauptet, "Nothing on disk is touched", sowie die Mac-Server-Pairing-Auswahl). Die Korrekturen stehen im Nachtrag-Commit.
+7. **Nachtrag nach unabhängiger Prüfung.** Ein unabhängiger Review-Durchlauf hat vier Punkte gefunden, die danach korrigiert wurden: der Dash-Test in `rules_test.go` enthielt die beiden Dash-Zeichen als Literale statt als Escapes, und drei Formulierungen in `docs/agent-integration.md` waren ungenau (markierter Block auch für die JSON-Harness behauptet, "Nothing on disk is touched", sowie die Mac-Server-Pairing-Auswahl). Die Korrekturen stehen in a6ad25a.
 
 ## Basisstand und Merge
 
