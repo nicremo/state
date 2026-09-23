@@ -34,7 +34,7 @@ func TestDefaultAgentRulesStayBounded(t *testing.T) {
 
 func TestDefaultAgentRulesHaveNoDashPunctuation(t *testing.T) {
 	rules := DefaultAgentRules()
-	if strings.ContainsAny(rules, "–—") {
+	if strings.ContainsAny(rules, "\u2013\u2014") {
 		t.Fatal("rules must not contain en or em dashes")
 	}
 }

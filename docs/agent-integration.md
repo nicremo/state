@@ -38,9 +38,10 @@ label typo would otherwise create a second actor for the same agent.
 ## Pair an agent
 
 1. Create a one-time pairing code as the owner:
-   - State app, **Settings**, section **Connect an agent**: choose the harness, give the
-     agent a name, then **Create one-time code**.
-   - The Mac Server app creates codes the same way for the server it runs.
+   - State app, **Settings**, section **Connect an agent**: choose the harness from the
+     picker or type a custom label, give the agent a name, then **Create one-time code**.
+   - The Mac Server app creates codes for iPhone, Claude Code, Codex and OpenCode. For Pi
+     Agent, DeepSeek Harness or any other label, create the code in the State app.
    The app shows the code, its expiry, and a copyable `statectl pair` command.
 2. Run that command on the workstation:
 
@@ -64,8 +65,8 @@ profile to `statectl.json` under the user configuration directory, which is
 
 ## What statectl changes
 
-For an automatic integration, `statectl pair` and `statectl install` add a marked block
-to two files. Paths come from `DefaultInstallPaths()` in
+For an automatic integration, `statectl pair` and `statectl install` write the MCP server
+entry and the rule block into two files. Paths come from `DefaultInstallPaths()` in
 `internal/statectl/installer.go`:
 
 | Harness | MCP configuration | Agent rules |
@@ -74,18 +75,25 @@ to two files. Paths come from `DefaultInstallPaths()` in
 | `claude-code` | `~/.claude.json` | `~/.claude/CLAUDE.md` |
 | `opencode` | `~/.config/opencode/opencode.json` | `~/.config/opencode/AGENTS.md` |
 
-Properties of the marked block:
+Properties of the change:
 
-- The MCP entry lives between `# statectl:state:start` and `# statectl:state:end` in the
-  TOML configuration, or between `<!-- statectl:state:start -->` and
-  `<!-- statectl:state:end -->` in the rule file.
-- Installation is idempotent. Running `statectl pair` twice replaces the marked block and
-  leaves every other setting and every other agent instruction untouched.
+- **Codex** gets a marked block in its TOML configuration. The MCP entry lives between
+  `# statectl:state:start` and `# statectl:state:end`, so unrelated TOML text is preserved.
+- **Claude Code** and **OpenCode** keep their JSON configuration. `statectl` adds one entry
+  under `mcpServers.state` or `mcp.state` and re-encodes the file, so unrelated values
+  survive while key order, indentation and number formatting are normalized to sorted
+  two-space JSON. Whitespace changes in your editor are therefore expected, lost comments
+  are not, because JSON has none.
+- The rule file of every automatic harness gets the rules between
+  `<!-- statectl:state:start -->` and `<!-- statectl:state:end -->`. Text outside the block
+  is preserved line by line.
+- Installation is idempotent. Running `statectl pair` twice replaces the State entry and
+  leaves every other setting and every other agent instruction in place.
 - Before an existing file is rewritten, `statectl` copies it next to itself as
   `<file>.state-backup-<timestamp>`, for example
   `config.toml.state-backup-20260923T015600Z`. New files get mode `0600`.
-- `statectl uninstall --harness <label>` removes both marked blocks and keeps the backup
-  files. Unrelated content in either file stays.
+- `statectl uninstall --harness <label>` removes the State entry from both files again and
+  keeps the backup files. Unrelated content stays.
 
 `statectl unpair --profile <name>` removes the local profile and the stored credential.
 It also uninstalls the harness integration unless you pass `--uninstall=false`.
@@ -94,7 +102,8 @@ It also uninstalls the harness integration unless you pass `--uninstall=false`.
 
 For a harness without a shipped integration, `statectl pair` still stores the credential
 and creates the profile. It then prints the MCP server entry and the rule block instead of
-writing files. Nothing on disk is touched.
+writing files. The command writes the statectl profile and the credential as always, but it
+writes no configuration file of that agent.
 
 The printed output has this shape:
 
