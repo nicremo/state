@@ -43,6 +43,7 @@
 		8E0C1182D2046BF405D62292 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12289CA407B35AD8F259EAF /* SnapshotHelper.swift */; };
 		931130E49387A21ECA23A92F /* StateTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018038764FE0FC5AA2A1718D /* StateTheme.swift */; };
 		96FDC642DAF2CB21D922A85C /* NotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37E22432DA6BAAD47D855756 /* NotificationCoordinator.swift */; };
+		975DD550DD8859DF237FF5A2 /* RunnerStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A92850BCEB20D4342B139F1 /* RunnerStatusTests.swift */; };
 		A963E01C464A6B13F1742981 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DC5696C6332BF15523978F /* Models.swift */; };
 		A9F71CEF2025A3E0A46BB834 /* StateRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2AEBBEB07BE6383A7241E37 /* StateRootView.swift */; };
 		AC816DB6CC17F748F4D10A1D /* PushRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7761E726011D22475832A98 /* PushRegistrationService.swift */; };
@@ -120,6 +121,7 @@
 		67F45C19CFDD1BE98ECD5882 /* HarnessCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessCatalog.swift; sourceTree = "<group>"; };
 		703233419435A6EC390D6127 /* RunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunDetailView.swift; sourceTree = "<group>"; };
 		792F44A80F58FEEC0D77421F /* StateLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateLinks.swift; sourceTree = "<group>"; };
+		7A92850BCEB20D4342B139F1 /* RunnerStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerStatusTests.swift; sourceTree = "<group>"; };
 		7BBB357F0392F998BB99044C /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		7E6897370AAEB5437D3B7DAD /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		7F808B6F2B8A329996C25508 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -232,6 +234,7 @@
 				9C0B57D33EA9C96E17EC2644 /* PolicyDraftValidationTests.swift */,
 				8E9E35C98AD7FCDC965ADA7C /* PushEnvelopeTests.swift */,
 				5FA9FBD89EF008034E44EA62 /* PushPayloadTests.swift */,
+				7A92850BCEB20D4342B139F1 /* RunnerStatusTests.swift */,
 				EEA74FBAC0A4D8299F73D22A /* SyncEngineTests.swift */,
 				A53151A5538CF22AA06C2F59 /* UUIDv7Tests.swift */,
 			);
@@ -586,6 +589,7 @@
 				177EE7BD41FDB6650B5856B8 /* PolicyDraftValidationTests.swift in Sources */,
 				119FEB1330F4F2CF49FC1B19 /* PushEnvelopeTests.swift in Sources */,
 				2B1DC5D1C8B6E6240A4694BC /* PushPayloadTests.swift in Sources */,
+				975DD550DD8859DF237FF5A2 /* RunnerStatusTests.swift in Sources */,
 				0EC25D57FC4F6CF2D6FA9FF8 /* SyncEngineTests.swift in Sources */,
 				16B7841A2AD057191FD575E2 /* UUIDv7Tests.swift in Sources */,
 			);

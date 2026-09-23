@@ -69,9 +69,7 @@ struct SettingsView: View {
                                             }
                                         }
                                     }
-                                    (Text(String(localized: "Last seen")) + Text(" ") + Text(runner.lastSeenAt, style: .relative))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    runnerStatus(for: runner)
                                 }
                                 Spacer()
                                 Button(role: .destructive) {
@@ -111,6 +109,9 @@ struct SettingsView: View {
                                     Label("Copy state-runner command", systemImage: "doc.on.doc")
                                 }
                                 Text("Run the command on the machine that should execute runs. state-runner stores the credential there.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("Adjust $HOME/Projects to the folder that holds your checkouts. The command pairs the runner and installs the launch agent.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -463,7 +464,27 @@ struct SettingsView: View {
 
     private func runnerPairingCommand(code: String) -> String {
         guard let server = model.session?.serverURL.absoluteString else { return code }
-        return "state-runner pair --server \(server) --code \(code)"
+        let typedName = runnerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = typedName.isEmpty ? "mac-runner" : typedName
+        return "state-runner pair --server \(server) --code \(code) --name \(name) --adapters claude-code,codex --work-root \"$HOME/Projects\" && state-runner service install"
+    }
+
+    @ViewBuilder
+    private func runnerStatus(for runner: Runner) -> some View {
+        let online = runner.isOnline()
+        HStack(spacing: 5) {
+            Circle()
+                .fill(online ? Color.green : Color.secondary.opacity(0.45))
+                .frame(width: 8, height: 8)
+            if online {
+                Text("Online")
+            } else {
+                Text(String(localized: "Last seen")) + Text(" ") + Text(runner.lastSeenAt, style: .relative)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier("runner-status-\(runner.id)")
     }
 
     private func chip(_ text: String) -> some View {
@@ -560,5 +581,21 @@ private struct NotificationFact: View {
         }
         .padding(.vertical, StateTheme.Space.hairline)
         .accessibilityElement(children: .combine)
+    }
+}
+
+extension Runner {
+    /// A runner is online while its last heartbeat is younger than this window.
+    static let onlineWindow: TimeInterval = 120
+
+    /// isOnline decides the dot next to a runner row. A timestamp from the
+    /// future counts as online, because it only means clock skew.
+    static func isOnline(lastSeenAt: Date?, now: Date) -> Bool {
+        guard let lastSeenAt else { return false }
+        return now.timeIntervalSince(lastSeenAt) < onlineWindow
+    }
+
+    func isOnline(now: Date = Date()) -> Bool {
+        Runner.isOnline(lastSeenAt: lastSeenAt, now: now)
     }
 }
