@@ -39,7 +39,9 @@ type Client struct {
 
 func NewClient(serverURL string, token string, httpClient *http.Client) *Client {
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 20 * time.Second}
+		// Must outlast the claim long-poll plus its margin; Claim bounds each
+		// request with its own context deadline.
+		httpClient = &http.Client{Timeout: time.Duration(maxLongPollSeconds+15) * time.Second}
 	}
 	return &Client{
 		baseURL:    strings.TrimRight(serverURL, "/"),
