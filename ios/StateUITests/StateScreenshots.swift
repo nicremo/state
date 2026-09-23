@@ -13,20 +13,33 @@ final class StateScreenshots: XCTestCase {
         let demoButton = app.buttons["explore-demo"]
         XCTAssertTrue(demoButton.waitForExistence(timeout: 10))
         demoButton.tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(
             app.descendants(matching: .any)["reminder-01989f00-0000-7000-8000-000000000010"]
                 .waitForExistence(timeout: 10)
         )
+        XCTAssertTrue(sectionEntry(app, 0).waitForExistence(timeout: 10), app.debugDescription)
         snapshot("01-today")
 
-        app.tabBars.buttons.element(boundBy: 1).tap()
+        sectionEntry(app, 1).tap()
         snapshot("02-planned")
 
-        app.tabBars.buttons.element(boundBy: 2).tap()
+        sectionEntry(app, 2).tap()
         snapshot("03-activity")
 
-        app.tabBars.buttons.element(boundBy: 3).tap()
+        sectionEntry(app, 3).tap()
         snapshot("04-settings")
+    }
+
+    /// The iPhone shows the sections in a tab bar, the iPad and the Mac in the
+    /// sidebar. Their titles are localized and both keep the same order, so this
+    /// picks the entry by position instead of by name. The reminder above only
+    /// exists once the app is laid out, which makes telling the two layouts
+    /// apart here reliable.
+    private func sectionEntry(_ app: XCUIApplication, _ index: Int) -> XCUIElement {
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists {
+            return tabBar.buttons.element(boundBy: index)
+        }
+        return app.collectionViews["Sidebar"].cells.element(boundBy: index)
     }
 }
