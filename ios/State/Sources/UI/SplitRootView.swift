@@ -17,13 +17,17 @@ struct SplitRootView: View {
             List(selection: $section) {
                 Label(String(localized: "Today"), systemImage: "sun.max.fill")
                     .tag(StateTab.today)
+                    .accessibilityIdentifier("sidebar-today")
                 Label(String(localized: "Planned"), systemImage: "calendar")
                     .tag(StateTab.planned)
+                    .accessibilityIdentifier("sidebar-planned")
                 Label(String(localized: "Activity"), systemImage: "clock.arrow.circlepath")
                     .badge(model.conflicts.count)
                     .tag(StateTab.activity)
+                    .accessibilityIdentifier("sidebar-activity")
                 Label(String(localized: "Settings"), systemImage: "gearshape")
                     .tag(StateTab.settings)
+                    .accessibilityIdentifier("sidebar-settings")
             }
             .navigationTitle("State")
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
@@ -71,11 +75,13 @@ struct SplitRootView: View {
                 ReminderDetailView(model: model, reminderID: selectedReminderID)
             }
             .id(selectedReminderID)
+            .accessibilityIdentifier("split-detail")
         } else {
             ContentUnavailableView(
                 String(localized: "Select a reminder"),
                 systemImage: "checklist"
             )
+            .accessibilityIdentifier("split-detail-placeholder")
         }
     }
 
