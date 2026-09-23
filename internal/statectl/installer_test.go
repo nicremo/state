@@ -1,9 +1,11 @@
 package statectl
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +47,9 @@ func TestInstallerBacksUpAndPreservesCodexConfiguration(t *testing.T) {
 	}
 	if !strings.Contains(rules, "Keep me.") || strings.Count(rules, RuleBlockStart) != 1 {
 		t.Fatalf("installed rules are invalid:\n%s", rules)
+	}
+	if !strings.Contains(rules, DefaultAgentRules()) {
+		t.Fatal("installed rules do not carry the current default agent rules")
 	}
 	backup := paths.CodexConfig + ".state-backup-20260811T213000Z"
 	if _, err := os.Stat(backup); err != nil {
@@ -130,6 +135,81 @@ func TestInstallerReportsManualInstallationForUnknownHarness(t *testing.T) {
 			t.Fatalf("manual instructions miss %q:\n%s", fragment, instructions)
 		}
 	}
+}
+
+func TestManualInstructionsForPiMentionPiSpecifics(t *testing.T) {
+	t.Parallel()
+
+	installer := NewInstaller(InstallPaths{}, "/usr/local/bin/statectl", nil)
+	text := installer.ManualInstructions("pi-agent", "pi-main")
+	// encodeJSONObject indents the args array, so the expected fragments follow
+	// the real output instead of one imagined single line.
+	for _, required := range []string{
+		"Pi Agent:",
+		"\"mcp\"",
+		"\"--profile\"",
+		"\"pi-main\"",
+		"doctor --profile pi-main",
+		DefaultAgentRules(),
+	} {
+		if !strings.Contains(text, required) {
+			t.Errorf("manual instructions miss %q", required)
+		}
+	}
+	if args := manualServerArgs(t, text); !reflect.DeepEqual(args, []string{"mcp", "--profile", "pi-main"}) {
+		t.Errorf("MCP server args = %v, want [mcp --profile pi-main]", args)
+	}
+}
+
+func TestManualInstructionsForPiAliasAndDeepSeekHarness(t *testing.T) {
+	t.Parallel()
+
+	installer := NewInstaller(InstallPaths{}, "/usr/local/bin/statectl", nil)
+	if !strings.Contains(installer.ManualInstructions("pi", "pi"), "Pi Agent:") {
+		t.Fatal("the pi alias must get the Pi Agent hint")
+	}
+	text := installer.ManualInstructions("deepseek-harness", "deepseek")
+	if !strings.Contains(text, "DeepSeek Harness:") {
+		t.Fatal("missing DeepSeek Harness hint")
+	}
+	if !strings.Contains(text, "doctor --profile deepseek") {
+		t.Fatal("missing verification line for the DeepSeek Harness profile")
+	}
+}
+
+func TestManualInstructionsForUnknownHarnessHaveNoProductHint(t *testing.T) {
+	t.Parallel()
+
+	installer := NewInstaller(InstallPaths{}, "/usr/local/bin/statectl", nil)
+	text := installer.ManualInstructions("my-agent", "my-agent")
+	if strings.Contains(text, "Pi Agent:") || strings.Contains(text, "DeepSeek Harness:") {
+		t.Fatal("unknown harness must not get product specific hints")
+	}
+	if !strings.Contains(text, "doctor --profile my-agent") {
+		t.Fatal("unknown harness must still get the verification line")
+	}
+}
+
+// manualServerArgs extracts the args array of the printed state MCP server.
+func manualServerArgs(t *testing.T, text string) []string {
+	t.Helper()
+
+	start := strings.Index(text, "{")
+	end := strings.LastIndex(text, "}")
+	if start < 0 || end < start {
+		t.Fatalf("manual instructions have no JSON definition:\n%s", text)
+	}
+	var definition struct {
+		McpServers struct {
+			State struct {
+				Args []string `json:"args"`
+			} `json:"state"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(text[start:end+1]), &definition); err != nil {
+		t.Fatalf("decode printed MCP definition: %v", err)
+	}
+	return definition.McpServers.State.Args
 }
 
 func TestInstallerRejectsInvalidHarnessLabels(t *testing.T) {

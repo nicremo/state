@@ -135,7 +135,9 @@ func (installer *Installer) Uninstall(harness string) error {
 
 // ManualInstructions renders the MCP server definition and the agent rules for
 // a harness that statectl does not configure itself. The operator pastes the
-// definition into that agent's own configuration file.
+// definition into that agent's own configuration file. Harnesses with a known
+// configuration shape get a product specific hint, because statectl never
+// writes configuration for a product it has not verified.
 func (installer *Installer) ManualInstructions(harness string, profile string) string {
 	command := installer.executable
 	if command == "" {
@@ -152,7 +154,7 @@ func (installer *Installer) ManualInstructions(harness string, profile string) s
 	if err != nil {
 		definition = ""
 	}
-	return strings.Join([]string{
+	lines := []string{
 		"statectl has no shipped configuration for " + harness + ".",
 		"The credential is stored and the profile is ready. Add this MCP server",
 		"to that agent yourself:",
@@ -163,11 +165,36 @@ func (installer *Installer) ManualInstructions(harness string, profile string) s
 		"",
 		"  " + command + " mcp --profile " + profile,
 		"",
+	}
+	if hint := manualHarnessHint(harness); hint != "" {
+		lines = append(lines, hint, "")
+	}
+	lines = append(lines,
 		"Then add these rules to that agent's instruction file:",
 		"",
 		DefaultAgentRules(),
 		"",
-	}, "\n")
+		"Verify with: "+command+" doctor --profile "+profile,
+		"",
+	)
+	return strings.Join(lines, "\n")
+}
+
+// manualHarnessHint returns copyable guidance for harnesses that statectl does
+// not configure automatically. Anything unknown deliberately gets no hint.
+func manualHarnessHint(harness string) string {
+	switch harness {
+	case "pi-agent", "pi":
+		return "Pi Agent: add the server to the \"mcpServers\" object of the profile's MCP " +
+			"configuration and the rules to the profile's AGENTS.md or system prompt file. " +
+			"Each Pi profile needs its own statectl profile."
+	case "deepseek-harness":
+		return "DeepSeek Harness: add the server to the MCP client plugin configuration of " +
+			"each preset that should see State, and the rules to that preset's persona or " +
+			"agent instructions."
+	default:
+		return ""
+	}
 }
 
 func (installer *Installer) pathsFor(harness string) (string, string) {
