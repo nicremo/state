@@ -78,9 +78,25 @@ WP06 liegt inzwischen als Branch `wp/06-macos-client-target` (`30e407c`) vor, ab
 | `xcodebuild -scheme StateMac -destination 'platform=macOS' -derivedDataPath build/DerivedData-maccheck CODE_SIGNING_ALLOWED=NO build` | `** BUILD SUCCEEDED **` |
 | `xcodebuild -scheme State -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.5' test` | 45 Tests grün, 1 Fehler: `StateScreenshots.testAppStoreScreenshots()` mit `Test crashed with signal kill` |
 
-Der eine Fehler kommt nicht aus diesem WP. Gegenprobe: derselbe Testlauf auf WP06 allein, ohne eine Zeile WP10-Code, zeigt exakt dasselbe Bild (40 grün, derselbe `StateScreenshots`-Absturz). Auf dem WP10-Branch allein, gegen `main` ohne WP06, ist dieselbe Suite dagegen vollständig grün (46 Tests, 0 Fehler, inklusive StateUITests). Der Absturz gehört also zu WP06 oder zur lokalen Simulatorumgebung, nicht zu diesem Arbeitspaket.
+Der eine Fehler kommt nicht aus diesem WP. Gegenprobe: derselbe Testlauf auf WP06 allein, ohne eine Zeile WP10-Code, zeigt exakt dasselbe Bild (40 grün, derselbe `StateScreenshots`-Absturz). Auf dem WP10-Branch allein, gegen `main` ohne WP06, ist dieselbe Suite dagegen zweimal vollständig grün (46 Tests, 0 Fehler, inklusive StateUITests). Der Absturz gehört also nicht zu diesem Arbeitspaket; die genaue Ursache steht im Abschnitt "Abschlussprüfung auf main".
 
 Damit ist belegt: der Code dieses WP kompiliert für das macOS-Target, und er verträgt sich mit der Plattform-Abstraktion aus WP06. Der Wegwerf-Worktree wurde danach entfernt, es wurde nichts davon committet oder gepusht. Für den Koordinator heißt das: beim Merge von WP06 sind nur der Abschnitt Runners und die `Runner`-Extension in `SettingsView.swift` betroffen, dazu der String-Katalog und die von `xcodegen` erzeugte Projektdatei. Wichtig ist, beim Auflösen `Platform.copyToPasteboard(...)` von WP06 zu behalten, mein `runnerStatus(for:)` kommt eine Zeile darüber.
+
+## Abschlussprüfung auf `main`
+
+Der Koordinator hat #44 als Squash nach `main` gemergt (`7ace307`). Für den Nachweis, dass dort genau der geprüfte Stand liegt, habe ich in einem frischen Worktree auf `origin/main` geprüft:
+
+| Befehl | Ergebnis |
+| --- | --- |
+| `git diff --quiet origin/main HEAD -- . ':(exclude)docs/plans'` auf dem WP10-Branch | leer, alle Code-Dateien sind byte-identisch mit dem verifizierten Stand |
+| `gofmt -l ./cmd ./internal` | leer |
+| `go vet ./...` | sauber |
+| `go test -count=1 -race ./...` | grün, 15 Pakete |
+| `bash -n scripts/install-agent-tools.sh` | grün |
+| `ls ~/Library/LaunchAgents \| grep -i state \|\| echo "NO_REAL_AGENT_INSTALLED"` | `NO_REAL_AGENT_INSTALLED` |
+| `xcodebuild -scheme State` mit iPhone-Tests | auf demselben Quellstand zweimal grün (46 Tests, 0 Fehler); der Lauf in diesem Worktree brach beim Bootstrap des Testhosts ab, siehe unten |
+
+**Der abgebrochene Lauf ist ein Maschinenproblem, kein Codefehler.** Die Meldung lautet `Early unexpected exit, operation never finished bootstrapping ... Test crashed with signal kill before establishing connection`, es lief kein einziger Test (0 von 0). Zur selben Zeit war die Platte bei 99 Prozent Belegung (rund 8 GB frei), und zwei andere WP-Sessions bauten parallel (`xcodebuild -scheme State` in `wp/06-macos-client-target`, dazu ein wartender Fastlane-Lauf in `wp/11-release-pipeline`). Nach dem Löschen meiner eigenen Derived-Data (rund 2,4 GB) und einem Simulator-Neustart blieb der Effekt bestehen, solange die fremden Builds liefen. Derselbe Testabsturz trat vorher schon auf WP06 allein und in der Vorabintegration auf, also unabhängig von diesem WP. Die iOS-Prüfung gilt deshalb über den identischen Quellstand: der `ios/`-Tree-Hash ist in allen Läufen `4e8fb11`.
 
 ## Abweichungen vom Plan
 
@@ -96,15 +112,16 @@ Damit ist belegt: der Code dieses WP kompiliert für das macOS-Target, und er ve
 
 ## Offene Fragen und Risiken
 
-1. **WP06 ist gemergt noch nicht auf `main`, liegt aber fertig auf `wp/06-macos-client-target` (`30e407c`).** Ohne den Merge gibt es in diesem Branch kein `StateMac`-Target. Die Vorabintegration im Wegwerf-Worktree (Abschnitt oben) zeigt, dass der Code dieses WP für macOS baut; für den Endnachweis muss der Koordinator nach dem Merge von WP06 `cd ios && xcodegen generate`, die iOS-Tests und den Mac-Build im WP10-Worktree erneut laufen lassen. Der Zusatz aus diesem WP ist plattformneutral: `runnerStatus(for:)` und die `Runner`-Extension nutzen nur SwiftUI (`HStack`, `Circle`, `Text`, `Color`) und Foundation, kein UIKit. Achtung: der WP06-Branch basiert auf dem Integrationsbranch vor `#38` und kollidiert deshalb mit `main` in vielen UI-Dateien und in `macos/**`; das sind WP06-gegen-`main`-Konflikte, nicht WP10-gegen-WP06.
+1. **WP06 ist noch nicht auf `main`, liegt aber fertig auf `wp/06-macos-client-target` (`30e407c`).** Ohne den Merge gibt es auf `main` kein `StateMac`-Target, die Prüfzeile `xcodebuild -scheme StateMac` bleibt deshalb bis dahin offen. Die Vorabintegration im Wegwerf-Worktree (Abschnitt oben) zeigt, dass der Code dieses WP für macOS baut; für den Endnachweis muss der Koordinator nach dem Merge von WP06 `cd ios && xcodegen generate`, die iOS-Tests und den Mac-Build erneut laufen lassen. Der Zusatz aus diesem WP ist plattformneutral: `runnerStatus(for:)` und die `Runner`-Extension nutzen nur SwiftUI (`HStack`, `Circle`, `Text`, `Color`) und Foundation, kein UIKit. Achtung: der WP06-Branch basiert auf dem Integrationsbranch vor `#38` und kollidiert deshalb mit `main` in vielen UI-Dateien und in `macos/**`; das sind WP06-gegen-`main`-Konflikte, nicht WP10-gegen-WP06.
 2. **`--work-root "$HOME/Projects"` ist ein Vorschlag.** Der Befehl ist kopierfertig, aber der Pfad muss zu Fabians Checkout-Ordner passen. Falls die Projekte woanders liegen, ist die Zeichenkette in `runnerPairingCommand` die eine Stelle zum Anpassen.
 3. **Der Agent erbt `PATH` und `HOME`, sonst nichts.** Adapter, die weitere Umgebungsvariablen brauchen (etwa ein Token im Environment), funktionieren im Agenten nicht. Das ist bewusst so und in `docs/runner-service.md` beschrieben; Erweiterungen gehören in die Runner- oder Adapter-Konfiguration, nicht in das Plist.
 4. **Logrotation fehlt.** launchd rotiert nicht, die Dateien unter `~/Library/Logs/State Runner` wachsen unbegrenzt. Die Doku nennt das, ein `newsyslog`-Eintrag wäre ein eigenes kleines WP.
 5. **Der Runner-Status in der App hängt an der Sync-Aktualität.** Der Punkt wird beim Rendern aus `lastSeenAt` berechnet; ohne neuen Sync bleibt ein tatsächlich laufender Runner grau. Das ist die im WP gewünschte reine Ableitung, eine laufende Uhr oder ein Timer wäre eine spätere Verfeinerung.
-6. **WP06 lässt `StateScreenshots.testAppStoreScreenshots()` lokal abstürzen** (`Test crashed with signal kill`), sowohl mit als auch ohne WP10-Code. Das ist eine Beobachtung für die WP06-Session und den Koordinator, kein Befund dieses WP: auf dem WP10-Branch allein läuft die komplette Suite inklusive `StateUITests` grün. Mögliche Ursachen sind der Screenshot-Pfad `~/Library/Caches/tools.fastlane/screenshots/` oder Simulatorressourcen.
+6. **Die iPhone-Tests brechen auf dieser Maschine zeitweise beim Bootstrap des Testhosts ab** (`Early unexpected exit, operation never finished bootstrapping`, `Test crashed with signal kill before establishing connection`), dann läuft kein einziger Test. Beobachtet auf WP06 allein, in der WP06-Vorabintegration und in einem Lauf auf `main`. Die Ursache liegt bei der Maschine, nicht im Code: die Platte war zu 99 Prozent belegt (rund 8 GB frei) und mehrere WP-Sessions haben gleichzeitig gebaut. Dieselbe Suite lief auf demselben Quellstand zweimal vollständig grün (46 Tests, 0 Fehler). Für den Koordinator heißt das: vor großen Testläufen Platz schaffen (`build/DerivedData-*` der abgeschlossenen WPs löschen) und nicht mehrere `xcodebuild`-Läufe parallel starten. Der Screenshot-Pfad `~/Library/Caches/tools.fastlane/screenshots/` existiert auf dieser Maschine nicht, das war aber nur eine Warnung und nicht der Abbruch.
+7. **Vor dem nächsten großen Build Platz schaffen.** Nach dem Aufräumen meiner eigenen Derived-Data lagen rund 9 GB frei; die Ordner `build/DerivedData-*` in den WP-Worktrees sind zusammen über 5 GB groß und jederzeit neu erzeugbar.
 
 ## Manuelle Schritte für Fabian oder den Koordinator
 
-1. WP06 mergen, danach diesen Branch mit `main` abgleichen, `cd ios && xcodegen generate`, iOS-Tests und den Mac-Build (`-scheme StateMac`) erneut laufen lassen.
+1. WP06 mergen und danach auf `main` `cd ios && xcodegen generate`, die iPhone-Tests und den Mac-Build (`-scheme StateMac`) laufen lassen. WP10 selbst ist bereits auf `main` (`7ace307`), es ist kein weiterer Merge dieses Branches nötig.
 2. Auf einem echten Mac einmal durchspielen: `scripts/install-agent-tools.sh`, Pairing-Code in der App erzeugen, kopierten Befehl ausführen, `state-runner service status` prüfen, `launchctl print gui/$(id -u)/com.fabincrm.state.runner` ansehen. In dieser Session wurde das bewusst nicht getan.
 3. Probelauf der Deinstallation (`state-runner service uninstall`) und Kontrolle, dass `~/Library/LaunchAgents/com.fabincrm.state.runner.plist` verschwindet.
