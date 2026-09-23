@@ -3,7 +3,7 @@
 **Status:** DONE
 **Branch:** wp/08-runner-adapters
 **Basis:** origin/main 4254d1b, nach Rebase auf den aktuellen Stand
-**Letzter Commit:** 5acee62 docs: list the new runner adapters (dieser Report folgt als letzter Commit)
+**Letzter Commit:** `docs: add WP08 report` (Report-Commit an der Branch-Spitze), davor 5acee62 `docs: list the new runner adapters`
 
 ## Ergebnis in drei Sätzen
 
@@ -103,14 +103,17 @@ Anmerkungen zu Task 0:
 
 ## Task 1: Server-Allowlist
 
-Suchbefehl und Ergebnis:
+Suchbefehl und Ergebnis (Ausgabe gekürzt, je Treffer nur Datei und Zeile):
 
 ```text
 $ grep -rn '"claude-code"' internal/state internal/api internal/mcpserver
-internal/state/harness.go:12:var knownHarnesses = []string{"codex", "claude-code", "opencode"}
-internal/state/service_test.go:20, internal/state/execution_test.go:396,
-internal/state/harness_test.go:8, internal/api/handler_test.go:27,72,
-internal/mcpserver/multi_agent_test.go:32, internal/mcpserver/server_test.go:131,157
+internal/state/harness.go:12        var knownHarnesses = []string{"codex", "claude-code", "opencode"}
+internal/state/service_test.go:20
+internal/state/execution_test.go:396
+internal/state/harness_test.go:8
+internal/api/handler_test.go:27,72
+internal/mcpserver/multi_agent_test.go:32
+internal/mcpserver/server_test.go:131,157
 ```
 
 Es gibt **keine** Allowlist für Ausführungs-Adapter:
@@ -176,7 +179,7 @@ ok  	github.com/nicremo/state/internal/store	(cached)
 1. **Kein Commit für Task 1.** Das WP-Dokument rechnete mit einer serverseitigen Adapter-Liste. Die gibt es nicht, also wurde nach der Regel "Wenn es keine Liste gibt: nichts tun" verfahren und nur der Nachweis als Test ergänzt. Der Test liegt in `internal/runner/adapters_test.go`, weil `internal/state/execution_test.go`, `harness_test.go` und `internal/statectl` nicht in meinem Bereich liegen.
 2. **`unknown-agent` wird serverseitig nicht abgelehnt.** Das WP-Dokument nahm an, eine Policy mit `unknown-agent` werde weiterhin abgelehnt. Realität: `ValidPolicyConfiguration` akzeptiert jedes Label in Harness-Form, auch `unknown-agent`. Die Ablehnung passiert erst im Runner über die Registry. Der Test prüft deshalb genau diese Grenze, die im Code existiert.
 3. **`deepseek-harness` ist kein Binary, sondern `dsh`.** Das WP-Dokument ließ offen, welches Binary gemeint ist. Die Adapter-Beschriftung bleibt `deepseek-harness`, das Binary ist `dsh`.
-4. **README.** Task 3 verlangt, "dort, wo die Runner-Adapter aufgezählt werden", die neuen Namen zu ergänzen. Eine solche Aufzählung existierte in der README nicht, auch kein `claude-code`-Treffer im Runner-Abschnitt. Statt einer falschen Ergänzung bei den `statectl`-Harnesses (Zeile 84, dort geht es um automatische Konfiguration, die es für die beiden neuen Agenten laut WP05 nicht gibt) wurde die Adapter-Liste im Abschnitt "Scheduled agent execution" ergänzt.
+4. **README.** Task 3 verlangt, "dort, wo die Runner-Adapter aufgezählt werden", die neuen Namen zu ergänzen. Eine solche Aufzählung existierte in der README nicht, auch kein `claude-code`-Treffer im Runner-Abschnitt. Statt einer falschen Ergänzung bei den `statectl`-Harnesses (Zeile 93, dort geht es um automatische Konfiguration, die es für die beiden neuen Agenten laut WP05 nicht gibt) wurde die Adapter-Liste im Abschnitt "Scheduled agent execution" ergänzt.
 5. **Commit-Zuschnitt.** Der Kommentar über `DefaultAdapters()` wurde zusammen mit der Registry im Commit `feat: launch pi agent and deepseek harness from the runner` geändert, nicht erst im Doku-Commit. Inhaltlich gehört er zur Registrierung, und der Doku-Commit `docs: list the new runner adapters` enthält die README.
 6. **Basis-Commit.** Der Worktree wurde nach Master-Plan Abschnitt 4.1 von `origin/main` angelegt, damals `ae6ab23`. Während der Arbeit hat der Koordinator die Welle 1 vorbereitet und `origin/main` auf `4254d1b` gebracht (PR #38, Integration des lokalen Mac-Servers und der Pläne). Der Branch wurde deshalb auf `4254d1b` rebased, ohne Konflikte, und alle Prüfungen liefen danach erneut. `internal/runner`, `internal/state`, `cmd/state-runner` und die README-Änderung betreffen nur die README, die neuen Zeilen liegen weiter oben und kollidieren nicht mit meiner Änderung.
 
@@ -185,7 +188,7 @@ ok  	github.com/nicremo/state/internal/store	(cached)
 1. **iOS-Auswahl ist fest und kennt die neuen Adapter nicht.** `ios/State/Sources/Models/HarnessCatalog.swift:38` listet nur `codex`, `claude-code`, `opencode`, und `AppModel.swift:918` bietet nur `["claude-code", "codex"]` zur Auswahl an. Solange das so bleibt, kann eine Policy über die App nicht auf `pi-agent` oder `deepseek-harness` zeigen, obwohl der Server sie akzeptiert. Das ist Bereich von WP06 und wurde hier bewusst nicht angefasst. Der Koordinator sollte entscheiden, ob WP06 oder ein Folge-WP die Auswahl erweitert.
 2. **PATH des Runners.** Beide neuen Binaries liegen unter `/Users/nicremo/.npm-global/bin`. Startet der Runner aus einem LaunchAgent, sieht er diesen Pfad möglicherweise nicht und meldet dann korrekt `adapter_unavailable`. Das betrifft alle fünf Adapter gleichermaßen und gehört zu WP10 (Runner in der Mac-App). Der Runner hat heute keine Option für absolute Binary-Pfade.
 3. **`pi -p` ist ein Schalter, der Prompt ist eine Positions-Message.** Die `pi`-Usage-Zeile erlaubt mehrere Messages (`[messages...]`). Der Adapter übergibt genau ein Element. Wenn `pi` in einer künftigen Version `-p` zu einem werttragenden Schalter ändert, muss die Argumentliste angepasst werden. Beide Tests pinnen die Argumentliste, ein solcher Bruch fällt also sofort auf.
-4. **`deepseek-harness` ist an das Profil `headless` gebunden.** Das Profil existiert auf diesem Mac (`/Users/nicremo/.dsh/profiles/headless/`). Fehlt es auf einem anderen Rechner, startet `dsh` nicht mit einem sinnvollen Fehler, der Runner meldet dann einen Exit-Code statt `adapter_unavailable`.
+4. **`deepseek-harness` ist an das Profil `headless` gebunden.** Das Profil existiert auf diesem Mac (`/Users/nicremo/.dsh/profiles/headless/`). Fehlt es auf einem anderen Rechner, bricht `dsh` mit Exit-Code 1 und der Meldung `dsh: profile "headless" does not exist; create it with 'dsh plugin --profile headless add <package>'` ab, geprüft mit `dsh --profile wp08-does-not-exist --help`. Der Runner meldet den Lauf dann mit einem Exit-Code, nicht mit `adapter_unavailable`, die Ursache steht nur im gekappten Output-Tail. Dasselbe gilt, wenn `pi` mit unbekannten Flags aufgerufen wird.
 
 ## Manuelle Schritte für Fabian oder den Koordinator
 
