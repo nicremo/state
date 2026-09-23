@@ -49,7 +49,7 @@ type getChangesInput struct {
 
 type createReminderInput struct {
 	Title           string                `json:"title" jsonschema:"Short reminder title."`
-	Description     string                `json:"description,omitempty" jsonschema:"Detailed Markdown context."`
+	Description     string                `json:"description,omitempty" jsonschema:"Markdown context. Use sections when known: Objective, Why it matters, Project boundary, Procedure and references, Acceptance criteria, Risk and approvals. Never include secrets."`
 	Schedule        *state.Schedule       `json:"schedule,omitempty" jsonschema:"Optional local date, local time, IANA time zone, mode, and prewarning."`
 	Recurrence      *state.RecurrenceRule `json:"recurrence,omitempty" jsonschema:"Optional daily, weekly, monthly, or yearly recurrence."`
 	ClientRequestID string                `json:"client_request_id" jsonschema:"Stable UUIDv7 for idempotent retries."`
@@ -168,7 +168,7 @@ func (server *server) registerTools() {
 
 	mcp.AddTool(server.mcp, &mcp.Tool{
 		Name:        "get_briefing",
-		Description: "Return bounded current reminders and changes since a cursor for session startup.",
+		Description: "Start every session here. Returns bounded current reminders and changes since a cursor; keep the returned cursor.",
 		Annotations: readOnly,
 	}, server.getBriefing)
 	mcp.AddTool(server.mcp, &mcp.Tool{
@@ -188,17 +188,17 @@ func (server *server) registerTools() {
 	}, server.getChanges)
 	mcp.AddTool(server.mcp, &mcp.Tool{
 		Name:        "create_reminder",
-		Description: "Create exactly one idempotent reminder and record the authenticated harness as actor.",
+		Description: "Store exactly one explicit user obligation as a reminder. Ask first when date, time zone or recurrence is ambiguous. Report success only when the result says stored=true.",
 		Annotations: mutating,
 	}, server.createReminder)
 	mcp.AddTool(server.mcp, &mcp.Tool{
 		Name:        "update_reminder",
-		Description: "Update a reminder with optimistic revision checking. Agents cannot archive reminders.",
+		Description: "Change a reminder with optimistic revision checking. Read it first and pass its revision as expected_revision. Agents cannot archive reminders.",
 		Annotations: mutating,
 	}, server.updateReminder)
 	mcp.AddTool(server.mcp, &mcp.Tool{
 		Name:        "add_comment",
-		Description: "Append agent context to a reminder and its audit timeline.",
+		Description: "Append new context, decisions, links or blockers to a reminder without rewriting it.",
 		Annotations: mutating,
 	}, server.addComment)
 	mcp.AddTool(server.mcp, &mcp.Tool{

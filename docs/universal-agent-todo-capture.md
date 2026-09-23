@@ -139,6 +139,8 @@ statectl mcp --profile <profile>
 
 `statectl` stores the credential using the operating-system secret store, then prints the local MCP server declaration and the agent instruction block. The operator copies that output into the agent's own configuration. The lack of an auto-installer is not a lack of State support. It is a refusal to guess where another tool stores config, which is considerably less exciting than corrupting it.
 
+The operator workflow, including the exact files statectl writes, the backup and removal behavior, and the prepared hints for Pi Agent and DeepSeek Harness, is described in [Agent integration](agent-integration.md).
+
 ### 6.4 CLI as universal fallback
 
 The State CLI must expose enough functionality for terminal-only or MCP-incapable agents to participate without direct database access:
