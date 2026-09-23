@@ -16,6 +16,23 @@ enum HarnessCatalog {
         ("pi", "Pi"),
     ]
 
+    /// The name State proposes for a newly paired agent. The owner sees the
+    /// agent under this name in the audit history, so a sensible default beats
+    /// an empty field that blocks the button.
+    static func suggestedName(for harness: String) -> String {
+        let base = presets.first { $0.id == harness }?.label ?? displayLabel(for: harness)
+        return String(format: String(localized: "%@ Agent"), base)
+    }
+
+    /// Turns a raw label into something readable: `claude-code` becomes
+    /// `Claude Code`. Used for agents State has no preset for.
+    static func displayLabel(for harness: String) -> String {
+        harness
+            .split(separator: "-")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+
     /// Agents whose configuration file statectl writes on its own. Mirrors
     /// knownHarnesses in internal/state/harness.go.
     static let shippedIntegrations: Set<String> = ["codex", "claude-code", "opencode"]

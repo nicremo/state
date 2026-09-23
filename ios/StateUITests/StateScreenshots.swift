@@ -6,6 +6,9 @@ final class StateScreenshots: XCTestCase {
         continueAfterFailure = false
         let app = XCUIApplication()
         setupSnapshot(app)
+        // Skips the launch animation and the first run introduction, so every
+        // screenshot run starts from the same screen.
+        app.launchArguments.append("-stateUITesting")
         app.launch()
         let demoButton = app.buttons["explore-demo"]
         XCTAssertTrue(demoButton.waitForExistence(timeout: 10))

@@ -47,9 +47,11 @@ type Adapter interface {
 	Start(ctx context.Context, request StartRequest) (Session, error)
 }
 
-// DefaultAdapters returns the shipped adapter registry. The test-only script
-// adapter is registered only when STATE_RUNNER_TEST_ADAPTER=1, so integration
-// tests never need real agent CLIs and production processes never get it.
+// DefaultAdapters returns the shipped adapter registry: codex, claude-code,
+// opencode, pi-agent (Pi Agent) and deepseek-harness (DeepSeek Harness). The
+// test-only script adapter is registered only when
+// STATE_RUNNER_TEST_ADAPTER=1, so integration tests never need real agent CLIs
+// and production processes never get it.
 func DefaultAdapters() map[string]Adapter {
 	adapters := map[string]Adapter{
 		"codex": &cliAdapter{
@@ -66,6 +68,16 @@ func DefaultAdapters() map[string]Adapter {
 			slug:   "opencode",
 			binary: "opencode",
 			args:   func(prompt string) []string { return []string{"run", prompt} },
+		},
+		"pi-agent": &cliAdapter{
+			slug:   "pi-agent",
+			binary: "pi",
+			args:   func(prompt string) []string { return []string{"-p", prompt} },
+		},
+		"deepseek-harness": &cliAdapter{
+			slug:   "deepseek-harness",
+			binary: "dsh",
+			args:   func(prompt string) []string { return []string{"--profile", "headless", prompt} },
 		},
 	}
 	if os.Getenv("STATE_RUNNER_TEST_ADAPTER") == "1" {
