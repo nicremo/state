@@ -81,8 +81,8 @@ Pakete einer Welle laufen **gleichzeitig** in getrennten Worktrees. Die nächste
 ```bash
 cd ~/Desktop/state
 git fetch origin
-git config user.name    # muss "Fabian" liefern
-git config user.email   # muss fb200386@gmail.com liefern
+git config user.name    # muss gesetzt sein
+git config user.email   # muss gesetzt sein
 ```
 
 Wenn `user.name` oder `user.email` leer ist: **STOPP.** Nichts committen, im Report als BLOCKED melden.
@@ -209,7 +209,7 @@ Das Gesamtziel ist erreicht, wenn alle Punkte nachweislich funktionieren:
 3. Die iPhone-App, die iPad-App (Seitenleiste) und die Mac-App (natives Target) laufen aus demselben Code, alle als TestFlight-Build.
 4. Claude Code, Codex, OpenCode, DeepSeek Harness und Pi Agent sind je mit eigener Identität gekoppelt. Ein Satz wie "ich muss jeden Monat ein Monatsreporting machen" im Chat erzeugt nach Rückfrage einen monatlichen Reminder.
 5. `statectl reminder create` funktioniert als Ausweichweg ohne MCP.
-6. Ein fälliger Reminder mit Policy startet über den Runner der Mac-App eine Agent-Session im richtigen Projektordner, und das Ergebnis erscheint auf dem iPhone.
+6. Ein fälliger Reminder mit Policy startet über den `state-runner`-LaunchAgent auf dem Mac eine Agent-Session im richtigen Projektordner, und das Ergebnis erscheint auf dem iPhone.
 
 ## 7. Schnellstart: Goal-Prompts zum Kopieren
 

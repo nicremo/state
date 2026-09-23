@@ -14,6 +14,8 @@ New here? [`DOCUMENTATION.md`](DOCUMENTATION.md) walks through the whole setup: 
 - `state-runner`: An outbound-only worker on an opted-in workstation that claims eligible agent runs, launches local harness adapters and reports redacted results.
 - `State`: A native SwiftUI app for iOS 18 or later with GRDB offline storage and a Notification Service Extension.
 
+See [the product lineup](docs/product-lineup.md) for how the iPhone, iPad and Mac apps, the Mac Server and the VPS Server fit together.
+
 ```mermaid
 flowchart LR
     H["Codex, Claude Code, OpenCode"] --> C["statectl"]
