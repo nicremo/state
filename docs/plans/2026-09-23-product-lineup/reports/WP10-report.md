@@ -53,11 +53,33 @@ Alle Befehle liefen im Worktree `~/Desktop/state-worktrees/wp10-runner-service`.
 | `bash -n scripts/install-agent-tools.sh` | grün, Skript bewusst nicht ausgeführt |
 | `cd ios && xcodegen generate` | grün |
 | `xcodebuild -scheme State -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.5' test` | `** TEST SUCCEEDED **`, 46 Tests, 0 Fehler, 0 übersprungen, davon 5 neue aus `RunnerStatusTests` |
-| `xcodebuild -scheme StateMac -destination 'platform=macOS' build` | nicht ausführbar: `The project named "State" does not contain a scheme named "StateMac"`, siehe Abweichungen |
+| `xcodebuild -scheme StateMac -destination 'platform=macOS' build` | im eigenen Branch nicht ausführbar (`The project named "State" does not contain a scheme named "StateMac"`), siehe Abweichungen; mit WP06 in einem Wegwerf-Worktree vorab integriert und dort `** BUILD SUCCEEDED **`, siehe Abschnitt "Mac-Build-Prüfung mit WP06" |
 | `ls ~/Library/LaunchAgents \| grep -i state \|\| echo "NO_REAL_AGENT_INSTALLED"` | `NO_REAL_AGENT_INSTALLED` |
 | `plutil -lint` auf das erzeugte Plist | läuft im Test `TestLaunchAgentPlistPassesPlutilLint` und ist grün (`/usr/bin/plutil` ist vorhanden, der Skip greift hier nicht) |
 
 Kein echter LaunchAgent wurde installiert, `launchctl` wurde nur über das Fake im Test aufgerufen. Auf der Kommandozeile wurden ausschließlich die Fehlerpfade ohne Systemzugriff geprüft (`service` ohne Unterbefehl, unbekannter Unterbefehl, unbekanntes Flag, fehlende Config), jeweils mit erwarteter Meldung und Exit-Code 1.
+
+Zusätzlich geprüft, weil `cmd/state-runner` auch auf Linux laufen soll:
+
+| Befehl | Ergebnis |
+| --- | --- |
+| `GOOS=linux GOARCH=amd64 go build ./cmd/state-runner` | grün |
+| `GOOS=linux GOARCH=amd64 go vet ./cmd/state-runner ./internal/runner` | grün |
+| `go build -trimpath -ldflags "-X main.version=deadbee" -o /tmp/... ./cmd/state-runner && /tmp/... version` | gibt `deadbee` aus, die `-ldflags`-Zeile aus `scripts/install-agent-tools.sh` wirkt also |
+
+## Mac-Build-Prüfung mit WP06 (Vorabintegration)
+
+WP06 liegt inzwischen als Branch `wp/06-macos-client-target` (`30e407c`) vor, aber noch nicht auf `main`. Um die letzte offene Prüfung aus Task 6 trotzdem zu belegen, habe ich einen Wegwerf-Worktree `~/Desktop/state-worktrees/wp10-mac-check` erstellt, ihn auf WP06 gestellt und dort ausschließlich meine vier iOS-Änderungen eingespielt (`runnerStatus(for:)` statt der "Last seen"-Zeile, der Hinweis zum Arbeitsverzeichnis, `runnerPairingCommand` mit allen Pflicht-Flags plus `service install`, die `Runner`-Extension, die zwei String-Katalog-Einträge und `ios/StateTests/RunnerStatusTests.swift`). Danach:
+
+| Befehl | Ergebnis |
+| --- | --- |
+| `cd ios && xcodegen generate` | grün, das StateMac-Scheme existiert dort |
+| `xcodebuild -scheme StateMac -destination 'platform=macOS' -derivedDataPath build/DerivedData-maccheck CODE_SIGNING_ALLOWED=NO build` | `** BUILD SUCCEEDED **` |
+| `xcodebuild -scheme State -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.5' test` | 45 Tests grün, 1 Fehler: `StateScreenshots.testAppStoreScreenshots()` mit `Test crashed with signal kill` |
+
+Der eine Fehler kommt nicht aus diesem WP. Gegenprobe: derselbe Testlauf auf WP06 allein, ohne eine Zeile WP10-Code, zeigt exakt dasselbe Bild (40 grün, derselbe `StateScreenshots`-Absturz). Auf dem WP10-Branch allein, gegen `main` ohne WP06, ist dieselbe Suite dagegen vollständig grün (46 Tests, 0 Fehler, inklusive StateUITests). Der Absturz gehört also zu WP06 oder zur lokalen Simulatorumgebung, nicht zu diesem Arbeitspaket.
+
+Damit ist belegt: der Code dieses WP kompiliert für das macOS-Target, und er verträgt sich mit der Plattform-Abstraktion aus WP06. Der Wegwerf-Worktree wurde danach entfernt, es wurde nichts davon committet oder gepusht. Für den Koordinator heißt das: beim Merge von WP06 sind nur der Abschnitt Runners und die `Runner`-Extension in `SettingsView.swift` betroffen, dazu der String-Katalog und die von `xcodegen` erzeugte Projektdatei. Wichtig ist, beim Auflösen `Platform.copyToPasteboard(...)` von WP06 zu behalten, mein `runnerStatus(for:)` kommt eine Zeile darüber.
 
 ## Abweichungen vom Plan
 
@@ -69,14 +91,16 @@ Kein echter LaunchAgent wurde installiert, `launchctl` wurde nur über das Fake 
 6. **Nicht-darwin-Prüfung als reine Funktion.** `checkServicePlatform(goos)` macht die geforderte Meldung ohne echtes `launchctl` und ohne `runtime.GOOS`-Trick testbar; `runService` ruft sie als Erstes mit `runtime.GOOS` auf.
 7. **`isOnline` behandelt Zeitstempel aus der Zukunft als online.** Ein Heartbeat, der durch Uhrenversatz wenige Sekunden in der Zukunft liegt, darf den Punkt nicht grau machen. `nil` gilt als offline.
 8. **Die `Runner`-Extension liegt am Ende von `SettingsView.swift`.** Das WP nennt als Beispiel eine Extension auf `Runner`, erlaubt mir aber nur diese eine Swift-Datei. Ein Umzug nach `Models.swift` ist eine Aufgabe für einen späteren WP.
+9. **Die echte `launchctl`-Implementierung heißt `ExecLaunchctl`, nicht `execLaunchctl`.** Der Plan nennt den Typ `execLaunchctl`, aber `cmd/state-runner` ist ein eigenes Paket und kann einen unexportierten Typ aus `internal/runner` nicht konstruieren. `NewExecLaunchctl()` ist der Konstruktor, den die CLI benutzt; die Testbarkeit kommt über das `Launchctl`-Interface, nicht über die Sichtbarkeit des Typs.
 
 ## Offene Fragen und Risiken
 
-1. **WP06 ist Voraussetzung und fehlt weiterhin.** Ohne WP06 gibt es kein `StateMac`-Target und keinen Mac-Build. Sobald WP06 auf `main` ist, sollte dieser Branch erneut abgeglichen werden. Erwartete Konflikte: `SettingsView.swift`, weil WP06 `UIPasteboard` und `UIApplication` durch Plattform-Abstraktionen ersetzt (betroffen sind der Kopier-Button im Abschnitt Runners und `NotificationSettingsView`), sowie `ios/project.yml` und die Projektdatei. Der Zusatz aus diesem WP ist plattformneutral: `runnerStatus(for:)` und die `Runner`-Extension nutzen nur SwiftUI (`HStack`, `Circle`, `Text`, `Color`) und Foundation, kein UIKit. Für den Mac-Build fehlt also nur das Target, nicht der Code dieses WP.
+1. **WP06 ist gemergt noch nicht auf `main`, liegt aber fertig auf `wp/06-macos-client-target` (`30e407c`).** Ohne den Merge gibt es in diesem Branch kein `StateMac`-Target. Die Vorabintegration im Wegwerf-Worktree (Abschnitt oben) zeigt, dass der Code dieses WP für macOS baut; für den Endnachweis muss der Koordinator nach dem Merge von WP06 `cd ios && xcodegen generate`, die iOS-Tests und den Mac-Build im WP10-Worktree erneut laufen lassen. Der Zusatz aus diesem WP ist plattformneutral: `runnerStatus(for:)` und die `Runner`-Extension nutzen nur SwiftUI (`HStack`, `Circle`, `Text`, `Color`) und Foundation, kein UIKit. Achtung: der WP06-Branch basiert auf dem Integrationsbranch vor `#38` und kollidiert deshalb mit `main` in vielen UI-Dateien und in `macos/**`; das sind WP06-gegen-`main`-Konflikte, nicht WP10-gegen-WP06.
 2. **`--work-root "$HOME/Projects"` ist ein Vorschlag.** Der Befehl ist kopierfertig, aber der Pfad muss zu Fabians Checkout-Ordner passen. Falls die Projekte woanders liegen, ist die Zeichenkette in `runnerPairingCommand` die eine Stelle zum Anpassen.
 3. **Der Agent erbt `PATH` und `HOME`, sonst nichts.** Adapter, die weitere Umgebungsvariablen brauchen (etwa ein Token im Environment), funktionieren im Agenten nicht. Das ist bewusst so und in `docs/runner-service.md` beschrieben; Erweiterungen gehören in die Runner- oder Adapter-Konfiguration, nicht in das Plist.
 4. **Logrotation fehlt.** launchd rotiert nicht, die Dateien unter `~/Library/Logs/State Runner` wachsen unbegrenzt. Die Doku nennt das, ein `newsyslog`-Eintrag wäre ein eigenes kleines WP.
 5. **Der Runner-Status in der App hängt an der Sync-Aktualität.** Der Punkt wird beim Rendern aus `lastSeenAt` berechnet; ohne neuen Sync bleibt ein tatsächlich laufender Runner grau. Das ist die im WP gewünschte reine Ableitung, eine laufende Uhr oder ein Timer wäre eine spätere Verfeinerung.
+6. **WP06 lässt `StateScreenshots.testAppStoreScreenshots()` lokal abstürzen** (`Test crashed with signal kill`), sowohl mit als auch ohne WP10-Code. Das ist eine Beobachtung für die WP06-Session und den Koordinator, kein Befund dieses WP: auf dem WP10-Branch allein läuft die komplette Suite inklusive `StateUITests` grün. Mögliche Ursachen sind der Screenshot-Pfad `~/Library/Caches/tools.fastlane/screenshots/` oder Simulatorressourcen.
 
 ## Manuelle Schritte für Fabian oder den Koordinator
 
