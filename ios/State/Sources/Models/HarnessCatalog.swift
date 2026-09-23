@@ -14,6 +14,18 @@ enum HarnessCatalog {
         ("claude-code", "Claude Code"),
         ("opencode", "OpenCode"),
         ("pi", "Pi"),
+        ("deepseek-harness", "DeepSeek Harness"),
+    ]
+
+    /// Adapters a runner can launch for an execution policy. These are the
+    /// names in DefaultAdapters (internal/runner/adapters.go), which differ
+    /// from pairing labels: Pi pairs as `pi` but runs as `pi-agent`.
+    static let adapterPresets: [(id: String, label: String)] = [
+        ("claude-code", "Claude Code"),
+        ("codex", "Codex"),
+        ("opencode", "OpenCode"),
+        ("pi-agent", "Pi"),
+        ("deepseek-harness", "DeepSeek Harness"),
     ]
 
     /// The name State proposes for a newly paired agent. The owner sees the

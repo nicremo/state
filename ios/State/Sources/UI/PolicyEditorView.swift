@@ -97,7 +97,7 @@ struct PolicyEditorView: View {
         let draft = policy.map { PolicyDraft(policy: $0) } ?? PolicyDraft()
         _draft = State(initialValue: draft)
         // A label outside the shipped presets starts in the custom field.
-        if HarnessCatalog.presets.contains(where: { $0.id == draft.adapter }) {
+        if HarnessCatalog.adapterPresets.contains(where: { $0.id == draft.adapter }) {
             _adapterSelection = State(initialValue: draft.adapter)
             _customAdapter = State(initialValue: "")
         } else {
@@ -134,7 +134,7 @@ struct PolicyEditorView: View {
 
                 Section("Adapter") {
                     Picker("Adapter", selection: $adapterSelection) {
-                        ForEach(HarnessCatalog.presets, id: \.id) { preset in
+                        ForEach(HarnessCatalog.adapterPresets, id: \.id) { preset in
                             Text(preset.label).tag(preset.id)
                         }
                         Text("Other").tag(HarnessCatalog.customTag)
