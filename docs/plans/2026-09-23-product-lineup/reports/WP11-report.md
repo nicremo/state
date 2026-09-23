@@ -97,6 +97,7 @@ The "-list" option can be used to find the names of the schemes in the project.
 1. WP06 mergen. Danach enthält `ios/project.yml` das Target `StateMac` mit dem Scheme `StateMac`, und Task 2 kann nachgeholt werden.
 2. WP09 mergen. Danach muss `ios/StateUITests/StateScreenshots.swift` auf die Seitenleiste umgestellt werden.
 3. WP10 mergen. Danach ist der Runner-Befehl in der App kopierbar, einer der Prüfpunkte der Checkliste.
+4. Die Abnahmebefehle auf einem ruhigen Rechner nachziehen: `cd ios && fastlane mac_test && fastlane test`, danach `git status --short`.
 
 ### Task 2, fertiger Diff für `ios/project.yml` nach dem Merge von WP06
 
@@ -162,5 +163,7 @@ Weil `scan` beim ersten Fehler abbricht, lief die neue iPad-Zeile in keinem der 
 
 ## Umgebung während dieser Sitzung
 
-Auf demselben Rechner liefen parallel die Worker von WP06, WP07 und WP10 in ihren Worktrees, dazu weitere Sitzungen. Die Last lag zeitweise über 100, und Simulatoren wurden von fremden Sitzungen neu gestartet. Alle Läufe dieses Reports sind davon betroffen, die Ergebnisse sind entsprechend vorsichtig zu lesen.
+Auf demselben Rechner liefen parallel die Worker von WP06, WP07, WP08, WP09 und WP10 in ihren Worktrees, dazu weitere Sitzungen. Die Last lag zeitweise über 100, und Simulatoren wurden von fremden Sitzungen neu gestartet. Alle Läufe dieses Reports sind davon betroffen, die Ergebnisse sind entsprechend vorsichtig zu lesen.
+
+Ein dritter Anlauf von `fastlane test` nach dem Merge mit `origin/main` wurde abgebrochen, weil WP09 zu diesem Zeitpunkt denselben Simulator für seine eigenen Tests benutzte und ich diesen Lauf nicht stören wollte. Er gehört in den nächsten Anlauf, siehe "Manuelle Schritte".
 
