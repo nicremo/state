@@ -2,12 +2,21 @@
 
 The device screenshot is pasted unchanged; only the backdrop, the device shell
 and the headline are drawn here, so the interface still shows what the app does.
+
+Usage: compose_ipad_frames.py [capture directory] [output directory]
+
+The defaults are the two directories this pipeline works with: the raw captures
+that `fastlane screenshots` writes, and the framed set that `fastlane ios
+metadata` uploads.
 """
 import pathlib
+import sys
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-SRC = pathlib.Path("/private/tmp/claude-501/-Users-nicremo-Documents-Codex-2026-08-11-gib-state/91ca112e-0c4d-46e3-a33f-30a0e56a9018/scratchpad/ipad")
-OUT = pathlib.Path("/private/tmp/claude-501/-Users-nicremo-Documents-Codex-2026-08-11-gib-state/91ca112e-0c4d-46e3-a33f-30a0e56a9018/scratchpad/store-ipad")
+FASTLANE_DIR = pathlib.Path(__file__).resolve().parent
+IOS_DIR = FASTLANE_DIR.parent
+SRC = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else IOS_DIR / "screenshots"
+OUT = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else FASTLANE_DIR / "screenshots"
 W, H = 2064, 2752
 BG = (22, 22, 27)
 GLOW = (86, 66, 220)
@@ -95,10 +104,21 @@ def compose(src, dst, headline, subline):
     canvas.convert("RGB").save(dst, "PNG")
 
 
+def capture(locale_dir, name):
+    """The raw capture of one screen. snapshot prefixes the device name."""
+    exact = locale_dir / f"{name}.png"
+    if exact.exists():
+        return exact
+    matches = sorted(locale_dir.glob(f"*-{name}.png"))
+    if not matches:
+        raise SystemExit(f"no capture for {name} in {locale_dir}")
+    return matches[0]
+
+
 OUT.mkdir(parents=True, exist_ok=True)
 for locale, screens in COPY.items():
     (OUT / locale).mkdir(exist_ok=True)
     for name, (headline, subline) in screens.items():
         dst = OUT / locale / f"iPad Pro 13-inch-{name}.png"
-        compose(SRC / locale / f"{name}.png", dst, headline, subline)
+        compose(capture(SRC / locale, name), dst, headline, subline)
         print(locale, dst.name, Image.open(dst).size)

@@ -66,6 +66,49 @@ Both sets show the untouched app capture inside the frame. Only the backdrop, th
 
 The App Store icon comes from the uploaded build, not from a separate upload. It stays a placeholder in App Store Connect until the first build finishes processing.
 
+## Mac and iPad
+
+iPhone, iPad and Mac are one app: the same project, the same bundle identifier `com.fabincrm.state` and the same version. The Mac app is a native macOS target (`StateMac` in `ios/project.yml`), not Catalyst and not "Designed for iPad", so one app record covers all three through Universal Purchase.
+
+### App Store Connect setup for macOS
+
+1. Add the macOS platform to the existing app record. The bundle identifier stays `com.fabincrm.state` and nothing about the app identity changes.
+2. App Store Connect then wants its own version record, its own screenshots and its own metadata for that platform. The existing lanes only ever touch the iOS record: `editable_app_store_version!` in the Fastfile filters on `Platform::IOS`, and `deliver` defaults to `platform: "ios"`.
+3. Signing needs a Mac App Store distribution certificate, a Mac Installer Distribution certificate for the `.pkg`, and a Mac App Store provisioning profile for `com.fabincrm.state`. `fastlane mac_build` archives with `-allowProvisioningUpdates`, so Xcode creates or repairs what is missing once an Apple ID that can manage the app is signed in, exactly as it did for iOS.
+4. The Mac app is sandboxed (`com.apple.security.app-sandbox` with `com.apple.security.network.client`) and uses the keychain group `com.fabincrm.state.shared`. The Mac App Store profile has to carry that keychain group, otherwise the app cannot read the server credentials it shares with the iPhone.
+
+### Building and uploading
+
+```bash
+cd ios
+bundle exec fastlane mac_beta    # signed pkg for macOS plus the TestFlight upload
+bundle exec fastlane beta        # iPhone and iPad build plus the TestFlight upload
+```
+
+Both lanes take the build number from the same source: `BUILD_NUMBER` if it is set, a UTC `yymmddHHMM` stamp otherwise. Override it when a number is already taken, because App Store Connect rejects an upload with a build number that exists for that version and platform.
+
+`bundle exec fastlane mac_test` builds `StateMac` without signing. It is the smoke test for the Mac target, and it needs no Apple account.
+
+### Mac screenshots
+
+fastlane `snapshot` has no macOS support, so `ios/fastlane/Snapfile` covers the iPhone and the iPad only and the Mac set is captured by hand:
+
+1. Build and start the Mac app. `bundle exec fastlane mac_test` leaves it in `ios/build/DerivedData-mac/Build/Products/Debug/State.app`, so `open ios/build/DerivedData-mac/Build/Products/Debug/State.app` starts that build.
+2. On the connection screen click "Look around without a server". There is no launch argument for the demo mode: the UI test uses `-stateUITesting` to skip the introduction and then taps the same `explore-demo` button, so the Mac window needs that one click.
+3. Resize the window to a 16:10 content size. App Store Connect accepts 1280x800, 1440x900, 2560x1600 and 2880x1800. Use 2880x1800 on a Retina display, which is 1440x900 points.
+4. Capture the window with `screencapture -o -w <file>` and click it, or `screencapture -o -l <window id> <file>` when the window id is known.
+5. Capture the same four screens as the iPhone set (Today, Planned, Activity, Settings) and store them as `ios/fastlane/screenshots/{de-DE,en-US}/Mac-01-today.png` and so on. `deliver` picks the display type from the pixel size, and 2880x1800 is the Mac set, so the file name only has to stay unique per locale.
+6. Upload the Mac set to the macOS version record. `bundle exec fastlane ios metadata` does not do it, for the reason given above. Either add the images in App Store Connect by hand or add a lane that passes `platform: "osx"` to `deliver`.
+
+### Points to check before uploading
+
+1. iPad layout: the sidebar replaces the tabs, and Today, Planned, Activity and Settings are all reachable from it. The iPad build inside `fastlane test` only proves that the layout compiles, not that it is usable.
+2. Mac menu commands: `File > New Reminder` (⌘N) and `File > Sync Now` (⌘R) exist and do what the iOS buttons do.
+3. Mac without push: expected, not a fault. Only iPhone and iPad register for APNs. The Mac app works with local notifications from the synced data and with sync polling while it runs.
+4. Runner command: the Mac app shows the pairing code and the install command for `state-runner` and both can be copied. The runner runs as its own LaunchAgent outside the sandboxed app, so the command has to be usable as shown.
+5. Export compliance: the macOS `Info.plist` declares `ITSAppUsesNonExemptEncryption=false`, the same answer as the iOS side and as `submission_info_defaults`. Confirm it stays that way, because State builds its own encrypted push envelopes and signs the audit chain.
+6. App Privacy: the declaration in `ios/fastlane/app_privacy_details.json` belongs to the app record, so macOS inherits it. Check that the Mac app adds no data collection of its own. It has no push token and no App Attest, and its network traffic goes to the owner's own server.
+
 ## Developer portal and signing
 
 `bundle exec fastlane ios build` archives with `-allowProvisioningUpdates`, so Xcode creates the missing developer portal resources itself. A verified run on August 15, 2026 produced a signed App Store IPA and resolved all of the following:
