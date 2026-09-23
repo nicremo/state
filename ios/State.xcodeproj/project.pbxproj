@@ -55,6 +55,7 @@
 		6E1AC199ED7529B30DA8B9E7 /* NotificationCenterDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4827F88B0E5B1AB9EA09BCB3 /* NotificationCenterDelegate.swift */; };
 		6F676F5DFD4EFCDB0FE836E3 /* PushEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3FF11D16348C43C9D86F1D /* PushEnvelope.swift */; };
 		71514921E82149E1FEF126AB /* LocalServerTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34D5F59FE6D7FBABFA71D21B /* LocalServerTrust.swift */; };
+		7308009B4EC6E4DCC0E95C16 /* AdaptiveLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC979EC8154ACA211A682EA /* AdaptiveLayoutTests.swift */; };
 		739F03ABE01C34B752EFC4AF /* ReminderDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B2B6204A2A5749FD6D9286 /* ReminderDetailView.swift */; };
 		73AB7CBB0C637AC111FA698A /* UUIDv7.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596270393A6CEA01AD29FA15 /* UUIDv7.swift */; };
 		775F148622CD9D765C1976C9 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 306A7C2E5B307C14A82FC318 /* GRDB */; };
@@ -158,6 +159,7 @@
 		079104A3F695B8A3044C7A01 /* AdaptiveRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveRootView.swift; sourceTree = "<group>"; };
 		0D06FBE82110384711CA15F1 /* HarnessCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessCatalogTests.swift; sourceTree = "<group>"; };
 		245015566E7DE84F196D0EB8 /* MacAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = MacAssets.xcassets; sourceTree = "<group>"; };
+		2DC979EC8154ACA211A682EA /* AdaptiveLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveLayoutTests.swift; sourceTree = "<group>"; };
 		2E09C1F897A91393A521BAED /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		34D5F59FE6D7FBABFA71D21B /* LocalServerTrust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServerTrust.swift; sourceTree = "<group>"; };
 		37E22432DA6BAAD47D855756 /* NotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCoordinator.swift; sourceTree = "<group>"; };
@@ -356,6 +358,7 @@
 		77FCB614373C0CA16D582EF6 /* StateUITests */ = {
 			isa = PBXGroup;
 			children = (
+				2DC979EC8154ACA211A682EA /* AdaptiveLayoutTests.swift */,
 				D12289CA407B35AD8F259EAF /* SnapshotHelper.swift */,
 				C27E6B9D51CED9A367DD60F3 /* StateScreenshots.swift */,
 			);
@@ -661,6 +664,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7308009B4EC6E4DCC0E95C16 /* AdaptiveLayoutTests.swift in Sources */,
 				8E0C1182D2046BF405D62292 /* SnapshotHelper.swift in Sources */,
 				EB0B572FBA71649C79BFBF29 /* StateScreenshots.swift in Sources */,
 			);
