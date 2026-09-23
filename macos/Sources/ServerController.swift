@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import ServiceManagement
 import StateLocalTransport
+import StateServerCore
 
 struct DesktopDevice: Decodable, Identifiable {
     struct Actor: Decodable { let id: String; let displayName: String; let deviceName: String }
@@ -44,13 +45,19 @@ final class ServerController {
     var loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval
     var pairingVisible = false
     var pairingKind = ""
+    private(set) var lastExitCode: Int32?
+    let logFile = LogFile(directory: FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Logs/State Server", isDirectory: true))
     private var process: Process?
     private var input: Pipe?
     private var output: Pipe?
+    private var errorPipe: Pipe?
     private var monitor: Task<Void, Never>?
     private var restartTask: Task<Void, Never>?
-    private var restarts = 0
+    private var restartPolicy = RestartPolicy()
     private var desiredRunning = false
+    private var sleeping = false
+    private var lastTick = Date()
     private var startingAt = Date()
     private var quitting = false
     private var launched = false
@@ -70,15 +77,24 @@ final class ServerController {
         }
     }
 
+    var consecutiveFailures: Int { restartPolicy.consecutiveFailures }
+
     func launch() {
         guard !launched else { return }
         launched = true
         start()
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.sleeping = true }
+        }
+        center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.didWake() }
+        }
     }
 
     func start() {
         guard process == nil else { return }
-        if !desiredRunning { restarts = 0 }
+        if !desiredRunning { restartPolicy.reset() }
         desiredRunning = true
         restartTask?.cancel()
         phase = .starting
@@ -86,6 +102,7 @@ final class ServerController {
         status = nil
         startingAt = Date()
         lastUpdated = nil
+        lastTick = Date()
         guard let executable = Bundle.main.url(forResource: "state-server", withExtension: nil) else {
             fail("Die Serverdatei fehlt. Bitte die App mit macos/build.sh neu bauen.")
             return
@@ -96,12 +113,13 @@ final class ServerController {
             let child = Process()
             let stdin = Pipe()
             let stdout = Pipe()
+            let stderr = Pipe()
             child.executableURL = executable
             child.arguments = ["desktop", "--data", dataDirectory.path, "--host", hostname]
             child.standardInput = stdin
             child.standardOutput = stdout
-            // Do not persist request bodies, credentials or pairing payloads.
-            child.standardError = FileHandle.nullDevice
+            // The server logs structured events only, never bodies or secrets.
+            child.standardError = stderr
             child.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": NSHomeDirectory()]
             child.terminationHandler = { [weak self] finished in
                 Task { @MainActor in self?.didExit(code: finished.terminationStatus) }
@@ -110,6 +128,7 @@ final class ServerController {
             process = child
             input = stdin
             output = stdout
+            errorPipe = stderr
             let handle = stdout.fileHandleForReading
             Task.detached { [weak self] in
                 // Each line belongs to the private child pipe. Never log it.
@@ -125,6 +144,26 @@ final class ServerController {
                         await self?.receive(line)
                     }
                 }
+            }
+            let errorHandle = stderr.fileHandleForReading
+            let logFile = logFile
+            Task.detached {
+                var pending = Data()
+                while true {
+                    let chunk = errorHandle.availableData
+                    if chunk.isEmpty { break }
+                    pending.append(chunk)
+                    while let newline = pending.firstIndex(of: 10) {
+                        let line = pending[...newline]
+                        pending.removeSubrange(...newline)
+                        try? logFile.append(line)
+                    }
+                    if pending.count > 64 * 1024 {
+                        try? logFile.append(pending)
+                        pending.removeAll(keepingCapacity: true)
+                    }
+                }
+                if !pending.isEmpty { try? logFile.append(pending) }
             }
             monitor?.cancel()
             monitor = Task { [weak self] in
@@ -174,6 +213,10 @@ final class ServerController {
               let cli = Bundle.main.url(forResource: "statectl", withExtension: nil) else { return }
         func quote(_ value: String) -> String { "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'" }
         copy("\(quote(cli.path)) pair --server \(quote(status.localURL)) --code \(quote(pairing.code)) --harness \(quote(harness)) --profile \(quote(harness))")
+    }
+
+    func revealLog() {
+        NSWorkspace.shared.activateFileViewerSelecting([logFile.url])
     }
 
     func refreshLoginStatus() {
@@ -229,12 +272,26 @@ final class ServerController {
         lastUpdated = Date()
         message = update.error?.isEmpty == false ? update.error : nil
         if update.devices.count > previousCount, pairingKind.isEmpty { pairingVisible = false }
-        if Date().timeIntervalSince(startingAt) > 60 { restarts = 0 }
+    }
+
+    private func didWake() {
+        sleeping = false
+        // A sleeping Mac sends no status lines; that silence is not a hang.
+        lastUpdated = Date()
+        lastTick = Date()
+        if desiredRunning, process == nil { start() }
+        send(action: "status")
     }
 
     private func tick() {
         guard desiredRunning else { return }
-        if Date().timeIntervalSince(lastUpdated ?? startingAt) > 25 {
+        if sleeping { return }
+        let now = Date()
+        // A tick that arrives long after the previous one means this Mac was
+        // asleep, even if the wake notification has not been delivered yet.
+        let elapsed = now.timeIntervalSince(lastTick)
+        lastTick = now
+        if elapsed < 15, now.timeIntervalSince(lastUpdated ?? startingAt) > 25 {
             phase = .failed
             message = "Der Server antwortet nicht. Ein Neustart wird versucht."
             process?.terminate()
@@ -249,20 +306,19 @@ final class ServerController {
         try? input?.fileHandleForWriting.close()
         input = nil
         output = nil
+        errorPipe = nil
         process = nil
         status = nil
         if quitting { NSApplication.shared.reply(toApplicationShouldTerminate: true); return }
         guard desiredRunning else { phase = .stopped; return }
-        restarts += 1
-        guard restarts <= 3 else {
-            desiredRunning = false
-            fail("Serverstart fehlgeschlagen. Möglicherweise sind Port 9847 oder 9848 belegt. Bitte erneut starten.")
-            return
-        }
+        lastExitCode = code
+        let delay = restartPolicy.delayAfterExit(at: Date(), startedAt: startingAt)
         phase = .starting
-        message = "Server wird neu gestartet (\(restarts)/3)."
+        message = restartPolicy.consecutiveFailures >= 3
+            ? "Der Server startet wiederholt nicht (Exit \(code)). Nächster Versuch in \(Int(delay)) s. Details im Log."
+            : "Server wird neu gestartet."
         restartTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Double(self?.restarts ?? 1) * 2))
+            try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled else { return }
             self?.start()
         }

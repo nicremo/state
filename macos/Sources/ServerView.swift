@@ -51,6 +51,29 @@ struct ServerView: View {
                 }
 
                 GroupBox {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            Label("Diagnose", systemImage: "stethoscope").font(.headline)
+                            Spacer()
+                            Button("Log im Finder zeigen") { controller.revealLog() }
+                        }
+                        HStack {
+                            Text("Letzter Exit-Code").foregroundStyle(.secondary)
+                            Spacer()
+                            Text(controller.lastExitCode.map(String.init) ?? "keiner")
+                                .font(.system(.callout, design: .monospaced)).textSelection(.enabled)
+                        }
+                        HStack {
+                            Text("Fehlstarts in Folge").foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(controller.consecutiveFailures)").font(.system(.callout, design: .monospaced))
+                        }
+                        Text("Servermeldungen stehen in ~/Library/Logs/State Server/server.log und werden bei 5 MB rotiert.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.padding(10)
+                }
+
+                GroupBox {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Label("Gerät verbinden", systemImage: "qrcode").font(.headline)

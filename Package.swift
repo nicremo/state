@@ -7,7 +7,9 @@ let package = Package(
     products: [.executable(name: "StateServerMac", targets: ["StateServerMac"])],
     targets: [
         .target(name: "StateLocalTransport", path: "shared/LocalTransport"),
-        .executableTarget(name: "StateServerMac", dependencies: ["StateLocalTransport"], path: "macos/Sources"),
+        .target(name: "StateServerCore", path: "macos/Core"),
+        .executableTarget(name: "StateServerMac", dependencies: ["StateLocalTransport", "StateServerCore"], path: "macos/Sources"),
         .testTarget(name: "StateLocalTransportTests", dependencies: ["StateLocalTransport"], path: "macos/Tests"),
+        .testTarget(name: "StateServerCoreTests", dependencies: ["StateServerCore"], path: "macos/CoreTests"),
     ]
 )
