@@ -57,7 +57,7 @@
 2. **Die PR-Ansicht ist noch verrauscht.** `main` enthält den Integrationsstand inzwischen als `4254d1b` (#38), der WP-Branch basiert aber auf dem inhaltlich gleichen Stand `e74c673`. Deshalb zeigt GitHub im Draft-PR 61 Dateien, obwohl inhaltlich nur drei Dateien neu sind (`git diff --stat origin/main HEAD` ergibt drei Dateien, 210 Zeilen). Nach `git merge origin/main` im WP-Worktree zeigt der PR genau diese drei Dateien. Der Merge ist konfliktfrei, weil beide Seiten gegenüber der Merge-Basis dieselben Änderungen an `README.md` und am Plan-Set enthalten.
 3. **Abschnitt 10 verlinkt elf Plan-Dateien.** Wird eine Plan-Datei umbenannt, muss der Link im Dokument mitgezogen werden. Die Namen stammen aus dem Plan-Set vom 23.09.2026.
 4. **WP07** ist die Voraussetzung für die gestrichelte Relay-Verbindung im Diagramm.
-5. **E-Mail-Adresse im Plan-Set.** `docs/plans/2026-09-23-product-lineup/README.md` nennt `fb200386@gmail.com` als Pflichtwert für `git config user.email`. Die Adresse steht bereits in öffentlichen Commits, ist also nicht neu. Mit dem Plan-Commit `e74c673` liegt sie aber erstmals als Dateiinhalt im Repository und damit auch in diesem Branch.
+5. **E-Mail-Adresse im Plan-Set.** `docs/plans/2026-09-23-product-lineup/README.md` nannte die private E-Mail-Adresse als Pflichtwert für `git config user.email`. Die Adresse steht bereits in öffentlichen Commits, ist also nicht neu. Mit dem Plan-Commit `e74c673` lag sie erstmals als Dateiinhalt im Repository. Der Koordinator hat sie mit Commit f379753 entfernt.
 
 ## Manuelle Schritte für Fabian oder den Koordinator
 
