@@ -1,6 +1,7 @@
 import AppKit
 import CoreImage.CIFilterBuiltins
 import ServiceManagement
+import StateServerCore
 import SwiftUI
 
 struct ServerView: View {
@@ -85,13 +86,17 @@ struct ServerView: View {
                                 Text("Claude Code").tag("claude-code")
                                 Text("Codex").tag("codex")
                                 Text("OpenCode").tag("opencode")
-                            }.labelsHidden().frame(width: 155)
+                                Text("DeepSeek Harness").tag("deepseek-harness")
+                                Text("Pi").tag("pi")
+                                Divider()
+                                Text("Runner (Agent-Aufgaben)").tag(PairingCommand.runnerSelection)
+                            }.labelsHidden().frame(width: 190)
                                 .onChange(of: controller.pairingKind) { _, _ in
                                     if controller.pairingVisible { controller.showPairing() }
                                 }
                         }
                         if controller.pairingVisible, let pairing = controller.status?.pairing,
-                           (pairing.harness ?? "") == controller.pairingKind {
+                           controller.pairingMatchesSelection(pairing) {
                             if controller.pairingKind.isEmpty {
                                 HStack(alignment: .center, spacing: 22) {
                                     QRCodeView(value: pairing.url)
@@ -107,7 +112,9 @@ struct ServerView: View {
                                     }
                                 }
                             } else {
-                                Text("Kopiere den Befehl und führe ihn im Terminal aus. Er verbindet das gewählte Programm mit diesem lokalen Server.")
+                                Text(PairingCommand.isRunner(controller.pairingKind)
+                                     ? "Kopiere den Befehl und führe ihn im Terminal aus. Er koppelt state-runner mit diesem Server und installiert ihn als Hintergrunddienst. Vorher --work-root auf deinen Projektordner anpassen."
+                                     : "Kopiere den Befehl und führe ihn im Terminal aus. Er verbindet das gewählte Programm mit diesem lokalen Server.")
                                     .foregroundStyle(.secondary)
                                 Button("Kopplungsbefehl kopieren") { controller.copyHarnessCommand() }.buttonStyle(.borderedProminent)
                             }
