@@ -20,6 +20,16 @@ enum Platform {
         #endif
     }
 
+    /// The owner's name where the system knows it (the Mac account's full
+    /// name), otherwise empty so the field asks for it.
+    static var ownerName: String {
+        #if os(macOS)
+        NSFullUserName()
+        #else
+        ""
+        #endif
+    }
+
     static var deviceName: String {
         #if os(iOS)
         UIDevice.current.name
@@ -108,6 +118,17 @@ extension View {
     func stateInlineNavigationTitle() -> some View {
         #if os(iOS)
         self.navigationBarTitleDisplayMode(.inline)
+        #else
+        self
+        #endif
+    }
+
+    /// Keeps forms at a readable width inside a large Mac window; iPhone
+    /// and iPad forms already fit their container.
+    @ViewBuilder
+    func stateReadableWidth() -> some View {
+        #if os(macOS)
+        self.frame(maxWidth: 600).frame(maxWidth: .infinity)
         #else
         self
         #endif

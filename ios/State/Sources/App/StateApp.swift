@@ -21,8 +21,12 @@ struct StateApp: App {
     var body: some Scene {
         WindowGroup {
             StateRootView(model: model)
+                #if os(macOS)
+                .frame(minWidth: 720, minHeight: 520)
+                #endif
         }
         #if os(macOS)
+        .defaultSize(width: 1080, height: 720)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button(String(localized: "New reminder")) {

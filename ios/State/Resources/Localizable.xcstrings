@@ -121,6 +121,16 @@
         }
       }
     },
+    "Access" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zugang"
+          }
+        }
+      }
+    },
     "Activity" : {
       "localizations" : {
         "de" : {
@@ -591,22 +601,22 @@
         }
       }
     },
-    "Connect an agent" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent verbinden"
-          }
-        }
-      }
-    },
     "Connect %@ to your own server." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verbinde %@ mit deinem eigenen Server."
+          }
+        }
+      }
+    },
+    "Connect an agent" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent verbinden"
           }
         }
       }
@@ -626,7 +636,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eigenen Server verbinden"
+            "value" : "Server verbinden"
           }
         }
       }
@@ -637,6 +647,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verbunden"
+          }
+        }
+      }
+    },
+    "Connecting" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbinde"
           }
         }
       }
@@ -701,6 +721,16 @@
         }
       }
     },
+    "Create a code in State on a device that is already connected, under Settings." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstelle einen Code in State auf einem bereits verbundenen Gerät, unter Einstellungen."
+          }
+        }
+      }
+    },
     "Create a one time code" : {
       "localizations" : {
         "de" : {
@@ -727,6 +757,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wird in State auf einem bereits gekoppelten Gerät unter Einstellungen erzeugt."
+          }
+        }
+      }
+    },
+    "Credentials stay in the Keychain. Your reminders stay on your server." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zugangsdaten bleiben im Schlüsselbund. Deine Erinnerungen bleiben auf deinem Server."
           }
         }
       }
@@ -977,6 +1017,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bitte eine vollständige https:// Adresse eintragen."
+          }
+        }
+      }
+    },
+    "Enter address" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adresse eingeben"
           }
         }
       }
@@ -1291,6 +1341,16 @@
         }
       }
     },
+    "Local Mac. Certificate verified from the pairing code." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lokaler Mac. Zertifikat über den Kopplungscode geprüft."
+          }
+        }
+      }
+    },
     "Local demo" : {
       "localizations" : {
         "de" : {
@@ -1491,6 +1551,16 @@
         }
       }
     },
+    "No pairing link on the clipboard. Copy it in the State Server app first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Kopplungslink in der Zwischenablage. Kopiere ihn zuerst in der State Server App."
+          }
+        }
+      }
+    },
     "No policies yet. Create one and a runner can execute this reminder on your Mac when it is due." : {
       "localizations" : {
         "de" : {
@@ -1527,6 +1597,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Noch keine Läufe"
+          }
+        }
+      }
+    },
+    "No server yet?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch kein Server?"
           }
         }
       }
@@ -1791,12 +1871,32 @@
         }
       }
     },
+    "Pairing code received." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopplungscode erkannt."
+          }
+        }
+      }
+    },
     "Pairing link" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kopplungslink"
+          }
+        }
+      }
+    },
+    "Paste pairing link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopplungslink einfügen"
           }
         }
       }
@@ -1817,6 +1917,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Füge den Link ein, den der State-Server neben seinem QR-Code anzeigt."
+          }
+        }
+      }
+    },
+    "Paste the pairing link your State server shows, or enter its address." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge den Kopplungslink deines State-Servers ein oder gib seine Adresse ein."
           }
         }
       }
@@ -2461,6 +2571,16 @@
         }
       }
     },
+    "Scan the pairing code your State server shows, or enter its address." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scanne den Kopplungscode, den dein State-Server anzeigt, oder gib seine Adresse ein."
+          }
+        }
+      }
+    },
     "Schedule" : {
       "localizations" : {
         "de" : {
@@ -2517,6 +2637,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Serveradresse"
+          }
+        }
+      }
+    },
+    "Server found" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server gefunden"
           }
         }
       }
@@ -2687,6 +2817,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "State braucht einen eigenen Server. Er verbindet deine Agenten und %@."
+          }
+        }
+      }
+    },
+    "State only talks to a server you run yourself." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "State spricht nur mit deinem eigenen Server."
           }
         }
       }
@@ -2921,6 +3061,16 @@
         }
       }
     },
+    "This device" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät"
+          }
+        }
+      }
+    },
     "This iPhone" : {
       "localizations" : {
         "de" : {
@@ -3051,6 +3201,16 @@
         }
       }
     },
+    "Try without a server" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ohne Server ausprobieren"
+          }
+        }
+      }
+    },
     "Unattended (low risk)" : {
       "localizations" : {
         "de" : {
@@ -3161,6 +3321,16 @@
         }
       }
     },
+    "Welcome to State" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Willkommen bei State"
+          }
+        }
+      }
+    },
     "Who changed what, when, and on whose instruction." : {
       "localizations" : {
         "de" : {
@@ -3257,6 +3427,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dein Name"
+          }
+        }
+      }
+    },
+    "Your server prints the token once with state-server bootstrap-token. This device becomes the owner." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Server gibt das Token einmalig mit state-server bootstrap-token aus. Dieses Gerät wird Besitzer."
           }
         }
       }
