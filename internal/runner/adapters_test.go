@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -120,14 +121,101 @@ func TestCLIAdapterReportsMissingBinary(t *testing.T) {
 	}
 }
 
+// shippedAdapterNames are the adapters the runner ships. The server accepts any
+// harness-shaped label, so this registry is the gate that decides which adapter
+// names can actually launch a process.
+func shippedAdapterNames() []string {
+	return []string{"codex", "claude-code", "opencode", "pi-agent", "deepseek-harness"}
+}
+
+func TestDefaultAdaptersIncludePiAgent(t *testing.T) {
+	t.Parallel()
+
+	adapter, ok := DefaultAdapters()["pi-agent"]
+	if !ok {
+		t.Fatal("pi-agent adapter missing")
+	}
+	cli, ok := adapter.(*cliAdapter)
+	if !ok {
+		t.Fatalf("pi-agent adapter has type %T", adapter)
+	}
+	if cli.binary != "pi" {
+		t.Fatalf("binary = %q", cli.binary)
+	}
+	if got := cli.args("do the thing"); !reflect.DeepEqual(got, []string{"-p", "do the thing"}) {
+		t.Fatalf("args = %#v", got)
+	}
+}
+
+func TestDefaultAdaptersIncludeDeepSeekHarness(t *testing.T) {
+	t.Parallel()
+
+	adapter, ok := DefaultAdapters()["deepseek-harness"]
+	if !ok {
+		t.Fatal("deepseek-harness adapter missing")
+	}
+	cli, ok := adapter.(*cliAdapter)
+	if !ok {
+		t.Fatalf("deepseek-harness adapter has type %T", adapter)
+	}
+	if cli.binary != "dsh" {
+		t.Fatalf("binary = %q", cli.binary)
+	}
+	if got := cli.args("do the thing"); !reflect.DeepEqual(got, []string{"--profile", "headless", "do the thing"}) {
+		t.Fatalf("args = %#v", got)
+	}
+}
+
+// The shipped entries resolve their binary from PATH, so an installation that
+// cannot see the CLI must fail as adapter_unavailable instead of launching.
+func TestShippedAdaptersReportMissingBinary(t *testing.T) {
+	// Not parallel: mutates the process environment.
+	t.Setenv("PATH", t.TempDir())
+
+	for _, name := range []string{"pi-agent", "deepseek-harness"} {
+		adapter, ok := DefaultAdapters()[name]
+		if !ok {
+			t.Fatalf("DefaultAdapters() misses %s", name)
+		}
+		if err := adapter.Validate(testContract()); !errors.Is(err, ErrAdapterUnavailable) {
+			t.Fatalf("%s Validate() error = %v, want ErrAdapterUnavailable", name, err)
+		}
+		if _, err := adapter.Start(context.Background(), StartRequest{Contract: testContract(), Dir: t.TempDir(), Prompt: "p"}); !errors.Is(err, ErrAdapterUnavailable) {
+			t.Fatalf("%s Start() error = %v, want ErrAdapterUnavailable", name, err)
+		}
+	}
+}
+
+// A policy names its adapter; the server only checks the label shape, which the
+// new adapter names satisfy.
+func TestPolicyValidationAcceptsNewAdapterLabels(t *testing.T) {
+	t.Parallel()
+
+	for _, adapter := range []string{"pi-agent", "deepseek-harness"} {
+		policy := state.ExecutionPolicy{
+			Name:                "review",
+			Adapter:             adapter,
+			Mode:                state.ExecutionModeSupervised,
+			AllowedCapabilities: []string{state.CapabilityReadRepository},
+			TimeoutMinutes:      30,
+		}
+		if err := state.ValidPolicyConfiguration(policy); err != nil {
+			t.Fatalf("ValidPolicyConfiguration(adapter %q) error = %v", adapter, err)
+		}
+	}
+}
+
 func TestDefaultAdaptersContainShippedAdaptersOnly(t *testing.T) {
 	// Not parallel: mutates the process environment.
 	t.Setenv("STATE_RUNNER_TEST_ADAPTER", "")
 	adapters := DefaultAdapters()
-	for _, name := range []string{"codex", "claude-code", "opencode"} {
+	for _, name := range shippedAdapterNames() {
 		if _, ok := adapters[name]; !ok {
 			t.Fatalf("DefaultAdapters() misses %s", name)
 		}
+	}
+	if _, ok := adapters["unknown-agent"]; ok {
+		t.Fatal("DefaultAdapters() registers an adapter it cannot launch")
 	}
 	if _, ok := adapters["script"]; ok {
 		t.Fatal("DefaultAdapters() exposes the test adapter without the env gate")
