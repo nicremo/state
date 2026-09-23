@@ -17,6 +17,7 @@ struct OnboardingFlowView: View {
         VStack(spacing: 0) {
             header
 
+            #if os(iOS)
             TabView(selection: $page) {
                 purpose.tag(0)
                 topology.tag(1)
@@ -24,6 +25,16 @@ struct OnboardingFlowView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(StateTheme.contentChange, value: page)
+            #else
+            Group {
+                switch page {
+                case 0: purpose
+                case 1: topology
+                default: notifications
+                }
+            }
+            .animation(StateTheme.contentChange, value: page)
+            #endif
 
             footer
         }

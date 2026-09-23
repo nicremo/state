@@ -55,7 +55,9 @@ struct ConnectView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(StateTheme.warmBackground.ignoresSafeArea())
+            #if os(iOS)
             .navigationBarHidden(true)
+            #endif
             .sheet(isPresented: $scansCode) { scanner }
         }
     }

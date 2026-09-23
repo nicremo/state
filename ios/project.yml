@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.fabincrm
   deploymentTarget:
     iOS: "18.0"
+    macOS: "15.0"
   developmentLanguage: en
   xcodeVersion: "26.0"
   groupSortPosition: top
@@ -50,6 +51,29 @@ targets:
         - StateTests
         - StateUITests
       gatherCoverageData: true
+  StateMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: State/Sources
+      - path: ../shared/LocalTransport
+      - path: State/Resources
+      - path: StateMac/Sources
+      - path: StateMac/Resources
+    dependencies:
+      - package: GRDB
+        product: GRDB
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fabincrm.state
+        PRODUCT_NAME: State
+        INFOPLIST_FILE: StateMac/Info.plist
+        CODE_SIGN_ENTITLEMENTS: StateMac/StateMac.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIconMac
+        ENABLE_HARDENED_RUNTIME: YES
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+    scheme:
+      gatherCoverageData: false
   StateNotificationService:
     type: app-extension
     platform: iOS

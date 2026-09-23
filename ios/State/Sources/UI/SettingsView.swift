@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import UserNotifications
 
 struct SettingsView: View {
@@ -650,7 +649,7 @@ struct NotificationSettingsView: View {
             }
             Section {
                 Button("Open iOS notification settings") {
-                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                    if let url = Platform.notificationSettingsURL {
                         openURL(url)
                     }
                 }

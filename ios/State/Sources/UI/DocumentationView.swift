@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// The setup guide the owner needs before the connection form makes any sense.
 /// It lives in the app rather than only on the web, because the moment it is
