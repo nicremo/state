@@ -15,6 +15,14 @@ struct ReminderDetailView: View {
                 List {
                     header(detail.reminder)
 
+                    if let description = detail.reminder.description,
+                       !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Section("Description") {
+                            CollapsibleMarkdown(source: description)
+                                .padding(.vertical, StateTheme.Space.tight)
+                        }
+                    }
+
                     if !detail.occurrences.isEmpty {
                         Section("Occurrences") {
                             ForEach(detail.occurrences) { occurrence in
@@ -135,16 +143,11 @@ struct ReminderDetailView: View {
     @ViewBuilder
     private func header(_ reminder: Reminder) -> some View {
         Section {
-            VStack(alignment: .leading, spacing: StateTheme.Space.inner) {
+            VStack(alignment: .leading, spacing: StateTheme.Space.group) {
                 Text(reminder.title)
                     .font(.title2.bold())
                     .foregroundStyle(StateTheme.graphite)
-
-                if let description = reminder.description, !description.isEmpty {
-                    Text(markdown: description)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: StateTheme.Space.inner) {
                     if let schedule = reminder.schedule {
@@ -172,7 +175,6 @@ struct ReminderDetailView: View {
                             )
                         )
                 }
-                .padding(.top, StateTheme.Space.hairline)
             }
             .padding(.vertical, StateTheme.Space.snug)
         }
@@ -188,8 +190,7 @@ struct ReminderDetailView: View {
             }
             ForEach(detail.comments) { item in
                 VStack(alignment: .leading, spacing: StateTheme.Space.group) {
-                    Text(markdown: item.body)
-                        .font(.callout)
+                    MarkdownView(item.body)
                     HStack(spacing: StateTheme.Space.inner) {
                         OriginBadge(actor: item.actor)
                         Spacer(minLength: StateTheme.Space.tight)
@@ -474,16 +475,6 @@ struct AuditEventRow: View {
         case "runner.registered": String(localized: "Runner registered")
         case "runner.updated": String(localized: "Runner changed")
         default: event.action
-        }
-    }
-}
-
-extension Text {
-    init(markdown: String) {
-        if let attributed = try? AttributedString(markdown: markdown) {
-            self.init(attributed)
-        } else {
-            self.init(verbatim: markdown)
         }
     }
 }
