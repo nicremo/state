@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// The design tokens the whole app draws from. Everything here adapts to light
 /// and dark appearance, because a self hosted tool gets opened at every hour.
@@ -9,39 +8,27 @@ enum StateTheme {
     /// enough for white text on a filled button, dark appearance lifts it far
     /// enough to stay legible on near black.
     static let accent = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.62, green: 0.66, blue: 0.98, alpha: 1)
-                : UIColor(red: 0.22, green: 0.26, blue: 0.62, alpha: 1)
-        }
+        light: (0.22, 0.26, 0.62, 1),
+        dark: (0.62, 0.66, 0.98, 1)
     )
 
     /// The accent at the strength a filled capsule or a tinted background needs.
     static let accentSoft = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.62, green: 0.66, blue: 0.98, alpha: 0.18)
-                : UIColor(red: 0.22, green: 0.26, blue: 0.62, alpha: 0.10)
-        }
+        light: (0.22, 0.26, 0.62, 0.10),
+        dark: (0.62, 0.66, 0.98, 0.18)
     )
 
     /// Warm ivory in light appearance, echoing the glow behind the app icon.
     static let warmBackground = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.055, green: 0.059, blue: 0.071, alpha: 1)
-                : UIColor(red: 0.973, green: 0.969, blue: 0.956, alpha: 1)
-        }
+        light: (0.973, 0.969, 0.956, 1),
+        dark: (0.055, 0.059, 0.071, 1)
     )
 
     /// The primary text color. Slightly warmer than pure label so it sits well
     /// on the ivory background.
     static let graphite = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.90, green: 0.91, blue: 0.94, alpha: 1)
-                : UIColor(red: 0.12, green: 0.13, blue: 0.16, alpha: 1)
-        }
+        light: (0.12, 0.13, 0.16, 1),
+        dark: (0.90, 0.91, 0.94, 1)
     )
 
     /// The launch and onboarding backdrop. Always dark, because the app icon is

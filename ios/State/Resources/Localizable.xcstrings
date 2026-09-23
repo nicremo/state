@@ -1791,12 +1791,32 @@
         }
       }
     },
+    "Pairing link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopplungslink"
+          }
+        }
+      }
+    },
     "Paste the bootstrap token once" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bootstrap-Token einmal einsetzen"
+          }
+        }
+      }
+    },
+    "Paste the link the State server shows next to its QR code." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge den Link ein, den der State-Server neben seinem QR-Code anzeigt."
           }
         }
       }
@@ -3057,6 +3077,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nutze 2 bis 64 Zeichen: Kleinbuchstaben, Ziffern und Bindestriche im Wortinneren."
+          }
+        }
+      }
+    },
+    "Use pairing link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopplungslink verwenden"
           }
         }
       }

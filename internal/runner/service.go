@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ServiceLabel is the launchd label of the per-user state-runner agent.
@@ -125,12 +126,13 @@ type ServiceManager struct {
 	launchAgentsDir string
 	launchctl       Launchctl
 	uid             int
+	retryDelay      time.Duration
 }
 
 // NewServiceManager returns a manager that writes into launchAgentsDir and
 // talks to launchctl through the given implementation.
 func NewServiceManager(launchAgentsDir string, launchctl Launchctl, uid int) *ServiceManager {
-	return &ServiceManager{launchAgentsDir: launchAgentsDir, launchctl: launchctl, uid: uid}
+	return &ServiceManager{launchAgentsDir: launchAgentsDir, launchctl: launchctl, uid: uid, retryDelay: 500 * time.Millisecond}
 }
 
 // Domain is the launchd domain of the logged-in user, for example gui/501.
@@ -162,10 +164,16 @@ func (manager *ServiceManager) Install(spec ServiceSpec) (plistPath string, err 
 	}
 	// A bootout failure only means the agent is not loaded yet.
 	_ = manager.launchctl.Bootout(manager.Domain(), ServiceLabel)
-	if err := manager.launchctl.Bootstrap(manager.Domain(), plistPath); err != nil {
-		return "", fmt.Errorf("load launch agent %s: %w", plistPath, err)
+	// Bootout returns before launchd has released the old job, so an
+	// immediate bootstrap of a running agent can fail; retry briefly.
+	var bootstrapErr error
+	for attempt := 0; attempt < 6; attempt++ {
+		if bootstrapErr = manager.launchctl.Bootstrap(manager.Domain(), plistPath); bootstrapErr == nil {
+			return plistPath, nil
+		}
+		time.Sleep(manager.retryDelay)
 	}
-	return plistPath, nil
+	return "", fmt.Errorf("load launch agent %s: %w", plistPath, bootstrapErr)
 }
 
 // Uninstall boots the agent out and removes its plist. Both steps tolerate an

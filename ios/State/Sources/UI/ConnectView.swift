@@ -1,6 +1,8 @@
 import SwiftUI
+#if os(iOS)
 import UIKit
 import VisionKit
+#endif
 
 /// The screen that turns a running server into a paired iPhone. It leads with
 /// the documentation, because everything below it assumes a server exists, and
@@ -21,8 +23,9 @@ struct ConnectView: View {
     @State private var scannedServer = ""
     @State private var scannedRelayURL: URL?
     @State private var displayName = ""
-    @State private var deviceName = UIDevice.current.name
+    @State private var deviceName = Platform.deviceName
     @State private var scansCode = false
+    @State private var pairingLink = ""
     @State private var isConnecting = false
     @FocusState private var focusedField: Field?
 
@@ -52,7 +55,9 @@ struct ConnectView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(StateTheme.warmBackground.ignoresSafeArea())
+            #if os(iOS)
             .navigationBarHidden(true)
+            #endif
             .sheet(isPresented: $scansCode) { scanner }
         }
     }
@@ -116,8 +121,8 @@ struct ConnectView: View {
             FieldGroup(label: String(localized: "Server address")) {
                 TextField(String(localized: "Server URL"), text: $server, prompt: Text(verbatim: "https://state.example.com"))
                     .textContentType(.URL)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
+                    .stateURLKeyboard()
+                    .stateNoAutocapitalization()
                     .autocorrectionDisabled()
                     .submitLabel(.next)
                     .focused($focusedField, equals: .server)
@@ -185,6 +190,7 @@ struct ConnectView: View {
             .disabled(!canConnect || isConnecting)
             .animation(StateTheme.stateChange, value: canConnect)
 
+            #if os(iOS)
             if DataScannerViewController.isSupported {
                 Button {
                     scansCode = true
@@ -194,6 +200,29 @@ struct ConnectView: View {
                         .padding(.vertical, StateTheme.Space.hairline)
                 }
                 .buttonStyle(.bordered)
+            }
+            #else
+            pairingLinkEntry
+            #endif
+        }
+    }
+
+    /// A Mac has no camera scanner, so the same payload is pasted as text and
+    /// runs through exactly the same parser the scanner uses.
+    private var pairingLinkEntry: some View {
+        VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
+            FieldGroup(label: String(localized: "Pairing link")) {
+                TextField(String(localized: "Pairing link"), text: $pairingLink)
+                    .stateNoAutocapitalization()
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit { applyPairingLink() }
+            }
+            HStack(alignment: .firstTextBaseline, spacing: StateTheme.Space.group) {
+                Button(String(localized: "Use pairing link")) { applyPairingLink() }
+                    .buttonStyle(.bordered)
+                    .disabled(pairingLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                helper(String(localized: "Paste the link the State server shows next to its QR code."))
             }
         }
     }
@@ -224,7 +253,9 @@ struct ConnectView: View {
         .foregroundStyle(.secondary)
     }
 
+    @ViewBuilder
     private var scanner: some View {
+        #if os(iOS)
         NavigationStack {
             PairingScannerView { value in
                 applyScanned(value)
@@ -232,13 +263,14 @@ struct ConnectView: View {
             }
             .ignoresSafeArea(edges: .bottom)
             .navigationTitle("Scan pairing code")
-            .navigationBarTitleDisplayMode(.inline)
+            .stateInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { scansCode = false }
                 }
             }
         }
+        #endif
     }
 
     private func helper(_ text: String) -> some View {
@@ -278,6 +310,12 @@ struct ConnectView: View {
         }
     }
 
+    private func applyPairingLink() {
+        let value = pairingLink.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        applyScanned(value)
+    }
+
     private func applyScanned(_ value: String) {
         guard let payload = PairingPayload(value: value) else {
             model.presentedError = String(localized: "This is not a valid State pairing code.")
@@ -315,12 +353,13 @@ private struct FieldGroup<Content: View>: View {
                 .padding(.vertical, StateTheme.Space.group)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                        .fill(Color.stateRowBackground)
                 )
         }
     }
 }
 
+#if os(iOS)
 struct PairingScannerView: UIViewControllerRepresentable {
     let onScan: (String) -> Void
 
@@ -373,3 +412,4 @@ struct PairingScannerView: UIViewControllerRepresentable {
         }
     }
 }
+#endif

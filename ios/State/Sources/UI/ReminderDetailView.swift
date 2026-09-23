@@ -83,7 +83,7 @@ struct ReminderDetailView: View {
                         }
                     }
                 }
-                .listStyle(.insetGrouped)
+                .stateListStyle()
                 .stateBackground()
                 .animation(StateTheme.contentChange, value: detail.occurrences.map(\.status))
                 .refreshable {
@@ -99,7 +99,7 @@ struct ReminderDetailView: View {
         }
         .sensoryFeedback(.success, trigger: completionFeedback)
         .navigationTitle("Details")
-        .navigationBarTitleDisplayMode(.inline)
+        .stateInlineNavigationTitle()
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {

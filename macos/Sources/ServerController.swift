@@ -17,6 +17,7 @@ struct DesktopPairing: Decodable {
     let code: String
     let expiresAt: Date
     let harness: String?
+    let kind: String?
 }
 
 struct DesktopStatus: Decodable {
@@ -223,7 +224,21 @@ final class ServerController {
 
     func showPairing() {
         pairingVisible = true
-        send(action: "pair", harness: pairingKind)
+        requestPairing()
+    }
+
+    /// Whether the displayed code belongs to the current picker selection.
+    func pairingMatchesSelection(_ pairing: DesktopPairing) -> Bool {
+        if PairingCommand.isRunner(pairingKind) { return pairing.kind == PairingCommand.runnerSelection }
+        return pairing.kind != PairingCommand.runnerSelection && (pairing.harness ?? "") == pairingKind
+    }
+
+    private func requestPairing() {
+        if PairingCommand.isRunner(pairingKind) {
+            send(action: "pair", kind: PairingCommand.runnerSelection)
+        } else {
+            send(action: "pair", harness: pairingKind)
+        }
     }
 
     func copyAddress(local: Bool = false) {
@@ -232,10 +247,9 @@ final class ServerController {
     }
 
     func copyHarnessCommand() {
-        guard let status, let pairing = status.pairing, let harness = pairing.harness,
+        guard let status, let pairing = status.pairing, pairingMatchesSelection(pairing),
               let cli = Bundle.main.url(forResource: "statectl", withExtension: nil) else { return }
-        func quote(_ value: String) -> String { "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'" }
-        copy("\(quote(cli.path)) pair --server \(quote(status.localURL)) --code \(quote(pairing.code)) --harness \(quote(harness)) --profile \(quote(harness))")
+        copy(PairingCommand.forSelection(pairingKind, code: pairing.code, localURL: status.localURL, statectlPath: cli.path))
     }
 
     func revealLog() {
@@ -263,9 +277,11 @@ final class ServerController {
         NSPasteboard.general.setString(value, forType: .string)
     }
 
-    private func send(action: String, harness: String = "") {
+    private func send(action: String, harness: String = "", kind: String = "") {
+        var request = ["action": action, "harness": harness]
+        if !kind.isEmpty { request["kind"] = kind }
         guard let input, process?.isRunning == true,
-              var bytes = try? JSONSerialization.data(withJSONObject: ["action": action, "harness": harness]) else { return }
+              var bytes = try? JSONSerialization.data(withJSONObject: request) else { return }
         bytes.append(10)
         do { try input.fileHandleForWriting.write(contentsOf: bytes) }
         catch { message = "Die Verbindung zum Server wurde unterbrochen." }
@@ -320,7 +336,7 @@ final class ServerController {
             process?.terminate()
             return
         }
-        if pairingVisible && status?.pairing == nil { send(action: "pair", harness: pairingKind) }
+        if pairingVisible && status?.pairing == nil { requestPairing() }
         send(action: "status")
     }
 
@@ -379,5 +395,5 @@ extension DesktopDevice {
     enum CodingKeys: String, CodingKey { case actor, lastUsedAt = "last_used_at" }
 }
 extension DesktopPairing {
-    enum CodingKeys: String, CodingKey { case url, code, expiresAt = "expires_at", harness }
+    enum CodingKeys: String, CodingKey { case url, code, expiresAt = "expires_at", harness, kind }
 }
