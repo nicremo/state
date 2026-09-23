@@ -417,3 +417,50 @@ func TestDesktopPairingTLSAndRestart(t *testing.T) {
 	}
 	stop(r)
 }
+
+// A Mac Server without a paired iPhone still has to pair its own runner, so
+// the private pipe mints runner codes as well as device and harness codes.
+func TestDesktopCreatesRunnerPairingCodes(t *testing.T) {
+	input, writer := io.Pipe()
+	output, result := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		err := runDesktop([]string{"--data", t.TempDir(), "--host", "test.local", "--https", "127.0.0.1:0", "--local-http", "127.0.0.1:0"}, input, result, io.Discard, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		_ = result.Close()
+		done <- err
+	}()
+	t.Cleanup(func() { _ = writer.Close(); _ = output.Close(); <-done })
+	reader := json.NewDecoder(output)
+	var status desktopStatus
+	if err := reader.Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Write([]byte(`{"action":"pair","kind":"runner","name":"Mac Runner"}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := reader.Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Pairing == nil || status.Pairing.Kind != "runner" || status.Pairing.Code == "" {
+		t.Fatalf("runner pairing missing: %+v", status.Pairing)
+	}
+	body := strings.NewReader(`{"code":"` + status.Pairing.Code + `"}`)
+	response, err := http.Post(status.LocalURL+"/api/v1/pairing/exchange", "application/json", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var credential struct {
+		Actor struct {
+			Kind        string `json:"kind"`
+			DisplayName string `json:"display_name"`
+		} `json:"actor"`
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&credential); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusCreated || credential.Actor.Kind != "runner" || credential.Actor.DisplayName != "Mac Runner" || credential.Token == "" {
+		t.Fatalf("exchange = %d %+v", response.StatusCode, credential.Actor)
+	}
+}

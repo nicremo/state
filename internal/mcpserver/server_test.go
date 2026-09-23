@@ -3,9 +3,11 @@ package mcpserver
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -67,6 +69,21 @@ func TestMCPServerNegotiatesListsToolsAndCreatesAuditedReminder(t *testing.T) {
 	}
 	if len(names) != len(want) {
 		t.Fatalf("tool names = %#v, want %#v", names, want)
+	}
+	// Agents guess enum values they cannot see; every guess is a failed write.
+	for _, tool := range toolsResult.Tools {
+		if tool.Name != "create_reminder" {
+			continue
+		}
+		schema, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("marshal create_reminder schema: %v", err)
+		}
+		for _, hint := range []string{"floating", "fixed", "YYYY-MM-DD", "HH:MM", "Europe/Berlin", "monthly"} {
+			if !strings.Contains(string(schema), hint) {
+				t.Errorf("create_reminder schema does not mention %q", hint)
+			}
+		}
 	}
 	for index := range want {
 		if names[index] != want[index] {

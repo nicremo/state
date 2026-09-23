@@ -502,3 +502,13 @@ func TestSummarizeResultRedactsSecrets(t *testing.T) {
 		t.Fatalf("summary length = %d, want <= %d", len([]rune(got)), maxResultSummaryLength)
 	}
 }
+
+// The claim long-poll holds a request open for up to DefaultLongPollSeconds;
+// a shorter client timeout turns every idle cycle into a logged failure.
+func TestDefaultClientOutlastsTheClaimLongPoll(t *testing.T) {
+	client := NewClient("http://127.0.0.1:1", "", nil)
+	limit := time.Duration(DefaultLongPollSeconds+5) * time.Second
+	if client.httpClient.Timeout != 0 && client.httpClient.Timeout < limit {
+		t.Fatalf("client timeout %s is shorter than the %s long-poll budget", client.httpClient.Timeout, limit)
+	}
+}
