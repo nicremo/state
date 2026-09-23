@@ -18,7 +18,7 @@ Der Mac bekommt eigene Fastlane-Lanes: `mac_test` baut `StateMac` ohne Signing, 
 | WP10 | auf `main` gemergt (#44) |
 | WP09 | **noch nicht auf `main`**, die Arbeit läuft im Worktree `wp09-adaptive-layout` |
 
-**Wichtig für die Merge-Reihenfolge:** Dieser Branch muss nach WP09 auf `main`. Ohne die Split-Ansicht zeigt das iPad die `TabView` von iPadOS 18, und deren Knöpfe liegen als einfache `Button`-Elemente im Baum, nicht in einer `TabBar`. Vor WP09 scheitert der iPad-Lauf der Screenshot-Tests also an der alten Tab-Leiste, nach WP09 bedient derselbe Test die Seitenleiste (beides gemessen, siehe unten).
+**Merge-Reihenfolge:** Der Branch läuft mit und ohne WP09. Mit der Split-Ansicht bedienen die Screenshot-Tests die Seitenleiste, davor die Knöpfe der iPad-`TabView`, und auf dem iPhone weiter die Tab-Leiste. Alle drei Varianten sind gemessen. Die iPad-Aufnahmen in `ios/fastlane/screenshots` stammen allerdings noch aus der Zeit vor der Split-Ansicht und sollten nach dem Merge von WP09 neu erzeugt werden.
 
 ## Erledigte Tasks
 
@@ -26,7 +26,7 @@ Der Mac bekommt eigene Fastlane-Lanes: `mac_test` baut `StateMac` ohne Signing, 
 - [x] Task 2: Signing für `StateMac`. `CODE_SIGN_STYLE: Automatic` und `CODE_SIGN_IDENTITY: "Apple Development"` in `settings.base`, `CODE_SIGN_IDENTITY: "Apple Distribution"` unter `configs.Release`. Das iOS-Target nutzt automatisches Signing: kein `CODE_SIGN_STYLE`, kein `PROVISIONING_PROFILE_SPECIFIER`, dafür global `DEVELOPMENT_TEAM: 5DKU7FFK4X` und `-allowProvisioningUpdates` in der Lane `build`. Der Stil ist damit derselbe, und die im Plan genannte Platzhaltervariable `$(STATE_MAC_PROFILE)` ist nicht nötig. `xcodegen generate` und `fastlane mac_test` sind grün.
 - [x] Task 3: Fastlane-Lanes für macOS. `mac_test`, `mac_build` und `mac_beta` sind angelegt, die Lane `test` baut zusätzlich für `iPad (A16)` mit OS 18.5. `mac_test` und `test` sind grün, `mac_build` und `mac_beta` sind bewusst nicht ausgeführt.
 - [x] Task 4.1: `iPad Pro 13-inch (M4)` in der Snapfile. Gerätetyp und Simulator-Instanz existieren, die Laufzeit iOS 18.5 ist installiert, es muss nichts nachinstalliert werden.
-- [x] Task 4.2: Navigation der Screenshot-Tests. Auf dem iPad tippt der Test jetzt die Einträge der Seitenleiste an, auf dem iPhone weiter die Tab-Leiste. Beides gemessen: gegen WP09 grün auf dem iPad, auf diesem Branch grün auf dem iPhone.
+- [x] Task 4.2: Navigation der Screenshot-Tests. Auf dem iPad tippt der Test jetzt die Einträge der Seitenleiste an, ohne Split-Ansicht die Knöpfe der iPad-Tab-Leiste und auf dem iPhone weiter die Tab-Leiste. Alle drei Varianten sind gemessen und grün.
 - [x] Task 4.3: Mac-Screenshots. Keine Lane, sondern die im Plan vorgesehene manuelle Anleitung in `docs/RELEASE_CHECKLIST.md`, mit Begründung unten.
 - [x] Task 5: Release-Checkliste. Abschnitt "Mac and iPad" ergänzt.
 - [x] Task 6: Gesamtprüfung. `xcodegen generate`, `fastlane mac_test`, `fastlane test`, `fastlane diagnose` und `git status --short` sind grün.
@@ -58,10 +58,11 @@ Der Mac bekommt eigene Fastlane-Lanes: `mac_test` baut `StateMac` ohne Signing, 
 | `fastlane lanes` | grün, 25 iOS-Lanes und die drei macOS-Lanes. Sie erscheinen als `fastlane mac_test`, `fastlane mac_build`, `fastlane mac_beta`, also genau in der Schreibweise, die der Plan und die Checkliste nennen. |
 | `cd ios && xcodegen generate` | grün, danach kein Diff am Projekt |
 | `fastlane mac_test` | grün gegen das echte Scheme `StateMac`: `** BUILD SUCCEEDED **` |
-| `fastlane test` | grün, zweimal gelaufen: 55 Unit-Tests und 1 UI-Test ohne Fehler, danach der iPad-Build mit `** BUILD SUCCEEDED **` |
+| `fastlane test` | grün: 55 Unit-Tests und 2 UI-Tests ohne Fehler, danach der iPad-Build mit `** BUILD SUCCEEDED **` |
 | `fastlane diagnose` | grün: ruby 4.0.5, Xcode 26.6, xcodegen 2.46.0, 55 Unit-Tests und 1 UI-Test ohne Fehler |
-| iPad-Screenshot-Test gegen WP09 | grün, 23,2 Sekunden, Seitenleiste statt Tabs |
-| iPhone-Screenshot-Test auf diesem Branch | grün, 19,9 Sekunden, Tab-Leiste |
+| iPad-Screenshot-Test gegen WP09 | grün, 19,8 Sekunden, Seitenleiste statt Tabs |
+| iPad-Screenshot-Test ohne WP09 | grün, 19,8 Sekunden, Knöpfe der iPad-Tab-Leiste |
+| iPhone-Screenshot-Test | grün, 21,0 Sekunden, Tab-Leiste |
 | `python3 ios/fastlane/compose_ipad_frames.py <roh> <ziel>` | grün mit Testaufnahmen im Namensschema von `snapshot` (`iPad Pro 13-inch (M4)-01-today.png`), acht Dateien in 2064x2752, zwei Sprachen |
 | `git status --short` | sauber, keine `.env`, keine `.p8`, keine Build-Artefakte |
 
@@ -71,7 +72,7 @@ Bevor WP06 auf `main` war, habe ich einen Wegwerf-Worktree unter `/tmp/wp11-veri
 
 1. `fastlane mac_test` gegen das echte Scheme `StateMac`: grün, `** BUILD SUCCEEDED **`.
 2. Der Task-2-Diff in `ios/project.yml`: `xcodegen generate` erzeugt `CODE_SIGN_IDENTITY = "Apple Distribution"` und `CODE_SIGN_STYLE = Automatic` für Release und `Apple Development` für Debug, der Build bleibt grün.
-3. Der iPad-Screenshot-Test gegen die Split-Ansicht: Der Test scheitert ohne Anpassung an `StateScreenshots.swift:16` (`app.tabBars` gibt es dort nicht), mit der Anpassung läuft er in 23,2 Sekunden grün.
+3. Der iPad-Screenshot-Test gegen die Split-Ansicht: Der Test scheitert ohne Anpassung an `StateScreenshots.swift:16` (`app.tabBars` gibt es dort nicht), mit der Anpassung läuft er grün. Nachgeprüft mit der endgültigen Fassung der Datei gegen den letzten WP09-Stand (`ce3e58e docs: record the final verification in the WP09 report`): grün in 19,8 Sekunden.
 
 ## iPad-Navigation (Task 4.2)
 
@@ -85,7 +86,7 @@ CollectionView, label: 'Sidebar'
   Cell  -> Image (identifier: 'gearshape')    und StaticText (label: 'Settings')
 ```
 
-Die Reihenfolge ist in beiden Layouts gleich, die Titel sind übersetzt. Die Screenshot-Läufe laufen außerdem zweisprachig, deshalb wählt der Test nach Position statt nach Name:
+Die Reihenfolge ist in allen Layouts gleich, die Titel sind übersetzt. Die Screenshot-Läufe laufen außerdem zweisprachig, deshalb wählt der Test nach Position statt nach Name:
 
 ```swift
 private func sectionEntry(_ app: XCUIApplication, _ index: Int) -> XCUIElement {
@@ -93,9 +94,15 @@ private func sectionEntry(_ app: XCUIApplication, _ index: Int) -> XCUIElement {
     if tabBar.exists {
         return tabBar.buttons.element(boundBy: index)
     }
-    return app.collectionViews["Sidebar"].cells.element(boundBy: index)
+    let sidebar = app.collectionViews["Sidebar"].cells
+    if sidebar.firstMatch.exists {
+        return sidebar.element(boundBy: index)
+    }
+    return app.buttons[Self.wideTabIdentifiers[index]].firstMatch
 }
 ```
+
+Der dritte Zweig deckt ein iPad ohne Split-Ansicht ab: Dort zeigt die App die `TabView`, und iPadOS legt deren Knöpfe als einfache `Button`-Elemente mit dem Namen des Symbols als Identifier ab (`sun.max.fill`, `calendar`, `clock.arrow.circlepath`, `gearshape`). Damit läuft der iPad-Lauf auch dann, wenn dieser Branch vor WP09 auf `main` geht.
 
 Zusätzlich prüft der Test jetzt zuerst, dass die Demo-Erinnerung da ist, und benutzt das als Bereitschaftssignal. Vorher hing die Bereitschaft an der Tab-Leiste, die es auf dem iPad nicht gibt.
 
@@ -118,7 +125,7 @@ Der Plan nennt als Bedingung, dass die App über ein Launch-Argument im Demo-Mod
 
 ## Offene Fragen und Risiken
 
-1. **Merge-Reihenfolge:** WP09 muss vor diesem Branch auf `main` sein, sonst ist der iPad-Lauf der Screenshot-Tests rot.
+1. **WP09 ist noch nicht auf `main`.** Der Branch läuft auch davor, die iPad-Aufnahmen sollten danach aber neu erzeugt werden, weil sie noch die alte Tab-Ansicht zeigen.
 2. **`mac_build` und `mac_beta` sind unverifiziert.** Sie brauchen ein Mac-Distributionszertifikat und einen Store-Zugang. `mac_beta` habe ich nie ausgeführt, wie der Plan es verlangt.
 3. **Der Mac braucht eine eigene Store-Einrichtung.** Die bestehenden Metadata- und Review-Lanes sind über `editable_app_store_version!` auf `Platform::IOS` festgelegt und fassen den macOS-Datensatz nicht an. Das ist in der Checkliste beschrieben, aber nicht automatisiert.
 4. **Der iPad-Lauf der Screenshot-Suite ist unter Last empfindlich.** Die App-Store-Screenshot-Tests laufen am längsten und werden von fremden Simulator-Neustarts zuerst erwischt, siehe unten.
