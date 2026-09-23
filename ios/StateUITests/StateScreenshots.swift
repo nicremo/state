@@ -31,15 +31,29 @@ final class StateScreenshots: XCTestCase {
     }
 
     /// The iPhone shows the sections in a tab bar, the iPad and the Mac in the
-    /// sidebar. Their titles are localized and both keep the same order, so this
-    /// picks the entry by position instead of by name. The reminder above only
-    /// exists once the app is laid out, which makes telling the two layouts
-    /// apart here reliable.
+    /// sidebar. Their titles are localized and every layout keeps the same
+    /// order, so this picks the entry by position instead of by name. The
+    /// reminder above only exists once the app is laid out, which makes telling
+    /// the layouts apart here reliable.
     private func sectionEntry(_ app: XCUIApplication, _ index: Int) -> XCUIElement {
         let tabBar = app.tabBars.firstMatch
         if tabBar.exists {
             return tabBar.buttons.element(boundBy: index)
         }
-        return app.collectionViews["Sidebar"].cells.element(boundBy: index)
+        let sidebar = app.collectionViews["Sidebar"].cells
+        if sidebar.firstMatch.exists {
+            return sidebar.element(boundBy: index)
+        }
+        // A regular width iPad without the split layout falls back to the tab
+        // view, and iPadOS exposes its tabs as plain buttons named after the
+        // symbol of their icon.
+        return app.buttons[Self.wideTabIdentifiers[index]].firstMatch
     }
+
+    private static let wideTabIdentifiers = [
+        "sun.max.fill",
+        "calendar",
+        "clock.arrow.circlepath",
+        "gearshape"
+    ]
 }
