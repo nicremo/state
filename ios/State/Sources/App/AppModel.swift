@@ -50,6 +50,9 @@ final class AppModel {
     private(set) var lastSyncAt: Date?
     private(set) var isDemo = false
     var presentedError: String?
+    /// Result of the last push registration. The settings screen shows it, so a
+    /// missing relay is visible instead of silently absent.
+    var pushStatus: PushRelayStatus = .unknown
 
     /// Which reminders the demo shows. It starts as the seeded pair and grows
     /// with everything the owner adds while trying the app out, so a reminder
@@ -79,7 +82,8 @@ final class AppModel {
         pairingCode: String?,
         displayName: String,
         deviceName: String,
-        certificateFingerprint: String? = nil
+        certificateFingerprint: String? = nil,
+        relayURL: URL? = nil
     ) async {
         do {
             let transport = try LocalServerTrust.session(serverURL: serverURL, fingerprint: certificateFingerprint)
@@ -98,9 +102,15 @@ final class AppModel {
             } else {
                 throw StateAPIError.invalidResponse
             }
-            let newSession = ServerSession(serverURL: serverURL, actor: credential.actor, certificateFingerprint: certificateFingerprint)
+            let newSession = ServerSession(
+                serverURL: serverURL,
+                actor: credential.actor,
+                certificateFingerprint: certificateFingerprint,
+                relayURL: relayURL
+            )
             try sessionRepository.save(session: newSession, token: credential.token)
             try configure(session: newSession, token: credential.token)
+            pushStatus = .unknown
             await synchronize()
         } catch {
             presentedError = error.localizedDescription
@@ -115,6 +125,20 @@ final class AppModel {
             syncEngine = nil
             isDemo = false
             demoVisibleIDs = []
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    /// Stores a relay address with the current session. Push registration reads
+    /// the address from the session, so this only has to persist the profile.
+    func updateRelayURL(_ relayURL: URL?) {
+        guard !isDemo, session != nil else { return }
+        do {
+            if let updated = try sessionRepository.updateRelayURL(relayURL) {
+                session = updated
+                pushStatus = .unknown
+            }
         } catch {
             presentedError = error.localizedDescription
         }

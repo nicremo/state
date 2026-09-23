@@ -4,6 +4,10 @@ struct ServerSession: Codable, Sendable {
     let serverURL: URL
     let actor: Actor
     var certificateFingerprint: String? = nil
+    /// The public push relay of this server, if it has one. It belongs to the
+    /// session so a server switch cannot inherit the address of an earlier
+    /// connection.
+    var relayURL: URL? = nil
 }
 
 @MainActor
@@ -32,6 +36,17 @@ final class SessionRepository {
         defaults.set(try StateJSON.encoder.encode(session), forKey: profileKey)
     }
 
+    /// Stores a new relay address with the current session. The credential
+    /// stays in Keychain, so only the profile is rewritten.
+    @discardableResult
+    func updateRelayURL(_ relayURL: URL?) throws -> ServerSession? {
+        guard let (session, token) = try load() else { return nil }
+        var updated = session
+        updated.relayURL = relayURL
+        try save(session: updated, token: token)
+        return updated
+    }
+
     func clear() throws {
         try SharedKeychain.delete(account: credentialAccount)
         defaults.removeObject(forKey: profileKey)
@@ -43,6 +58,10 @@ struct PairingPayload: Sendable {
     let bootstrapToken: String?
     let pairingCode: String?
     let certificateFingerprint: String?
+    /// Relay address the server advertises in its QR code. A QR code that
+    /// carries an unusable relay is rejected as a whole, because pairing
+    /// without push is better than registering at an address nobody chose.
+    let relayURL: URL?
 
     init?(value: String) {
         guard
@@ -62,6 +81,12 @@ struct PairingPayload: Sendable {
             guard serverURL.scheme == "https", LocalServerTrust.isValidFingerprint(fingerprint) else { return nil }
         }
         guard serverURL.user == nil, serverURL.password == nil else { return nil }
+        if let relayValue = components.queryItems?.first(where: { $0.name == "relay" })?.value {
+            guard let relay = URL(string: relayValue), PushRegistrationService.isUsableRelay(relay) else { return nil }
+            relayURL = relay
+        } else {
+            relayURL = nil
+        }
         certificateFingerprint = fingerprint
         self.serverURL = serverURL
         bootstrapToken = bootstrap

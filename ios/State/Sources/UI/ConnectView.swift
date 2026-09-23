@@ -19,6 +19,7 @@ struct ConnectView: View {
     @State private var pairingCode = ""
     @State private var certificateFingerprint: String?
     @State private var scannedServer = ""
+    @State private var scannedRelayURL: URL?
     @State private var displayName = ""
     @State private var deviceName = UIDevice.current.name
     @State private var scansCode = false
@@ -270,7 +271,8 @@ struct ConnectView: View {
                 pairingCode: method == .pairingCode ? pairingCode : nil,
                 displayName: displayName,
                 deviceName: deviceName,
-                certificateFingerprint: server.trimmingCharacters(in: .whitespacesAndNewlines) == scannedServer ? certificateFingerprint : nil
+                certificateFingerprint: server.trimmingCharacters(in: .whitespacesAndNewlines) == scannedServer ? certificateFingerprint : nil,
+                relayURL: server.trimmingCharacters(in: .whitespacesAndNewlines) == scannedServer ? scannedRelayURL : nil
             )
             isConnecting = false
         }
@@ -284,6 +286,7 @@ struct ConnectView: View {
         server = payload.serverURL.absoluteString
         scannedServer = server
         certificateFingerprint = payload.certificateFingerprint
+        scannedRelayURL = payload.relayURL
         if let token = payload.bootstrapToken, !token.isEmpty {
             bootstrapToken = token
             method = .bootstrap
