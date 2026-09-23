@@ -2,7 +2,7 @@
 
 **Status:** DONE
 **Branch:** wp/09-adaptive-layout
-**Letzter Commit:** 43520ae test: prove the layout follows the available width
+**Letzter Commit:** f54c6f1 test: prove the layout follows the available width
 
 ## Ergebnis in drei Sätzen
 
@@ -78,10 +78,10 @@ Alle Dateien liegen unter `/tmp`, sind **nicht** committet und wurden angesehen.
 
 1. **Die App läuft im iPad-Simulator in einem schmalen Fenster.** Auf drei iPad-Modellen (A16, Pro 13 Zoll M4, Air 13 Zoll M3) nimmt das App-Fenster nur etwa 57 Prozent der Bildschirmbreite ein, der Rest bleibt grau, und die Detailspalte wird am rechten Rand abgeschnitten. Die Einstellungen-App im selben Simulator füllt den Bildschirm, es liegt also nicht am Simulator. Da WP09 keine Fenstergröße setzt und das Verhalten auch die Tab-Ansicht betrifft, ist es kein Befund dieses WP, aber es sollte auf einem echten iPad geprüft werden, bevor die iPad-Abnahme läuft.
 2. **Auswahl auf dem Mac nur mit Knopf.** Siehe Abweichung 2. Wer später auf die reine Tag-Variante zurückbaut, bricht die Mac-Auswahl wieder.
-3. **Mehrere Sessions arbeiten gleichzeitig im selben Repository.** Während dieser Sitzung sind wiederholt Branches und `main` unter mir weitergelaufen (WP07 als PR #46, WP10 als #44, WP06 als #49), und im Worktree `wp09-adaptive-layout` lagen am Ende uncommittete Änderungen einer anderen Session (`Platform.deviceNoun` in `Platform.swift`, `ConnectView.swift`, `OnboardingFlowView.swift` und String-Keys). Ich habe diese Dateien nicht angefasst und nicht committet. Der Branch wurde deshalb in einem getrennten Worktree rebased und gepusht, damit die fremde Arbeit unberührt bleibt.
+3. **Mehrere Sessions arbeiten gleichzeitig im selben Repository.** Während dieser Sitzung sind wiederholt Branches und `main` unter mir weitergelaufen (WP07 als PR #46, WP10 als #44, WP06 als #49). Eine zweite Session hat außerdem direkt in diesem Worktree und auf diesem Branch gearbeitet. Von ihr stammen zwei Commits, die ich nicht geschrieben habe und die trotzdem auf dem Branch liegen: `24ba554 test: verify the adaptive layout switches with the size class` (trägt nur die neuen Dateien in `project.pbxproj` ein) und `de813c9 feat: name the actual device in the connect and onboarding text` (ergänzt `Platform.deviceNoun`, damit die Verbindungs- und Onboarding-Texte auf dem Mac "dieser Mac" statt "dieses iPhone" sagen). Der Inhalt beider Commits ist sinnvoll und passt zum Produkt, ich habe ihn deshalb nicht entfernt, aber der Koordinator sollte wissen, dass der Branch nicht aus einer Hand stammt.
 
 ## Manuelle Schritte für Fabian oder den Koordinator
 
 1. Diesen Branch nach `main` mergen. Er ist auf `origin/main` (`c046d8a`, WP06) rebased.
 2. Die iPad-Fensterbreite auf einem echten iPad ansehen. Falls die drei Spalten dort zu eng sind, ist die naheliegende Anpassung, die Detailspalte auf schmalen regulären Breiten erst nach einer Auswahl einzublenden.
-3. Die uncommitteten Änderungen der anderen Session im Worktree `wp09-adaptive-layout` prüfen und selbst committen oder verwerfen.
+3. Die beiden Commits der zweiten Session (`24ba554`, `de813c9`) beim Review mitlesen. Sie gehören fachlich zu WP06 beziehungsweise zur Testabdeckung, nicht zu den vier Tasks dieses WP.
