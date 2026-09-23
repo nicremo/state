@@ -140,10 +140,17 @@ type fakeLaunchctl struct {
 	printErr     error
 	bootstrapErr error
 	bootoutErr   error
+	// bootstrapFailures makes the first N bootstrap calls fail, the way
+	// launchd refuses a reload while the previous bootout is still settling.
+	bootstrapFailures int
 }
 
 func (fake *fakeLaunchctl) Bootstrap(domain string, plistPath string) error {
 	fake.calls = append(fake.calls, "bootstrap "+domain+" "+plistPath)
+	if fake.bootstrapFailures > 0 {
+		fake.bootstrapFailures--
+		return errors.New("Bootstrap failed: 5: Input/output error")
+	}
 	return fake.bootstrapErr
 }
 
@@ -335,5 +342,34 @@ func TestServiceManagerStatusReportsLaunchctlErrors(t *testing.T) {
 	}
 	if running {
 		t.Fatal("Status() reported running for a missing agent")
+	}
+}
+
+func TestInstallRetriesBootstrapWhileLaunchdSettles(t *testing.T) {
+	launchctl := &fakeLaunchctl{bootstrapFailures: 2}
+	manager := NewServiceManager(t.TempDir(), launchctl, 501)
+	manager.retryDelay = 0
+	spec := ServiceSpec{Executable: "/usr/local/bin/state-runner", ConfigPath: "/tmp/runner.json", LogDir: t.TempDir(), Path: "/usr/bin", Home: "/tmp"}
+	if _, err := manager.Install(spec); err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	bootstraps := 0
+	for _, call := range launchctl.calls {
+		if strings.HasPrefix(call, "bootstrap ") {
+			bootstraps++
+		}
+	}
+	if bootstraps != 3 {
+		t.Fatalf("bootstrap attempts = %d, want 3", bootstraps)
+	}
+}
+
+func TestInstallGivesUpAfterRepeatedBootstrapFailures(t *testing.T) {
+	launchctl := &fakeLaunchctl{bootstrapFailures: 100}
+	manager := NewServiceManager(t.TempDir(), launchctl, 501)
+	manager.retryDelay = 0
+	spec := ServiceSpec{Executable: "/usr/local/bin/state-runner", ConfigPath: "/tmp/runner.json", LogDir: t.TempDir(), Path: "/usr/bin", Home: "/tmp"}
+	if _, err := manager.Install(spec); err == nil {
+		t.Fatal("Install() succeeded although launchd never accepted the agent")
 	}
 }
