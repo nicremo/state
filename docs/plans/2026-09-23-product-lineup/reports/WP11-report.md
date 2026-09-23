@@ -8,20 +8,21 @@
 
 Die Welle-3-Vorbedingung ist nicht erfüllt: WP06, WP09 und WP10 sind nicht auf `main`, und WP09 hat noch nicht einmal einen Branch. Ich habe deshalb alles umgesetzt und geprüft, was ohne diese drei Pakete geht: die macOS-Lanes `mac_test`, `mac_build` und `mac_beta`, den iPad-Build in der iOS-Lane `test`, das iPad-Gerät in der Snapfile, die iPad-Frame-Pipeline und den Abschnitt "Mac and iPad" der Release-Checkliste. Offen und an WP06 beziehungsweise WP09 gebunden bleiben das Signing für `StateMac` und die iPad-Navigation der Screenshot-Tests, unverifiziert bleiben `mac_build` und `mac_beta`, weil sie ein Distributionszertifikat und einen Store-Zugang brauchen.
 
-## Vorbedingung: Welle 3 ist nicht freigegeben
+## Vorbedingung: Welle 3 ist noch nicht freigegeben
 
-Stand 23.09.2026, `origin/main = 63e0895` (WP02, WP04 und WP05 sind bereits gemergt, danach kamen weitere Fixes dazu):
+Stand 23.09.2026 gegen 02:55 Uhr, `origin/main = e62f515`:
 
 | Prüfung | Befehl | Ergebnis |
 | --- | --- | --- |
-| WP06 auf main | `git merge-base --is-ancestor wp/06-macos-client-target origin/main` | nein |
-| WP10 auf main | `git merge-base --is-ancestor wp/10-runner-service origin/main` | nein |
-| WP09 überhaupt vorhanden | `git branch -a \| grep wp/09` | kein Branch und kein Worktree |
+| WP06 auf main | `git merge-base --is-ancestor origin/wp/06-macos-client-target origin/main` | nein, der Branch `origin/wp/06-macos-client-target` hat aber inzwischen einen fertigen Report (`b16d56e docs: add WP06 report`) |
+| WP09 auf main | `git branch --list "wp/09*"` | nein, der Worktree `wp09-adaptive-layout` arbeitet auf Basis von WP06 an `AdaptiveRootView.swift` und `SplitRootView.swift` |
+| WP10 auf main | `git merge-base --is-ancestor wp/10-runner-service origin/main` | ja, gemergt als #44 |
+| WP07 auf main | `git log --oneline origin/main` | ja, gemergt als #46 |
 | `StateMac` in `ios/project.yml` | `git show origin/main:ios/project.yml \| grep -c StateMac` | 0 |
-| Arbeitsstand WP06 | `git status` in `~/Desktop/state-worktrees/wp06-macos-client-target` | `ios/project.yml` geändert, `ios/StateMac/` unversioniert, also noch nicht committet |
-| Arbeitsstand WP10 | `git status` in `~/Desktop/state-worktrees/wp10-runner-service` | `SettingsView.swift` geändert, `RunnerStatusTests.swift` unversioniert, also noch nicht committet |
 
-Während dieser Sitzung liefen die Worker von WP06, WP07 und WP10 parallel in ihren Worktrees, und `origin/main` ist mehrfach weitergezogen (4254d1b, dann debdee4, dann fe74fde, dann 63e0895).
+`origin/main` ist während dieser Sitzung mehrfach weitergezogen (4254d1b, debdee4, fe74fde, 63e0895, e62f515), und die Worker von WP06, WP07, WP08, WP09 und WP10 liefen parallel in ihren Worktrees.
+
+Mein Branch ist auf dem aktuellen `origin/main` gemergt (Merge ohne Konflikte, die Dateien dieses WP hat niemand sonst angefasst), und die Prüfungen wurden danach wiederholt.
 
 Folge für dieses WP: Auf meinem Branch gibt es kein Target `StateMac`, also auch kein Scheme `StateMac`. Damit sind Task 2 und der Mac-Teil von Task 3 auf dieser Basis nicht lauffähig. `fastlane mac_test` scheitert genau daran:
 
@@ -63,9 +64,9 @@ The "-list" option can be used to find the names of the schemes in the project.
 | --- | --- |
 | `ruby -c ios/fastlane/Fastfile` | Syntax OK |
 | `fastlane lanes` | grün, 25 iOS-Lanes und die drei macOS-Lanes. Die macOS-Lanes erscheinen als `fastlane mac_test`, `fastlane mac_build`, `fastlane mac_beta`, also genau in der Schreibweise, die der Plan und die Checkliste nennen. |
-| `xcodegen generate` | grün, kein Diff an `ios/State.xcodeproj` |
-| `fastlane mac_test` | rot, und zwar an der Vorbedingung: `xcodebuild: error: The project named "State" does not contain a scheme named "StateMac".` Die Lane selbst wird also gefunden und gestartet, der Mac-Build kann auf dieser Basis aber nicht grün sein. |
-| `xcodebuild ... -destination 'platform=iOS Simulator,name=iPad (A16),OS=18.5' CODE_SIGNING_ALLOWED=NO build` | grün, `** BUILD SUCCEEDED **`. Das ist genau der Befehl, den die neue Zeile der Lane `test` ausführt, deshalb ist der iPad-Teil der Lane einzeln belegt. |
+| `xcodegen generate` | grün, kein Diff an `ios/State.xcodeproj`, auch nach dem Merge von `origin/main` |
+| `fastlane mac_test` | rot, und zwar an der Vorbedingung: `xcodebuild: error: The project named "State" does not contain a scheme named "StateMac".` Die Lane selbst wird also gefunden und gestartet, der Mac-Build kann ohne WP06 aber nicht grün sein. Vor und nach dem Merge von `origin/main` geprüft, beide Male dieselbe Meldung. |
+| `xcodebuild ... -destination 'platform=iOS Simulator,name=iPad (A16),OS=18.5' CODE_SIGNING_ALLOWED=NO build` | grün, `** BUILD SUCCEEDED **`, vor und nach dem Merge von `origin/main`. Das ist genau der Befehl, den die neue Zeile der Lane `test` ausführt, deshalb ist der iPad-Teil der Lane einzeln belegt. |
 | `fastlane test` | in beiden Läufen rot. Lauf 2 kam bis 41 Tests: 40 grün, 1 rot. Der rote Test ist `StateScreenshots/testAppStoreScreenshots()` mit `Test crashed with signal kill`, also ein Abschuss von außen und keine fehlgeschlagene Zusicherung. Derselbe Test läuft einzeln grün. Einzelheiten unten. |
 | `fastlane diagnose` | Werkzeugkette grün (`ruby 4.0.5`, `Xcode 26.6`, `xcodegen 2.46.0`), danach rot im `scan`: `Invalid device state`, `Mach error -308 (ipc/mig) server died`, Testläufer abgeschossen. Es fehlen also keine Zugangsdaten, der Scan scheitert am Simulator. |
 | `python3 ios/fastlane/compose_ipad_frames.py <roh> <ziel>` | grün mit Testaufnahmen im Namensschema von `snapshot` (`iPad Pro 13-inch (M4)-01-today.png`), acht Dateien in 2064x2752, zwei Sprachen |
