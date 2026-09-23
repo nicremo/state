@@ -1,4 +1,6 @@
+#if os(iOS)
 import UIKit
+#endif
 import UserNotifications
 
 @MainActor
@@ -24,7 +26,9 @@ final class NotificationCoordinator {
         do {
             let granted = try await center.requestAuthorization(options: Self.authorizationOptions)
             guard granted else { return }
+            #if os(iOS)
             UIApplication.shared.registerForRemoteNotifications()
+            #endif
             await refresh(model: model)
         } catch {
             model.presentedError = error.localizedDescription

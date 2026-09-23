@@ -2,7 +2,11 @@ import SwiftUI
 
 @main
 struct StateApp: App {
+    #if os(iOS)
     @UIApplicationDelegateAdaptor(StateAppDelegate.self) private var appDelegate
+    #elseif os(macOS)
+    @NSApplicationDelegateAdaptor(StateMacAppDelegate.self) private var appDelegate
+    #endif
     @State private var model: AppModel
 
     init() {

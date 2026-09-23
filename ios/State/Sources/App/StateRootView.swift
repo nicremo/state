@@ -84,7 +84,7 @@ private struct StateLifecycle: ViewModifier {
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .seconds(15)) } catch { return }
                     guard !Task.isCancelled else { return }
-                    if model.session?.certificateFingerprint != nil, !model.isDemo {
+                    if shouldPoll {
                         await resynchronize()
                     }
                 }
@@ -100,13 +100,26 @@ private struct StateLifecycle: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .stateRemoteSync)) { _ in
                 Task { await resynchronize() }
             }
+            #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: .stateAPNSToken)) { notification in
                 guard !model.isDemo, let token = notification.object as? Data else { return }
                 Task { await pushRegistrationService.registerIfSupported(apnsToken: token, model: model) }
             }
+            #endif
             .onReceive(NotificationCenter.default.publisher(for: .stateNotificationAction)) { notification in
                 handle(notification)
             }
+    }
+
+    /// The iPhone only polls the server it paired with over the local network.
+    /// The Mac polls whenever it has a session, because it has no push channel
+    /// and keeps its own copy of the reminders current while it runs.
+    private var shouldPoll: Bool {
+        #if os(macOS)
+        !model.isDemo && model.session != nil
+        #else
+        model.session?.certificateFingerprint != nil && !model.isDemo
+        #endif
     }
 
     private func resynchronize() async {

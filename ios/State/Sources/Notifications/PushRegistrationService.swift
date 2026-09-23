@@ -1,5 +1,7 @@
 import CryptoKit
+#if os(iOS)
 import DeviceCheck
+#endif
 import Foundation
 import Network
 
@@ -131,6 +133,7 @@ final class PushRegistrationService {
     nonisolated static let legacyRelayURLKey = "state.relay-url"
 
     func registerIfSupported(apnsToken: Data, model: AppModel) async {
+        #if os(iOS)
         guard DCAppAttestService.shared.isSupported else {
             model.pushStatus = .unavailable
             return
@@ -211,6 +214,12 @@ final class PushRegistrationService {
             model.pushStatus = .failed(error.localizedDescription)
             model.presentedError = error.localizedDescription
         }
+        #else
+        // A relay route needs an App Attest attestation, and App Attest exists
+        // only on iOS. The Mac receives its reminders as local notifications
+        // from synced data instead.
+        model.pushStatus = .unavailable
+        #endif
     }
 
     private func pushPrivateKey() throws -> Curve25519.KeyAgreement.PrivateKey {
