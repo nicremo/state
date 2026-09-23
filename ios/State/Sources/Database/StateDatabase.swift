@@ -148,6 +148,37 @@ final class StateDatabase: Sendable {
         }
     }
 
+    /// Forgets everything cached from a server, including the sync cursor, so
+    /// the next sync rebuilds the cache from that server's own history.
+    /// Unsent local changes survive only when they belong to the same server.
+    func resetCache(keepingPendingMutations: Bool) async throws {
+        try await pool.write { database in
+            for table in [
+                "reminder_cache", "comment_cache", "occurrence_cache", "audit_cache",
+                "conflicts", "project_cache", "policy_cache", "runner_cache", "run_cache", "metadata",
+            ] {
+                try database.execute(sql: "DELETE FROM \(table)")
+            }
+            if !keepingPendingMutations {
+                try database.execute(sql: "DELETE FROM pending_mutations")
+            }
+        }
+    }
+
+    /// Whether demo reminders are still cached. Demo identifiers share a fixed
+    /// synthetic prefix that a generated UUIDv7 never carries.
+    func containsDemoContent() async throws -> Bool {
+        try await pool.read { database in
+            try Bool.fetchOne(
+                database,
+                sql: "SELECT EXISTS(SELECT 1 FROM reminder_cache WHERE id LIKE ?)",
+                arguments: [Self.demoIdentifierPrefix + "%"]
+            ) ?? false
+        }
+    }
+
+    static let demoIdentifierPrefix = "01989f00-0000-7000-8000-"
+
     func incrementAttempts(id: String) async throws {
         try await pool.write { database in
             try database.execute(sql: "UPDATE pending_mutations SET attempts = attempts + 1 WHERE id = ?", arguments: [id])

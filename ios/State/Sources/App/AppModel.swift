@@ -72,6 +72,11 @@ final class AppModel {
     }
 
     func start() async {
+        // Devices that tried the demo before connecting still carry its
+        // reminders; they are not on the server, so drop them and resync.
+        if session != nil, !isDemo, (try? await database.containsDemoContent()) == true {
+            try? await database.resetCache(keepingPendingMutations: true)
+        }
         await reloadCache()
         await synchronize()
     }
@@ -108,6 +113,10 @@ final class AppModel {
                 certificateFingerprint: certificateFingerprint,
                 relayURL: relayURL
             )
+            // A new server starts from its own history, never from a demo
+            // cache or another server's reminders and cursor.
+            try await database.resetCache(keepingPendingMutations: false)
+            demoVisibleIDs = []
             try sessionRepository.save(session: newSession, token: credential.token)
             try configure(session: newSession, token: credential.token)
             pushStatus = .unknown
@@ -502,15 +511,12 @@ final class AppModel {
         }
     }
 
+    /// Tells the server which occurrences have a local notification. This is
+    /// background bookkeeping the owner never asked for, so a failure is not
+    /// shown; the next refresh confirms again.
     func confirmNotifications(_ occurrenceIDs: [String]) async {
-        guard let api, !occurrenceIDs.isEmpty else { return }
-        do {
-            try await api.confirmOccurrences(occurrenceIDs)
-        } catch {
-            if !(error is URLError) {
-                presentedError = error.localizedDescription
-            }
-        }
+        guard let api, !isDemo, !occurrenceIDs.isEmpty else { return }
+        try? await api.confirmOccurrences(occurrenceIDs)
     }
 
     func registerPushRoute(
