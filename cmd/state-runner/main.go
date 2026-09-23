@@ -49,6 +49,20 @@ func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger)
 	}
 }
 
+// newPairConfig builds the config a fresh pairing saves, including the
+// polling defaults that Validate requires.
+func newPairConfig(serverURL, name, projects, adapters, workRoot string) runner.RunnerConfig {
+	return runner.RunnerConfig{
+		ServerURL:           strings.TrimRight(strings.TrimSpace(serverURL), "/"),
+		Name:                strings.TrimSpace(name),
+		Projects:            splitList(projects),
+		Adapters:            splitList(adapters),
+		WorkRoot:            workRoot,
+		PollIntervalSeconds: runner.DefaultPollIntervalSeconds,
+		LongPollSeconds:     runner.DefaultLongPollSeconds,
+	}
+}
+
 func runPair(args []string, stdout io.Writer, stderr io.Writer) error {
 	flags := flag.NewFlagSet("state-runner pair", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -65,13 +79,7 @@ func runPair(args []string, stdout io.Writer, stderr io.Writer) error {
 	if *serverURL == "" || *code == "" || *name == "" || *workRoot == "" {
 		return errors.New("state-runner pair requires --server, --code, --name and --work-root")
 	}
-	config := runner.RunnerConfig{
-		ServerURL: strings.TrimRight(strings.TrimSpace(*serverURL), "/"),
-		Name:      strings.TrimSpace(*name),
-		Projects:  splitList(*projects),
-		Adapters:  splitList(*adapters),
-		WorkRoot:  *workRoot,
-	}
+	config := newPairConfig(*serverURL, *name, *projects, *adapters, *workRoot)
 	if err := config.Validate(); err != nil {
 		return err
 	}
