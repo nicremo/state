@@ -9,8 +9,21 @@ enum StateTab: Hashable {
 
 struct MainTabView: View {
     @Bindable var model: AppModel
-    @State private var selection: StateTab = .today
+    @State private var selection: StateTab = MainTabView.launchTab
     @State private var opensNotificationSettings = false
+
+    private static var launchTab: StateTab {
+        #if DEBUG
+        switch StateLaunch.initialTab {
+        case "planned": return .planned
+        case "activity": return .activity
+        case "settings": return .settings
+        default: return .today
+        }
+        #else
+        return .today
+        #endif
+    }
 
     var body: some View {
         TabView(selection: $selection) {
@@ -161,9 +174,14 @@ struct ReminderCollectionView: View {
     }
 
     private func rowContent(_ reminder: Reminder) -> some View {
-        ReminderRow(
+        let summary = model.occurrenceSummaries[reminder.id]
+        return ReminderRow(
             reminder: reminder,
-            latestEvent: model.activity.first { $0.reminderID == reminder.id }
+            latestEvent: model.activity.first { $0.reminderID == reminder.id },
+            summary: summary,
+            onComplete: summary?.next == nil ? nil : {
+                Task { await model.completeNextOccurrence(of: reminder) }
+            }
         )
     }
 
@@ -221,14 +239,13 @@ struct ReminderCollectionView: View {
 
     private var filteredReminders: [Reminder] {
         let today = Date().formatted(.iso8601.year().month().day())
+        let wanted: ReminderBucket = mode == .today ? .today : .planned
         return model.reminders.filter { reminder in
-            let belongs: Bool
-            switch mode {
-            case .today:
-                belongs = reminder.schedule?.localDate ?? "9999-12-31" <= today
-            case .planned:
-                belongs = reminder.schedule == nil || (reminder.schedule?.localDate ?? today) > today
-            }
+            let belongs = ReminderListing.bucket(
+                for: reminder,
+                summary: model.occurrenceSummaries[reminder.id],
+                today: today
+            ) == wanted
             let matches = search.isEmpty
                 || reminder.title.localizedStandardContains(search)
                 || reminder.description?.localizedStandardContains(search) == true
@@ -240,50 +257,79 @@ struct ReminderCollectionView: View {
 struct ReminderRow: View {
     let reminder: Reminder
     let latestEvent: AuditEvent?
+    var summary: OccurrenceSummary? = nil
+    /// Nil when there is nothing to check off, such as an undated reminder.
+    var onComplete: (() -> Void)? = nil
+
+    @State private var checked = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
-            Text(reminder.title)
-                .font(.headline)
-                .foregroundStyle(StateTheme.graphite)
-                .lineLimit(2)
+        HStack(alignment: .firstTextBaseline, spacing: StateTheme.Space.group) {
+            if let onComplete {
+                Button {
+                    withAnimation(.smooth(duration: 0.2)) { checked = true }
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(350))
+                        onComplete()
+                        checked = false
+                    }
+                } label: {
+                    Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(checked ? StateTheme.accent : Color.secondary.opacity(0.6))
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "Complete reminder"))
+            }
 
-            if let description = reminder.description, !description.isEmpty {
-                Text(description)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
+                Text(reminder.title)
+                    .font(.headline)
+                    .foregroundStyle(checked ? .secondary : StateTheme.graphite)
+                    .strikethrough(checked)
                     .lineLimit(2)
-            }
 
-            HStack(spacing: StateTheme.Space.inner) {
-                if let schedule = reminder.schedule {
-                    MetaLabel(
-                        text: StateDateFormatter.rowLabel(for: schedule),
-                        systemImage: isOverdue ? "exclamationmark.circle" : "calendar",
-                        tint: isOverdue ? .orange : .secondary
-                    )
+                if let description = reminder.description, !description.isEmpty {
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
-                if let actor = latestEvent?.actor {
-                    OriginBadge(actor: actor)
+
+                if dueSchedule != nil || latestEvent?.actor != nil {
+                    HStack(spacing: StateTheme.Space.inner) {
+                        if let dueSchedule {
+                            MetaLabel(
+                                text: StateDateFormatter.rowLabel(for: dueSchedule),
+                                systemImage: reminder.recurrence == nil ? "calendar" : "repeat",
+                                tint: isOverdue ? .orange : .secondary
+                            )
+                        }
+                        if let actor = latestEvent?.actor {
+                            OriginBadge(actor: actor)
+                        }
+                    }
+                    .padding(.top, StateTheme.Space.hairline)
                 }
-                Spacer(minLength: StateTheme.Space.tight)
-                Text(verbatim: "r\(reminder.revision)")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.tertiary)
             }
-            .padding(.top, StateTheme.Space.hairline)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("reminder-\(reminder.id)")
     }
 
-    /// A due date in the past that nobody has acted on deserves a warmer color
-    /// than the same date after completion.
+    private var dueSchedule: Schedule? {
+        ReminderListing.dueSchedule(for: reminder, summary: summary)
+    }
+
+    /// A due date in the past that nobody has acted on deserves a warmer color.
     private var isOverdue: Bool {
         guard
             reminder.status == .active,
-            let schedule = reminder.schedule,
-            let date = StateDateFormatter.date(from: schedule)
+            let dueSchedule,
+            let date = StateDateFormatter.date(from: dueSchedule)
         else {
             return false
         }

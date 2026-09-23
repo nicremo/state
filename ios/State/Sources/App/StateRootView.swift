@@ -20,6 +20,12 @@ struct StateRootView: View {
             }
         }
         .task {
+            #if DEBUG
+            if StateLaunch.opensDemo, model.session == nil {
+                completedOnboarding = true
+                await model.enterDemo()
+            }
+            #endif
             guard showsSplash else { return }
             try? await Task.sleep(for: .milliseconds(reduceMotion ? 350 : 900))
             withAnimation(.easeOut(duration: 0.45)) { showsSplash = false }
