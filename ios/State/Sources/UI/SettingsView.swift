@@ -18,6 +18,8 @@ struct SettingsView: View {
     @State private var isCreatingCode = false
     @State private var copiedCommand = false
     @State private var confirmsDisconnect = false
+    @State private var relayInput = ""
+    @State private var relayError: String?
 
     private var harness: String {
         harnessSelection == HarnessCatalog.customTag
@@ -44,6 +46,7 @@ struct SettingsView: View {
 
                 connectionSection
                 syncSection
+                pushRelaySection
 
                 if model.session?.actor.kind == .owner {
                     agentSection
@@ -265,6 +268,107 @@ struct SettingsView: View {
             .animation(StateTheme.stateChange, value: model.isSyncing)
         }
     }
+
+    // MARK: Push relay
+
+    #if os(iOS)
+    /// The relay address belongs to the server session, so this section only
+    /// edits the stored session and then asks APNs for the device token again.
+    @ViewBuilder
+    private var pushRelaySection: some View {
+        if let session = model.session, !model.isDemo {
+            Section {
+                HStack(spacing: StateTheme.Space.group) {
+                    Image(systemName: session.relayURL == nil ? "wifi.slash" : "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(session.relayURL == nil ? Color.secondary : StateTheme.accent)
+                        .frame(width: 34, height: 34)
+                        .background(StateTheme.accentSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: StateTheme.Space.hairline) {
+                        Text(session.relayURL?.absoluteString
+                            ?? String(localized: "No relay: notifications only locally and in the home network"))
+                            .font(.subheadline)
+                            .foregroundStyle(StateTheme.graphite)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                        relayStateText
+                    }
+                }
+                .padding(.vertical, StateTheme.Space.tight)
+
+                TextField("https://relay.example.com", text: $relayInput)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .onAppear { relayInput = session.relayURL?.absoluteString ?? "" }
+
+                Button("Save") { saveRelay() }
+                    .disabled(relayInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if session.relayURL != nil {
+                    Button("Remove", role: .destructive) { removeRelay() }
+                }
+
+                if let relayError {
+                    Text(relayError)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            } header: {
+                Text("Push relay")
+            } footer: {
+                Text("With a public State relay, for example on your VPS, your iPhone receives notifications outside the home network. The content stays end to end encrypted.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var relayStateText: some View {
+        switch model.pushStatus {
+        case .registered:
+            Text("Notifications arrive through this relay.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .unavailable:
+            Text("Push registration is not available on this device.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case let .failed(message):
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.orange)
+        case .unknown, .noRelay:
+            // The header line already names the missing relay.
+            EmptyView()
+        }
+    }
+
+    private func saveRelay() {
+        let trimmed = relayInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), PushRegistrationService.isUsableRelay(url) else {
+            relayError = String(localized: "Enter a complete https:// address.")
+            return
+        }
+        relayError = nil
+        relayInput = url.absoluteString
+        model.updateRelayURL(url)
+        registerForPush()
+    }
+
+    private func removeRelay() {
+        relayError = nil
+        relayInput = ""
+        model.updateRelayURL(nil)
+        registerForPush()
+    }
+
+    /// The relay changed, so the route has to be registered again. APNs only
+    /// hands the token to the app delegate, so asking for it repeats that flow.
+    private func registerForPush() {
+        UIApplication.shared.registerForRemoteNotifications()
+    }
+    #endif
 
     // MARK: Agents
 

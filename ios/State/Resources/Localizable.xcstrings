@@ -971,6 +971,16 @@
         }
       }
     },
+    "Enter a complete https:// address." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bitte eine vollständige https:// Adresse eintragen."
+          }
+        }
+      }
+    },
     "Enter the server address" : {
       "localizations" : {
         "de" : {
@@ -1491,6 +1501,16 @@
         }
       }
     },
+    "No relay: notifications only locally and in the home network" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Relay: Mitteilungen nur lokal und im WLAN"
+          }
+        }
+      }
+    },
     "No results" : {
       "localizations" : {
         "de" : {
@@ -1597,6 +1617,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Benachrichtigungen"
+          }
+        }
+      }
+    },
+    "Notifications arrive through this relay." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mitteilungen kommen über dieses Relay an."
           }
         }
       }
@@ -1911,6 +1941,26 @@
         }
       }
     },
+    "Push registration is not available on this device." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push-Registrierung ist auf diesem Gerät nicht verfügbar."
+          }
+        }
+      }
+    },
+    "Push relay" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push-Relay"
+          }
+        }
+      }
+    },
     "Read State context" : {
       "localizations" : {
         "de" : {
@@ -2047,6 +2097,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Push bleibt verschlüsselt"
+          }
+        }
+      }
+    },
+    "Remove" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entfernen"
           }
         }
       }
@@ -3057,6 +3117,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wer was wann geändert hat und auf wessen Anweisung."
+          }
+        }
+      }
+    },
+    "With a public State relay, for example on your VPS, your iPhone receives notifications outside the home network. The content stays end to end encrypted." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit einem öffentlichen State-Relay, zum Beispiel auf deinem VPS, bekommt dein iPhone Mitteilungen auch außerhalb des WLANs. Die Inhalte bleiben Ende-zu-Ende verschlüsselt."
           }
         }
       }
