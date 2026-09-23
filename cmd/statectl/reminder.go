@@ -341,7 +341,29 @@ func detectLocalTimeZone() string {
 			return zone
 		}
 	}
-	zone := strings.TrimPrefix(strings.TrimSpace(os.Getenv("TZ")), ":")
+	if zone := strings.TrimPrefix(strings.TrimSpace(os.Getenv("TZ")), ":"); zone != "" {
+		if _, err := time.LoadLocation(zone); err == nil {
+			return zone
+		}
+	}
+	// macOS and most Linux systems name the zone only through this symlink;
+	// Go reports such a zone as "Local", which is useless as an IANA name.
+	target, err := os.Readlink("/etc/localtime")
+	if err != nil {
+		return ""
+	}
+	return zoneFromLocaltimeLink(target)
+}
+
+// zoneFromLocaltimeLink extracts the IANA name from an /etc/localtime link
+// target such as /var/db/timezone/zoneinfo/Europe/Berlin.
+func zoneFromLocaltimeLink(target string) string {
+	const marker = "zoneinfo/"
+	index := strings.LastIndex(target, marker)
+	if index < 0 {
+		return ""
+	}
+	zone := target[index+len(marker):]
 	if zone == "" {
 		return ""
 	}

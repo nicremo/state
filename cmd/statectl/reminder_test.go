@@ -290,3 +290,19 @@ func TestRunReminderCreateValidatesTheScheduleBeforeConnecting(t *testing.T) {
 		})
 	}
 }
+
+func TestZoneFromLocaltimeLink(t *testing.T) {
+	cases := map[string]string{
+		"/var/db/timezone/zoneinfo/Europe/Berlin": "Europe/Berlin",
+		"/usr/share/zoneinfo/America/New_York":    "America/New_York",
+		"../usr/share/zoneinfo/UTC":               "UTC",
+		"/usr/share/zoneinfo/Mars/Base":           "",
+		"/etc/something-else":                     "",
+		"":                                        "",
+	}
+	for target, want := range cases {
+		if got := zoneFromLocaltimeLink(target); got != want {
+			t.Errorf("zoneFromLocaltimeLink(%q) = %q, want %q", target, got, want)
+		}
+	}
+}
