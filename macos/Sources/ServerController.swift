@@ -56,6 +56,8 @@ final class ServerController {
     private var restartTask: Task<Void, Never>?
     private var restartPolicy = RestartPolicy()
     private var desiredRunning = false
+    private var sleeping = false
+    private var lastTick = Date()
     private var startingAt = Date()
     private var quitting = false
     private var launched = false
@@ -79,6 +81,13 @@ final class ServerController {
         guard !launched else { return }
         launched = true
         start()
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.sleeping = true }
+        }
+        center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.didWake() }
+        }
     }
 
     func start() {
@@ -91,6 +100,7 @@ final class ServerController {
         status = nil
         startingAt = Date()
         lastUpdated = nil
+        lastTick = Date()
         guard let executable = Bundle.main.url(forResource: "state-server", withExtension: nil) else {
             fail("Die Serverdatei fehlt. Bitte die App mit macos/build.sh neu bauen.")
             return
@@ -262,9 +272,24 @@ final class ServerController {
         if update.devices.count > previousCount, pairingKind.isEmpty { pairingVisible = false }
     }
 
+    private func didWake() {
+        sleeping = false
+        // A sleeping Mac sends no status lines; that silence is not a hang.
+        lastUpdated = Date()
+        lastTick = Date()
+        if desiredRunning, process == nil { start() }
+        send(action: "status")
+    }
+
     private func tick() {
         guard desiredRunning else { return }
-        if Date().timeIntervalSince(lastUpdated ?? startingAt) > 25 {
+        if sleeping { return }
+        let now = Date()
+        // A tick that arrives long after the previous one means this Mac was
+        // asleep, even if the wake notification has not been delivered yet.
+        let elapsed = now.timeIntervalSince(lastTick)
+        lastTick = now
+        if elapsed < 15, now.timeIntervalSince(lastUpdated ?? startingAt) > 25 {
             phase = .failed
             message = "Der Server antwortet nicht. Ein Neustart wird versucht."
             process?.terminate()
