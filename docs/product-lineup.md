@@ -3,7 +3,7 @@
 **Status:** Target architecture
 **Related:** [architecture](architecture.md), [local Mac connection](LOCAL_MAC_CONNECTION.md), [universal agent todo capture](universal-agent-todo-capture.md)
 
-State ships as four products: two apps, one Mac Server and one VPS Server. The iPhone, iPad and Mac apps share one client code base. The Mac Server and the VPS Server are the same Go binary in two modes.
+The lineup covers four products: two apps, one Mac Server and one VPS Server. The iPhone, iPad and Mac apps share one client code base, and the Mac Server and the VPS Server are the same Go binary in two modes.
 
 ## 1. Products at a glance
 
@@ -29,7 +29,7 @@ flowchart LR
     end
     A["Agents via statectl"] -->|MCP| D
     A -->|MCP| V
-    W["state-runner<br/>managed by Mac app"] -->|outbound claim| D
+    W["state-runner<br/>user LaunchAgent"] -->|outbound claim| D
     W -->|outbound claim| V
     P <-->|REST sync| D
     P <-->|REST sync| V
@@ -58,7 +58,7 @@ The iPhone keeps its `TabView`. iPad and Mac use a `NavigationSplitView` with a 
 
 All three form factors share the Swift code in `ios/State/Sources`. Platform-specific APIs such as the pasteboard, the QR scanner, the app delegate and colour handling sit behind a small platform layer in `ios/State/Sources/Platform/`.
 
-The Mac app is a native macOS target, not Mac Catalyst and not "Designed for iPad". A native target gives proper Mac behaviour with menus, keyboard shortcuts and real windows, and it avoids UIKit compromises in an app whose whole interface is SwiftUI.
+The Mac app is a native macOS target, not Mac Catalyst and not "Designed for iPad". A native target gives proper Mac behaviour with menus, keyboard shortcuts and real windows. It also avoids the UIKit compromises that a Catalyst build would bring into an app whose whole interface is SwiftUI.
 
 ## 4. Connection matrix
 
@@ -77,7 +77,7 @@ The transports follow the existing contracts: apps use versioned REST and the sy
 State uses three notification paths.
 
 - **Local notifications on every device.** Each device derives rolling local notifications from synchronized data, so reminders still fire while a server is unreachable. This path works offline.
-- **Encrypted APNs push for iPhone and iPad.** The server sends an encrypted envelope through `state-relay`, which forwards it to APNs. The relay enforces App Attest, and App Attest is not usable on the Mac, so this path stays limited to iPhone and iPad.
+- **Encrypted APNs push for iPhone and iPad.** The server sends an encrypted envelope through `state-relay`, which forwards it to APNs. Production delivery requires App Attest, which is not usable on the Mac, so this path stays limited to iPhone and iPad. The committed stack still allows development attest and runs APNs in dry-run mode until a permanent relay domain and Apple credentials exist.
 - **An optional relay for the Mac Server.** A Mac Server may use a public relay on the VPS. That requires the relay address to become configurable in the iPhone app, which is WP07. Without a relay, a Mac Server synchronizes in the local network and its clients notify locally.
 
 The Mac app itself never receives a relay push. It synchronizes while it runs and schedules local notifications from the data it holds.
@@ -88,7 +88,7 @@ Notification delivery never implies execution permission. Recurring occurrences 
 
 `statectl` is the MCP proxy and the CLI for every agent. Each agent pairs with its own identity and its own revocable credential, so the audit history shows which harness captured which reminder. Codex, Claude Code and OpenCode have installed integrations. Other labels such as DeepSeek Harness or Pi Agent receive an MCP declaration and agent rules to install manually.
 
-`state-runner` runs on a work machine and is managed by the Mac app as a login item, a LaunchAgent the app installs and watches. It claims due agent runs outbound only, whether the server runs on the Mac or on the VPS. The server never sends shell commands to a machine; a run carries a hash-pinned contract that names a project, an adapter and allowed capabilities.
+`state-runner` runs on a work machine as its own user LaunchAgent, installed once with `state-runner service install`. It does not live inside an app bundle, because the App Store build of the Mac app runs in the App Sandbox, and a sandboxed app may not start agent CLIs in project folders or create LaunchAgents. The apps show the runner status and provide the pairing code and the finished install command. The runner claims due agent runs outbound only, whether the server runs on the Mac or on the VPS. The server never sends shell commands to a machine; a run carries a hash-pinned contract that names a project, an adapter and allowed capabilities.
 
 A runner on the VPS is optional and only for projects that live on that server. The full capture and execution model is specified in [universal agent todo capture](universal-agent-todo-capture.md).
 
@@ -136,5 +136,5 @@ The [plan set](plans/2026-09-23-product-lineup/README.md) lists every package wi
 | WP07 | [Configurable relay address, Mac Server with VPS relay](plans/2026-09-23-product-lineup/WP07-relay-for-local-server.md) | 2 |
 | WP08 | [Runner adapters for Pi Agent and DeepSeek Harness](plans/2026-09-23-product-lineup/WP08-runner-adapters.md) | 1 |
 | WP09 | [iPad and Mac layout with `NavigationSplitView`](plans/2026-09-23-product-lineup/WP09-adaptive-layout.md) | 2 |
-| WP10 | [Runner in the Mac app (login item, UI)](plans/2026-09-23-product-lineup/WP10-runner-in-mac-app.md) | 2 |
+| WP10 | [Runner as a LaunchAgent, status and install command in the app](plans/2026-09-23-product-lineup/WP10-runner-in-mac-app.md) | 2 |
 | WP11 | [Release pipeline: Fastlane for macOS and iPad, TestFlight](plans/2026-09-23-product-lineup/WP11-release-pipeline.md) | 3 |
