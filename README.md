@@ -4,6 +4,8 @@ State gives coding agents a durable, auditable memory for reminders while keepin
 
 State is built for technical self-hosters. It is not an agent chat app, and execution never runs on the server: a workstation pulls its own work through an outbound-only runner.
 
+New here? [`DOCUMENTATION.md`](DOCUMENTATION.md) walks through the whole setup: running the server, pairing the iOS app, connecting Codex, Claude Code and OpenCode, and what the one-time codes and the pairing QR code actually are.
+
 ## Components
 
 - `state-server`: One Go binary with embedded PocketBase, REST, Streamable HTTP MCP, scheduling, full-text search and a signed audit chain.
@@ -11,6 +13,8 @@ State is built for technical self-hosters. It is not an agent chat app, and exec
 - `statectl`: A signed CLI, secure pairing client, local STDIO adapter for agent harnesses and project projection tool (`.state/`).
 - `state-runner`: An outbound-only worker on an opted-in workstation that claims eligible agent runs, launches local harness adapters and reports redacted results.
 - `State`: A native SwiftUI app for iOS 18 or later with GRDB offline storage and a Notification Service Extension.
+
+See [the product lineup](docs/product-lineup.md) for how the iPhone, iPad and Mac apps, the Mac Server and the VPS Server fit together.
 
 ```mermaid
 flowchart LR
@@ -35,6 +39,13 @@ flowchart LR
 - Offline iOS reads, queued writes and explicit conflict resolution.
 - Local rolling notifications with encrypted server push fallback.
 - German and English UI, Dark Mode, Dynamic Type and VoiceOver labels.
+
+## Native Mac server
+
+The [State Server menu bar app](macos/README.md) runs the server locally, displays
+an iPhone pairing QR code and keeps working when its window is closed. Build it
+with `bash macos/build.sh`. The updated iPhone client is required for local TLS
+pairing. Data stays on the Mac; synchronization requires an awake, reachable Mac.
 
 ## Quick start
 
@@ -145,7 +156,7 @@ state-runner pair --server https://state.example.com --code ONE_TIME_CODE --name
 state-runner run
 ```
 
-The runner polls outbound-only, validates the hash-pinned task contract against its local configuration, writes the contract and status under the project's `.state/runs/` directory, launches the matching local harness adapter and reports a redacted result. The owner watches the lifecycle in the iOS app, approves sensitive capabilities per run, and receives an encrypted push when a run finishes. Unattended policies are limited to low-risk capabilities; everything else stays supervised.
+The runner polls outbound-only, validates the hash-pinned task contract against its local configuration, writes the contract and status under the project's `.state/runs/` directory, launches the matching local harness adapter (`codex`, `claude-code`, `opencode`, `pi-agent`, `deepseek-harness`) and reports a redacted result. `pi-agent` runs `pi --print` and `deepseek-harness` runs `dsh --profile headless`, each with the prompt as a single argument. The owner watches the lifecycle in the iOS app, approves sensitive capabilities per run, and receives an encrypted push when a run finishes. Unattended policies are limited to low-risk capabilities; everything else stays supervised.
 
 Read [`docs/agent-execution-implementation-plan.md`](docs/agent-execution-implementation-plan.md) for the full design and [`docs/agent-execution-extension.md`](docs/agent-execution-extension.md) for the originating concept.
 

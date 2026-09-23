@@ -51,6 +51,11 @@ final class AppModel {
     private(set) var isDemo = false
     var presentedError: String?
 
+    /// Which reminders the demo shows. It starts as the seeded pair and grows
+    /// with everything the owner adds while trying the app out, so a reminder
+    /// created in the demo does not vanish the moment the cache reloads.
+    private var demoVisibleIDs: Set<String> = []
+
     init(database: StateDatabase, sessionRepository: SessionRepository = SessionRepository()) {
         self.database = database
         self.sessionRepository = sessionRepository
@@ -73,23 +78,27 @@ final class AppModel {
         bootstrapToken: String?,
         pairingCode: String?,
         displayName: String,
-        deviceName: String
+        deviceName: String,
+        certificateFingerprint: String? = nil
     ) async {
         do {
+            let transport = try LocalServerTrust.session(serverURL: serverURL, fingerprint: certificateFingerprint)
+            defer { transport.finishTasksAndInvalidate() }
             let credential: Credential
             if let bootstrapToken, !bootstrapToken.isEmpty {
                 credential = try await APIClient.bootstrapOwner(
                     serverURL: serverURL,
                     bootstrapToken: bootstrapToken,
                     displayName: displayName,
-                    deviceName: deviceName
+                    deviceName: deviceName,
+                    session: transport
                 )
             } else if let pairingCode, !pairingCode.isEmpty {
-                credential = try await APIClient.exchangePairingCode(serverURL: serverURL, code: pairingCode)
+                credential = try await APIClient.exchangePairingCode(serverURL: serverURL, code: pairingCode, session: transport)
             } else {
                 throw StateAPIError.invalidResponse
             }
-            let newSession = ServerSession(serverURL: serverURL, actor: credential.actor)
+            let newSession = ServerSession(serverURL: serverURL, actor: credential.actor, certificateFingerprint: certificateFingerprint)
             try sessionRepository.save(session: newSession, token: credential.token)
             try configure(session: newSession, token: credential.token)
             await synchronize()
@@ -105,6 +114,7 @@ final class AppModel {
             api = nil
             syncEngine = nil
             isDemo = false
+            demoVisibleIDs = []
         } catch {
             presentedError = error.localizedDescription
         }
@@ -147,8 +157,12 @@ final class AppModel {
         }
     }
 
-    func createReminder(_ draft: ReminderDraft) async {
-        guard let actor = session?.actor else { return }
+    /// Returns the identifier of the reminder that was written locally, so the
+    /// caller can show it. A reminder without a date does not belong to Today,
+    /// and landing back on an unchanged list looks exactly like a failure.
+    @discardableResult
+    func createReminder(_ draft: ReminderDraft) async -> String? {
+        guard let actor = session?.actor else { return nil }
         do {
             let now = Date()
             let provisionalID = UUIDv7.generate().uuidString.lowercased()
@@ -167,13 +181,34 @@ final class AppModel {
                 updatedAt: now
             )
             let occurrence = schedule.flatMap { makeOccurrence(reminderID: provisionalID, schedule: $0, now: now) }
+            // The demo has no server to write the audit event, so it writes the
+            // one the server would have written. Without it a reminder created
+            // in the demo would carry no origin and no history at all.
+            let history = isDemo
+                ? [
+                    localAuditEvent(
+                        reminderID: provisionalID,
+                        action: "reminder.created",
+                        changedFields: Self.changedFields(of: reminder),
+                        revision: 1,
+                        at: now,
+                        actor: actor
+                    ),
+                ]
+                : []
             try await database.apply(
-                detail: ReminderDetail(reminder: reminder, comments: [], occurrences: occurrence.map { [$0] } ?? [], history: []),
+                detail: ReminderDetail(
+                    reminder: reminder,
+                    comments: [],
+                    occurrences: occurrence.map { [$0] } ?? [],
+                    history: history
+                ),
                 cursor: nil
             )
             if isDemo {
+                demoVisibleIDs.insert(provisionalID)
                 await reloadCache()
-                return
+                return provisionalID
             }
             let requestID = UUIDv7.generate().uuidString.lowercased()
             let request = CreateReminderRequest(
@@ -194,11 +229,16 @@ final class AppModel {
                 body: StateJSON.encoder.encode(request),
                 entityID: provisionalID
             )
-            _ = actor
             await reloadCache()
             await synchronize()
+            // Synchronizing replaces the provisional identifier with the one
+            // the server assigned, so the caller gets whichever still exists.
+            return reminders.contains { $0.id == provisionalID }
+                ? provisionalID
+                : reminders.first { $0.title == reminder.title }?.id
         } catch {
             presentedError = error.localizedDescription
+            return nil
         }
     }
 
@@ -232,7 +272,15 @@ final class AppModel {
                 history: detail.history,
                 runs: detail.runs
             )
-            try await database.apply(detail: detail, cursor: nil)
+            try await database.apply(
+                detail: appendingDemoEvent(
+                    to: detail,
+                    action: "reminder.updated",
+                    changedFields: Self.changedFields(of: detail.reminder),
+                    revision: expectedRevision + 1
+                ),
+                cursor: nil
+            )
             if isDemo {
                 await reloadCache()
                 return
@@ -310,7 +358,15 @@ final class AppModel {
                 history: detail.history,
                 runs: detail.runs
             )
-            try await database.apply(detail: detail, cursor: nil)
+            try await database.apply(
+                detail: appendingDemoEvent(
+                    to: detail,
+                    action: "comment.added",
+                    changedFields: ["body"],
+                    revision: detail.reminder.revision
+                ),
+                cursor: nil
+            )
             if isDemo {
                 await reloadCache()
                 return
@@ -358,8 +414,21 @@ final class AppModel {
                 history: detail.history,
                 runs: detail.runs
             )
-            try await database.apply(detail: detail, cursor: nil)
+            try await database.apply(
+                detail: appendingDemoEvent(
+                    to: detail,
+                    action: archived ? "reminder.archived" : "reminder.restored",
+                    changedFields: ["archived"],
+                    revision: expectedRevision + 1
+                ),
+                cursor: nil
+            )
             if isDemo {
+                if archived {
+                    demoVisibleIDs.remove(reminder.id)
+                } else {
+                    demoVisibleIDs.insert(reminder.id)
+                }
                 await reloadCache()
                 return
             }
@@ -475,7 +544,16 @@ final class AppModel {
     }
 
     func createPairingCode(harness: String, displayName: String, deviceName: String) async -> PairingCode? {
-        guard let api else { return nil }
+        // The demo has no server to mint a real code, but the flow is the point
+        // of the screen, so it shows a sample code that expires like a real one
+        // and is obviously not usable against a server.
+        if isDemo {
+            return PairingCode(code: "DEMO-XXXX-XXXX", expiresAt: Date().addingTimeInterval(15 * 60))
+        }
+        guard let api else {
+            presentedError = String(localized: "Connect this iPhone to your server first.")
+            return nil
+        }
         do {
             return try await api.createPairingCode(kind: .harness, harness: harness, displayName: displayName, deviceName: deviceName)
         } catch {
@@ -658,6 +736,7 @@ final class AppModel {
     func enterDemo() async {
         do {
             isDemo = true
+            demoVisibleIDs = Set(Self.demoReminderIDs)
             session = ServerSession(
                 serverURL: URL(string: "https://demo.state.invalid")!,
                 actor: Actor(
@@ -688,7 +767,7 @@ final class AppModel {
     }
 
     private func configure(session: ServerSession, token: String) throws {
-        let api = try APIClient(serverURL: session.serverURL, token: token)
+        let api = try APIClient(serverURL: session.serverURL, token: token, session: LocalServerTrust.session(serverURL: session.serverURL, fingerprint: session.certificateFingerprint))
         isDemo = false
         self.session = session
         self.api = api
@@ -703,8 +782,8 @@ final class AppModel {
             policies = try await database.policies()
             runners = try await database.runners()
             if isDemo {
-                reminders = loadedReminders.filter { Self.demoReminderIDs.contains($0.id) }
-                activity = loadedActivity.filter { $0.reminderID.map(Self.demoReminderIDs.contains) ?? false }
+                reminders = loadedReminders.filter { demoVisibleIDs.contains($0.id) }
+                activity = loadedActivity.filter { $0.reminderID.map(demoVisibleIDs.contains) ?? false }
                 conflicts = []
             } else {
                 reminders = loadedReminders
@@ -938,7 +1017,81 @@ final class AppModel {
         )
     }
 
-    private func demoOccurrence(reminder: Reminder, id: String, now: Date) -> Occurrence {        let schedule = reminder.schedule!
+    /// The fields a reminder actually carries. The demo history has to name
+    /// these rather than a fixed list, otherwise it claims a description and a
+    /// schedule for a reminder that has neither.
+    private static func changedFields(of reminder: Reminder) -> [String] {
+        var fields = ["title"]
+        if reminder.description?.isEmpty == false {
+            fields.append("description")
+        }
+        if reminder.schedule != nil {
+            fields.append("schedule")
+        }
+        if reminder.recurrence != nil {
+            fields.append("recurrence")
+        }
+        return fields
+    }
+
+    /// The audit event the server would have produced, written locally so the
+    /// demo shows the same history the real product shows. It carries no hash
+    /// and no signature, because nothing signed it.
+    private func localAuditEvent(
+        reminderID: String,
+        action: String,
+        changedFields: [String],
+        revision: Int64,
+        at time: Date,
+        actor: Actor
+    ) -> AuditEvent {
+        let identifier = UUIDv7.generate().uuidString.lowercased()
+        return AuditEvent(
+            id: identifier,
+            reminderID: reminderID,
+            action: action,
+            actor: actor,
+            serverTime: time,
+            clientTime: time,
+            source: "ios",
+            sourceExcerpt: nil,
+            changedFields: changedFields,
+            revision: revision,
+            correlationID: identifier,
+            clientRequestID: identifier,
+            previousHash: nil,
+            hash: "demo",
+            signature: "demo"
+        )
+    }
+
+    /// Appends a locally produced event to a detail. Demo only.
+    private func appendingDemoEvent(
+        to detail: ReminderDetail,
+        action: String,
+        changedFields: [String],
+        revision: Int64
+    ) -> ReminderDetail {
+        guard isDemo, let actor = session?.actor else { return detail }
+        let event = localAuditEvent(
+            reminderID: detail.reminder.id,
+            action: action,
+            changedFields: changedFields,
+            revision: revision,
+            at: Date(),
+            actor: actor
+        )
+        return ReminderDetail(
+            reminder: detail.reminder,
+            comments: detail.comments,
+            occurrences: detail.occurrences,
+            history: detail.history + [event],
+            runs: detail.runs
+        )
+    }
+
+    private func demoOccurrence(reminder: Reminder, id: String, now: Date) -> Occurrence {
+        let schedule = reminder.schedule!
         return Occurrence(
             id: id,
             reminderID: reminder.id,
@@ -1053,7 +1206,15 @@ final class AppModel {
                 history: detail.history,
                 runs: detail.runs
             )
-            try await database.apply(detail: detail, cursor: nil)
+            try await database.apply(
+                detail: appendingDemoEvent(
+                    to: detail,
+                    action: snoozeUntil == nil ? "occurrence.completed" : "occurrence.snoozed",
+                    changedFields: snoozeUntil == nil ? ["status"] : ["status", "snoozed_until"],
+                    revision: occurrence.revision + 1
+                ),
+                cursor: nil
+            )
             if isDemo {
                 await reloadCache()
                 return

@@ -3,6 +3,7 @@ import Foundation
 struct ServerSession: Codable, Sendable {
     let serverURL: URL
     let actor: Actor
+    var certificateFingerprint: String? = nil
 }
 
 @MainActor
@@ -41,6 +42,7 @@ struct PairingPayload: Sendable {
     let serverURL: URL
     let bootstrapToken: String?
     let pairingCode: String?
+    let certificateFingerprint: String?
 
     init?(value: String) {
         guard
@@ -55,6 +57,12 @@ struct PairingPayload: Sendable {
         let bootstrap = components.queryItems?.first(where: { $0.name == "bootstrap" })?.value
         let code = components.queryItems?.first(where: { $0.name == "code" })?.value
         guard bootstrap != nil || code != nil else { return nil }
+        let fingerprint = components.queryItems?.first(where: { $0.name == "fingerprint" })?.value
+        if let fingerprint {
+            guard serverURL.scheme == "https", LocalServerTrust.isValidFingerprint(fingerprint) else { return nil }
+        }
+        guard serverURL.user == nil, serverURL.password == nil else { return nil }
+        certificateFingerprint = fingerprint
         self.serverURL = serverURL
         bootstrapToken = bootstrap
         pairingCode = code
