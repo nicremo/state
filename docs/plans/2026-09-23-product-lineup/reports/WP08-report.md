@@ -3,7 +3,18 @@
 **Status:** DONE
 **Branch:** wp/08-runner-adapters
 **Basis:** origin/main 4254d1b, nach Rebase auf den aktuellen Stand
-**Letzter Commit:** `docs: add WP08 report` (Report-Commit an der Branch-Spitze), davor 5acee62 `docs: list the new runner adapters`
+**Letzter Commit vor diesem Report:** d55f0b8 `test: pin the prompt boundary and the registry names of the shipped adapters`
+
+Commits auf dem Branch, älteste zuerst:
+
+```text
+1718871 feat: launch pi agent and deepseek harness from the runner
+5acee62 docs: list the new runner adapters
+524de5e docs: add WP08 report
+d703616 docs: correct WP08 report citations and verified profile behaviour
+d55f0b8 test: pin the prompt boundary and the registry names of the shipped adapters
+```
+
 
 ## Ergebnis in drei Sätzen
 
@@ -13,7 +24,7 @@
 
 - [x] Task 0: Echte Aufrufsyntax ermittelt. Vollständige Ausgabe in Abschnitt "Task 0: Aufrufsyntax" unten.
 - [x] Task 1: Server-Allowlist geprüft. Es gibt keine Allowlist für Ausführungs-Adapter, daher keine Produktionsänderung in `internal/state` und kein eigener Commit. Nachweis: `TestPolicyValidationAcceptsNewAdapterLabels` in `internal/runner/adapters_test.go` lief schon vor der Registrierung der Adapter grün, weil `ValidPolicyConfiguration` den Adapter nur über das Regex `ValidHarness` prüft.
-- [x] Task 2: `pi-agent` und `deepseek-harness` in `DefaultAdapters()` registriert, Test zuerst (rot gesehen, danach grün).
+- [x] Task 2: `pi-agent` und `deepseek-harness` in `DefaultAdapters()` registriert, Test zuerst (rot gesehen, danach grün). Nach der unabhängigen Prüfung um einen Test am echten Prozessrand ergänzt, der die argv-Elemente beider Adapter festhält.
 - [x] Task 3: Kommentar über `DefaultAdapters()` erweitert, `README.md` im Abschnitt "Scheduled agent execution" ergänzt.
 - [x] Task 4: `gofmt`, `go vet`, `go test -race ./...` siehe Prüfungen.
 - [x] Report und Draft-PR.
@@ -23,7 +34,7 @@
 | Datei | Änderung |
 | --- | --- |
 | `internal/runner/adapters.go` | Zwei Einträge in `DefaultAdapters()` (`pi-agent` mit Binary `pi` und `-p`, `deepseek-harness` mit Binary `dsh` und `--profile headless`), Kommentar über der Funktion erweitert |
-| `internal/runner/adapters_test.go` | `TestDefaultAdaptersIncludePiAgent`, `TestDefaultAdaptersIncludeDeepSeekHarness`, `TestShippedAdaptersReportMissingBinary`, `TestPolicyValidationAcceptsNewAdapterLabels`, Hilfsfunktion `shippedAdapterNames()`, bestehender Test `TestDefaultAdaptersContainShippedAdaptersOnly` auf die fünf Namen erweitert |
+| `internal/runner/adapters_test.go` | `TestDefaultAdaptersIncludePiAgent`, `TestDefaultAdaptersIncludeDeepSeekHarness`, `TestShippedAdaptersReportMissingBinary`, `TestShippedAdaptersPassPromptAsSingleArgvElement`, `TestPolicyValidationAcceptsNewAdapterLabels`, Hilfsfunktion `shippedAdapterNames()`, bestehender Test `TestDefaultAdaptersContainShippedAdaptersOnly` auf die fünf Namen und die Namensgleichheit von Registry-Schlüssel und `Name()` erweitert |
 | `README.md` | Adapter-Liste und Aufruf der beiden neuen Adapter im Abschnitt "Scheduled agent execution" |
 
 ## Dateien außerhalb meines Bereichs
@@ -143,11 +154,14 @@ ios/State/Sources/Models/HarnessCatalog.swift:38:    static let shippedIntegrati
 | `go vet ./...` | grün |
 | `go test -race ./...` | grün, 15 Pakete, Ausgabe unten |
 | `go test ./internal/runner/ -run ... -v` (rot vor der Implementierung) | `pi-agent adapter missing`, `deepseek-harness adapter missing`, `DefaultAdapters() misses pi-agent` |
-| `go test ./internal/runner/ -run ... -v` (grün nach der Implementierung) | 5 Tests grün |
+| `go test ./internal/runner/ -run ... -v` (grün nach der Implementierung) | 6 Tests grün |
+| Mutationsprobe zum argv-Test | `pi-agent`-Argumente absichtlich auf `[prompt, "-p"]` gedreht, `TestShippedAdaptersPassPromptAsSingleArgvElement` und `TestDefaultAdaptersIncludePiAgent` schlagen fehl, danach zurückgesetzt (`git diff` leer) |
+
+Zum Test `TestShippedAdaptersPassPromptAsSingleArgvElement`: er legt ein gefälschtes `pi` und ein gefälschtes `dsh` in ein temporäres Verzeichnis, setzt `PATH` dorthin und lässt den Adapter wirklich starten. Das Skript schreibt `$#` und `$@` in eine Datei. Geprüft wird, dass der Prozess genau `["-p", prompt]` beziehungsweise `["--profile", "headless", prompt]` erhält, mit einem Prompt, der Shell-Metazeichen enthält. Damit ist die Eigenschaft "ein argv-Element, keine Shell" am Prozessrand abgesichert und nicht nur an der Argumentfunktion.
 
 Der Beweis, dass die neuen Tests wirklich greifen: nach dem Schreiben der Tests und vor der Implementierung schlugen `TestDefaultAdaptersIncludePiAgent`, `TestDefaultAdaptersIncludeDeepSeekHarness`, `TestShippedAdaptersReportMissingBinary` und `TestDefaultAdaptersContainShippedAdaptersOnly` fehl. `TestPolicyValidationAcceptsNewAdapterLabels` lief bereits vorher grün, was der Beleg für Task 1 ist.
 
-Die Prüfungen liefen zweimal: einmal auf dem ursprünglichen Basis-Commit `ae6ab23` und nach dem Rebase auf den aktuellen `origin/main` (`4254d1b`) erneut. Beide Läufe waren vollständig grün. Ausgabe des zweiten Laufs:
+Die Prüfungen liefen zweimal: einmal auf dem ursprünglichen Basis-Commit `ae6ab23` und nach dem Rebase auf den aktuellen `origin/main` (`4254d1b`) erneut. Beide Läufe waren vollständig grün. Nach der Ergänzung des argv-Tests lief die Gesamtsuite ein drittes Mal grün (15 Pakete, `internal/runner` 9.725s). Ausgabe des zweiten Laufs:
 
 ```text
 $ gofmt -l ./cmd ./internal
@@ -174,6 +188,25 @@ ok  	github.com/nicremo/state/internal/statectl	4.406s
 ok  	github.com/nicremo/state/internal/store	(cached)
 ```
 
+## Unabhängige Prüfung
+
+Die Arbeit wurde von einer zweiten, unabhängigen Session gegen den Diff geprüft, ohne dass sie Dateien ändern durfte. Urteil: PASS mit Anmerkungen, kein Blocker. Bestätigt wurden unter anderem:
+
+1. Beide Adapter sind mit den aus der `--help`-Ausgabe abgeleiteten Argumenten registriert; der Aufrufort `adapters.go:131` reicht sie ohne Shell als Variadic weiter.
+2. `ErrAdapterUnavailable` entsteht unverändert über `Validate` mit `exec.LookPath` und wird in `run.go:125-127` als `state.RunFailureAdapterUnavailable` gemeldet.
+3. Der Datei-Scope der Commits ist exakt eingehalten, keine AI-Attribution, Git-Identität korrekt, Kommentare englisch.
+4. Die Regex `^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$` akzeptiert beide neuen Labels, geprüft mit einer eigenen Sonde.
+5. `gofmt`, `go vet`, `go test -race` grün, auch für `internal/state` und `cmd/state-runner`.
+
+Angemerkt und in dieser Fassung behoben:
+
+1. Es gab keinen Test am echten Prozessrand für "der Prompt bleibt ein argv-Element". Behoben durch `TestShippedAdaptersPassPromptAsSingleArgvElement`, inklusive Mutationsprobe.
+2. `TestShippedAdaptersReportMissingBinary` deckte nur die neuen Adapter ab. Behoben, jetzt laufen alle fünf durch.
+3. `TestPolicyValidationAcceptsNewAdapterLabels` prüfte nur die Regex-Form, ein vertippter Name wäre grün geblieben. Behoben durch die zusätzliche Zusicherung, dass der Name in der Registry liegt.
+4. Registry-Test pinnte die Namensgleichheit von Schlüssel und `Name()` nicht. Behoben.
+
+Offen gelassen und unter "Offene Fragen" notiert: die Hilfetexte außerhalb des Bereichs, der iOS-Preset `pi` gegen den Adapter-Namen `pi-agent`, und die bewusst manuelle `statectl`-Integration.
+
 ## Abweichungen vom Plan
 
 1. **Kein Commit für Task 1.** Das WP-Dokument rechnete mit einer serverseitigen Adapter-Liste. Die gibt es nicht, also wurde nach der Regel "Wenn es keine Liste gibt: nichts tun" verfahren und nur der Nachweis als Test ergänzt. Der Test liegt in `internal/runner/adapters_test.go`, weil `internal/state/execution_test.go`, `harness_test.go` und `internal/statectl` nicht in meinem Bereich liegen.
@@ -186,9 +219,12 @@ ok  	github.com/nicremo/state/internal/store	(cached)
 ## Offene Fragen und Risiken
 
 1. **iOS-Auswahl ist fest und kennt die neuen Adapter nicht.** `ios/State/Sources/Models/HarnessCatalog.swift:38` listet nur `codex`, `claude-code`, `opencode`, und `AppModel.swift:918` bietet nur `["claude-code", "codex"]` zur Auswahl an. Solange das so bleibt, kann eine Policy über die App nicht auf `pi-agent` oder `deepseek-harness` zeigen, obwohl der Server sie akzeptiert. Das ist Bereich von WP06 und wurde hier bewusst nicht angefasst. Der Koordinator sollte entscheiden, ob WP06 oder ein Folge-WP die Auswahl erweitert.
+   Zusatz aus der unabhängigen Prüfung: `HarnessCatalog.swift:12-17` führt den Pi-Agent-Preset als `pi`, nicht als `pi-agent`, und `ios/StateTests/HarnessCatalogTests.swift:9-11` pinnt die alte Menge. Der Adapter-Name `pi-agent` und der iOS-Preset `pi` sind damit zwei verschiedene Bezeichner für denselben Agenten. Auch das ist WP06.
 2. **PATH des Runners.** Beide neuen Binaries liegen unter `/Users/nicremo/.npm-global/bin`. Startet der Runner aus einem LaunchAgent, sieht er diesen Pfad möglicherweise nicht und meldet dann korrekt `adapter_unavailable`. Das betrifft alle fünf Adapter gleichermaßen und gehört zu WP10 (Runner in der Mac-App). Der Runner hat heute keine Option für absolute Binary-Pfade.
-3. **`pi -p` ist ein Schalter, der Prompt ist eine Positions-Message.** Die `pi`-Usage-Zeile erlaubt mehrere Messages (`[messages...]`). Der Adapter übergibt genau ein Element. Wenn `pi` in einer künftigen Version `-p` zu einem werttragenden Schalter ändert, muss die Argumentliste angepasst werden. Beide Tests pinnen die Argumentliste, ein solcher Bruch fällt also sofort auf.
-4. **`deepseek-harness` ist an das Profil `headless` gebunden.** Das Profil existiert auf diesem Mac (`/Users/nicremo/.dsh/profiles/headless/`). Fehlt es auf einem anderen Rechner, bricht `dsh` mit Exit-Code 1 und der Meldung `dsh: profile "headless" does not exist; create it with 'dsh plugin --profile headless add <package>'` ab, geprüft mit `dsh --profile wp08-does-not-exist --help`. Der Runner meldet den Lauf dann mit einem Exit-Code, nicht mit `adapter_unavailable`, die Ursache steht nur im gekappten Output-Tail. Dasselbe gilt, wenn `pi` mit unbekannten Flags aufgerufen wird.
+3. **Hilfetexte nennen die neuen Adapter nicht.** `cmd/statectl/main.go:116,223,250`, `cmd/state-runner/main.go:57` ("comma-separated harness adapters this runner launches, for example codex,claude-code") und `internal/statectl/policy.go:40` zählen nur die alten Namen auf. Das ist reine Kosmetik in Dateien außerhalb meines Bereichs, eine Zeile pro Stelle.
+4. **`statectl install` bleibt für die neuen Labels manuell.** `knownHarnesses` (`internal/state/harness.go:12`) listet sie nicht, deshalb lehnt `statectl install` sie mit `ErrManualInstallation` ab (`internal/statectl/installer.go:68,106`). Das ist gewollt, WP05 beschreibt beide Agenten als manuelle Integration. Ein Runner kann die Adapter trotzdem registrieren, weil Server und Runner nur `ValidHarness` prüfen.
+5. **`pi -p` ist ein Schalter, der Prompt ist eine Positions-Message.** Die `pi`-Usage-Zeile erlaubt mehrere Messages (`[messages...]`). Der Adapter übergibt genau ein Element. Wenn `pi` in einer künftigen Version `-p` zu einem werttragenden Schalter ändert, muss die Argumentliste angepasst werden. Beide Tests pinnen die Argumentliste, ein solcher Bruch fällt also sofort auf.
+6. **`deepseek-harness` ist an das Profil `headless` gebunden.** Das Profil existiert auf diesem Mac (`/Users/nicremo/.dsh/profiles/headless/`). Fehlt es auf einem anderen Rechner, bricht `dsh` mit Exit-Code 1 und der Meldung `dsh: profile "headless" does not exist; create it with 'dsh plugin --profile headless add <package>'` ab, geprüft mit `dsh --profile wp08-does-not-exist --help`. Der Runner meldet den Lauf dann mit einem Exit-Code, nicht mit `adapter_unavailable`, die Ursache steht nur im gekappten Output-Tail. Dasselbe gilt, wenn `pi` mit unbekannten Flags aufgerufen wird.
 
 ## Manuelle Schritte für Fabian oder den Koordinator
 
