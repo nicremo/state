@@ -72,7 +72,7 @@ struct ConnectView: View {
                 Text(verbatim: "State")
                     .font(.title.bold())
                     .foregroundStyle(StateTheme.graphite)
-                Text("Connect this iPhone to your own server.")
+                Text("Connect \(Platform.deviceNoun) to your own server.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -94,7 +94,7 @@ struct ConnectView: View {
                     Text("No server yet? Start here")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(StateTheme.graphite)
-                    Text("Set up the server, pair this iPhone, connect your agents.")
+                    Text("Set up the server, pair \(Platform.deviceNoun), connect your agents.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.leading)
@@ -142,7 +142,7 @@ struct ConnectView: View {
                         SecureField(String(localized: "Bootstrap token"), text: $bootstrapToken)
                             .focused($focusedField, equals: .secret)
                     }
-                    helper(String(localized: "Printed once by your server with state-server bootstrap-token. It makes this iPhone the owner."))
+                    helper(String(localized: "Printed once by your server with state-server bootstrap-token. It makes \(Platform.deviceNoun) the owner."))
                 case .pairingCode:
                     FieldGroup(label: String(localized: "One-time pairing code")) {
                         SecureField(String(localized: "One-time pairing code"), text: $pairingCode)

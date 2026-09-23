@@ -22,5 +22,21 @@ struct StateApp: App {
         WindowGroup {
             StateRootView(model: model)
         }
+        #if os(macOS)
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button(String(localized: "New reminder")) {
+                    NotificationCenter.default.post(name: .stateCreateReminder, object: nil)
+                }
+                .keyboardShortcut("n")
+            }
+            CommandMenu(String(localized: "Sync")) {
+                Button(String(localized: "Synchronize now")) {
+                    NotificationCenter.default.post(name: .stateSynchronizeNow, object: nil)
+                }
+                .keyboardShortcut("r")
+            }
+        }
+        #endif
     }
 }

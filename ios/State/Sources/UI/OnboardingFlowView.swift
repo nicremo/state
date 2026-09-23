@@ -136,7 +136,7 @@ struct OnboardingFlowView: View {
     private var topology: some View {
         OnboardingPage(
             title: String(localized: "Three pieces, one memory"),
-            subtitle: String(localized: "State needs a server of your own. Your agents and this iPhone both talk to it.")
+            subtitle: String(localized: "State needs a server of your own. It connects your agents and \(Platform.deviceNoun).")
         ) {
             VStack(spacing: 0) {
                 OnboardingNode(

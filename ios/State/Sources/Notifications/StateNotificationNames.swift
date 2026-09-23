@@ -6,6 +6,9 @@ extension Notification.Name {
     static let stateNotificationAction = Notification.Name("state.notification-action")
     static let stateAPNSToken = Notification.Name("state.apns-token")
     static let stateOpenNotificationSettings = Notification.Name("state.open-notification-settings")
+    /// Posted by the Mac menu commands, answered by the split layout.
+    static let stateCreateReminder = Notification.Name("state.create-reminder")
+    static let stateSynchronizeNow = Notification.Name("state.synchronize-now")
 }
 
 enum StateNotificationAction {
