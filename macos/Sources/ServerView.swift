@@ -5,6 +5,8 @@ import SwiftUI
 
 struct ServerView: View {
     @Bindable var controller: ServerController
+    @State private var relayInput = ""
+    @State private var relayError: String?
 
     var body: some View {
         ScrollView {
@@ -118,6 +120,35 @@ struct ServerView: View {
                     }.padding(10)
                 }
 
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Label("Push unterwegs (optional)", systemImage: "antenna.radiowaves.left.and.right").font(.headline)
+                        TextField("https://relay.example.com", text: $relayInput)
+                            .textFieldStyle(.roundedBorder)
+                            .autocorrectionDisabled()
+                        Text("Mit einem öffentlichen State-Relay, z.B. auf deinem VPS, bekommt dein iPhone Mitteilungen auch außerhalb des WLANs. Die Inhalte bleiben Ende-zu-Ende verschlüsselt.")
+                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 10) {
+                            Button("Übernehmen") { applyRelay() }
+                                .disabled(controller.phase == .stopping)
+                            if controller.relayURL.isEmpty {
+                                Text("Kein Relay: Mitteilungen nur lokal und im WLAN.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                Text(controller.relayURL)
+                                    .font(.caption.monospaced()).foregroundStyle(.secondary)
+                                    .textSelection(.enabled).lineLimit(1).truncationMode(.middle)
+                            }
+                            Spacer()
+                        }
+                        if let relayError {
+                            Label(relayError, systemImage: "exclamationmark.triangle")
+                                .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }.padding(10)
+                }
+                .onAppear { relayInput = controller.relayURL }
+
                 if let devices = controller.status?.devices, !devices.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Verbundene Geräte").font(.headline)
@@ -158,6 +189,15 @@ struct ServerView: View {
         .frame(width: 620, height: 700)
         .background(Color(nsColor: .windowBackgroundColor))
         .onDisappear { controller.pairingVisible = false }
+    }
+
+    private func applyRelay() {
+        if controller.applyRelay(relayInput) {
+            relayInput = controller.relayURL
+            relayError = nil
+        } else {
+            relayError = "Bitte eine vollständige https:// Adresse eintragen oder das Feld leer lassen."
+        }
     }
 }
 

@@ -1,6 +1,17 @@
 import CryptoKit
 import DeviceCheck
 import Foundation
+import Network
+
+/// Observable result of the last push registration attempt. The settings
+/// screen shows why notifications do or do not travel through a relay.
+enum PushRelayStatus: Equatable, Sendable {
+    case unknown
+    case registered
+    case noRelay
+    case unavailable
+    case failed(String)
+}
 
 enum PushRegistrationError: Error, LocalizedError {
     case unavailable
@@ -115,12 +126,22 @@ final class PushRegistrationService {
     private let defaults = UserDefaults(suiteName: "group.com.fabincrm.state") ?? .standard
     private let routeCapabilityAccount = "relay-route-capability"
     private let routeIDKey = "state.relay-route-id"
-    private let relayURLKey = "state.relay-url"
+    /// Builds before this change cached a derived relay globally. The relay now
+    /// belongs to the server session, so the old value is deleted on sight.
+    nonisolated static let legacyRelayURLKey = "state.relay-url"
 
     func registerIfSupported(apnsToken: Data, model: AppModel) async {
-        guard DCAppAttestService.shared.isSupported, let session = model.session else { return }
+        guard DCAppAttestService.shared.isSupported else {
+            model.pushStatus = .unavailable
+            return
+        }
+        guard let session = model.session else { return }
+        Self.removeLegacyCachedRelay(in: defaults)
+        guard let relayURL = Self.relayURL(for: session.serverURL, configured: session.relayURL) else {
+            model.pushStatus = .noRelay
+            return
+        }
         do {
-            let relayURL = try resolvedRelayURL(serverURL: session.serverURL)
             let client = try RelayClient(baseURL: relayURL)
             let token = apnsToken.map { String(format: "%02x", $0) }.joined()
             let privateKey = try pushPrivateKey()
@@ -138,6 +159,7 @@ final class PushRegistrationService {
                         authorization: capability,
                         publicKey: privateKey.publicKey.rawRepresentation
                     )
+                    model.pushStatus = .registered
                     return
                 } catch PushRegistrationError.rejected(401), PushRegistrationError.rejected(404) {
                     defaults.removeObject(forKey: routeIDKey)
@@ -184,7 +206,9 @@ final class PushRegistrationService {
                 authorization: response.authorization,
                 publicKey: privateKey.publicKey.rawRepresentation
             )
+            model.pushStatus = .registered
         } catch {
+            model.pushStatus = .failed(error.localizedDescription)
             model.presentedError = error.localizedDescription
         }
     }
@@ -198,21 +222,49 @@ final class PushRegistrationService {
         return key
     }
 
-    private func resolvedRelayURL(serverURL: URL) throws -> URL {
-        if let configured = defaults.string(forKey: relayURLKey), let url = URL(string: configured) {
-            return url
+    /// Deletes the relay address that older builds cached globally.
+    nonisolated static func removeLegacyCachedRelay(in defaults: UserDefaults) {
+        defaults.removeObject(forKey: legacyRelayURLKey)
+    }
+
+    /// A relay has to be an absolute HTTPS address without credentials.
+    nonisolated static func isUsableRelay(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "https" && url.host?.isEmpty == false && url.user == nil && url.password == nil
+    }
+
+    /// Decides where pushes go. The relay of the session wins; otherwise the
+    /// address is derived from a public server host. Local and private hosts
+    /// get no relay, because `relay.<name>.local` and `relay.192.168.1.20` do
+    /// not exist and a failed registration would look like a broken relay.
+    nonisolated static func relayURL(for serverURL: URL, configured: URL?) -> URL? {
+        if let configured {
+            return isUsableRelay(configured) ? configured : nil
         }
-        guard var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false), let host = components.host else {
-            throw PushRegistrationError.invalidRelayURL
+        guard
+            let components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false),
+            let host = components.host,
+            isPublicHost(host)
+        else {
+            return nil
         }
-        if host.hasPrefix("state.") {
-            components.host = "relay." + host.dropFirst("state.".count)
-        } else {
-            components.host = "relay." + host
-        }
-        guard let url = components.url else { throw PushRegistrationError.invalidRelayURL }
-        defaults.set(url.absoluteString, forKey: relayURLKey)
+        var relay = components
+        relay.user = nil
+        relay.password = nil
+        relay.query = nil
+        relay.fragment = nil
+        relay.host = host.hasPrefix("state.") ? "relay." + host.dropFirst("state.".count) : "relay." + host
+        if relay.path == "/" { relay.path = "" }
+        guard let url = relay.url, isUsableRelay(url) else { return nil }
         return url
+    }
+
+    nonisolated private static func isPublicHost(_ host: String) -> Bool {
+        let lowercased = host.lowercased()
+        if lowercased.hasSuffix(".local") || lowercased == "local" { return false }
+        if IPv4Address(host) != nil || IPv6Address(host) != nil { return false }
+        // A single label such as "localhost" or a Bonjour name never resolves
+        // outside the own network.
+        return lowercased.contains(".")
     }
 
     private static var environment: String {

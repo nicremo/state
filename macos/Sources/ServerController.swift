@@ -45,6 +45,8 @@ final class ServerController {
     var loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval
     var pairingVisible = false
     var pairingKind = ""
+    /// Optional public push relay, stored per Mac. Empty means local-only.
+    var relayURL = DesktopRelay.stored(in: .standard)
     private(set) var lastExitCode: Int32?
     let logFile = LogFile(directory: FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Logs/State Server", isDirectory: true))
@@ -59,6 +61,7 @@ final class ServerController {
     private var sleeping = false
     private var lastTick = Date()
     private var startingAt = Date()
+    private var restarting = false
     private var quitting = false
     private var launched = false
 
@@ -115,7 +118,7 @@ final class ServerController {
             let stdout = Pipe()
             let stderr = Pipe()
             child.executableURL = executable
-            child.arguments = ["desktop", "--data", dataDirectory.path, "--host", hostname]
+            child.arguments = DesktopRelay.launchArguments(dataDirectory: dataDirectory.path, host: hostname, relayURL: relayURL)
             child.standardInput = stdin
             child.standardOutput = stdout
             // The server logs structured events only, never bodies or secrets.
@@ -196,6 +199,26 @@ final class ServerController {
         quitting = true
         stop()
         try? input?.fileHandleForWriting.close()
+    }
+
+    /// Stores a new relay address and restarts the server so the next pairing
+    /// QR code carries it. Returns false for input that is not an HTTPS address.
+    @discardableResult
+    func applyRelay(_ value: String) -> Bool {
+        guard DesktopRelay.store(value, in: .standard) else { return false }
+        relayURL = DesktopRelay.stored(in: .standard)
+        restart()
+        return true
+    }
+
+    /// Restarts the child process. A user-initiated restart never counts as a
+    /// failure, so the backoff stays untouched.
+    func restart() {
+        restartTask?.cancel()
+        guard process != nil else { start(); return }
+        restarting = true
+        stop()
+        desiredRunning = true
     }
 
     func showPairing() {
@@ -310,6 +333,11 @@ final class ServerController {
         process = nil
         status = nil
         if quitting { NSApplication.shared.reply(toApplicationShouldTerminate: true); return }
+        if restarting {
+            restarting = false
+            start()
+            return
+        }
         guard desiredRunning else { phase = .stopped; return }
         lastExitCode = code
         let delay = restartPolicy.delayAfterExit(at: Date(), startedAt: startingAt)

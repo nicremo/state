@@ -46,6 +46,7 @@ type desktopStatus struct {
 	Fingerprint string                  `json:"fingerprint"`
 	Devices     []stateauth.ActorRecord `json:"devices"`
 	Version     string                  `json:"version"`
+	RelayURL    string                  `json:"relay_url,omitempty"`
 	Pairing     *desktopPairing         `json:"pairing,omitempty"`
 	Error       string                  `json:"error,omitempty"`
 }
@@ -66,11 +67,15 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 	address := flags.String("https", "0.0.0.0:9847", "local network HTTPS address")
 	localAddress := flags.String("local-http", "127.0.0.1:9848", "loopback-only API for local tools")
 	host := flags.String("host", "", "Mac Bonjour hostname ending in .local")
+	relayURL := flags.String("relay-url", "", "optional public push relay, for example https://relay.example.com")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if *data == "" || !validDesktopHost(*host) {
 		return errors.New("desktop requires a data directory and a valid .local hostname")
+	}
+	if !validDesktopRelayURL(*relayURL) {
+		return errors.New("relay URL must be an absolute https URL without user information, query or fragment")
 	}
 	localHost, _, err := net.SplitHostPort(*localAddress)
 	if err != nil || net.ParseIP(localHost) == nil || !net.ParseIP(localHost).IsLoopback() {
@@ -170,7 +175,7 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 			pairing = nil
 		}
 		lastDeviceCount = len(active)
-		return encoder.Encode(desktopStatus{Type: "status", ServerURL: serverURL, LocalURL: localURL, Fingerprint: fingerprint, Devices: active, Version: version, Pairing: pairing, Error: message})
+		return encoder.Encode(desktopStatus{Type: "status", ServerURL: serverURL, LocalURL: localURL, Fingerprint: fingerprint, Devices: active, Version: version, RelayURL: *relayURL, Pairing: pairing, Error: message})
 	}
 	if err := emit(""); err != nil {
 		return err
@@ -209,8 +214,7 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 						}
 						continue
 					}
-					values := url.Values{"server": {serverURL}, "code": {code.Code}, "fingerprint": {fingerprint}}
-					pairing = &desktopPairing{URL: "state://pair?" + values.Encode(), Code: code.Code, ExpiresAt: code.ExpiresAt, Harness: request.Harness}
+					pairing = &desktopPairing{URL: desktopPairingURL(serverURL, code.Code, fingerprint, *relayURL), Code: code.Code, ExpiresAt: code.ExpiresAt, Harness: request.Harness}
 				}
 			default:
 				if err := emit("Unbekannte Aktion."); err != nil {
@@ -223,6 +227,14 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 			}
 		}
 	}
+}
+
+func desktopPairingURL(serverURL, code, fingerprint, relayURL string) string {
+	values := url.Values{"server": {serverURL}, "code": {code}, "fingerprint": {fingerprint}}
+	if relayURL != "" {
+		values.Set("relay", relayURL)
+	}
+	return "state://pair?" + values.Encode()
 }
 
 func validDesktopHost(host string) bool {
@@ -239,6 +251,20 @@ func validDesktopHost(host string) bool {
 		}
 	}
 	return true
+}
+
+// validDesktopRelayURL accepts an empty value, meaning no relay, or an
+// absolute HTTPS address that carries no credentials, query or fragment.
+func validDesktopRelayURL(value string) bool {
+	if value == "" {
+		return true
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	return parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil &&
+		parsed.RawQuery == "" && parsed.Fragment == "" && parsed.Opaque == ""
 }
 
 func desktopLANOnly(next http.Handler) http.Handler {

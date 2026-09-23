@@ -72,6 +72,17 @@ Renaming the Mac changes its Bonjour name, so the server replaces the stored
 certificate for the new name. The fingerprint changes with it, and paired iPhones
 pair again once with the new QR code.
 
+## Optional push relay
+
+The Mac server can advertise a public push relay, for example a State relay on a VPS, so a paired
+iPhone receives notifications outside the home network while the Mac stays reachable. Enter the
+address under **Push unterwegs (optional)** in the app; **Übernehmen** stores it and restarts the
+server, and the pairing QR code then carries it as the `relay` parameter. The iPhone keeps that
+address with its server session, so switching servers cannot inherit the address of an earlier
+connection, and the relay only forwards sealed envelopes, which keeps the content end to end
+encrypted. Leave the field empty for local-only delivery, because the server never requires a
+relay and never contacts one itself.
+
 ## Background and offline limits
 
 The server runs while the user is logged in and the Mac is awake. It does not
