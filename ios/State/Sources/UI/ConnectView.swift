@@ -2,324 +2,59 @@ import SwiftUI
 #if os(iOS)
 import UIKit
 import VisionKit
+#elseif os(macOS)
+import AppKit
 #endif
 
-/// The screen that turns a running server into a paired iPhone. It leads with
-/// the documentation, because everything below it assumes a server exists, and
-/// it names which of the two secrets is needed instead of showing both at once.
-struct ConnectView: View {
-    @Bindable var model: AppModel
-
-    private enum Method: Hashable {
+/// Everything needed to pair this device with a server. Shared by the three
+/// connection screens so a scanned code, a typed address and the confirmation
+/// all edit one draft.
+@MainActor
+@Observable
+final class ConnectDraft {
+    enum Method: Hashable {
         case pairingCode
         case bootstrap
     }
 
-    @State private var method: Method = .bootstrap
-    @State private var server = ""
-    @State private var bootstrapToken = ""
-    @State private var pairingCode = ""
-    @State private var certificateFingerprint: String?
-    @State private var scannedServer = ""
-    @State private var scannedRelayURL: URL?
-    @State private var displayName = ""
-    @State private var deviceName = Platform.deviceName
-    @State private var scansCode = false
-    @State private var pairingLink = ""
-    @State private var isConnecting = false
-    @FocusState private var focusedField: Field?
+    var method: Method = .pairingCode
+    var server = ""
+    var bootstrapToken = ""
+    var pairingCode = ""
+    var displayName = Platform.ownerName
+    var deviceName = Platform.deviceName
+    var certificateFingerprint: String?
+    var scannedServer = ""
+    var scannedRelayURL: URL?
 
-    private enum Field: Hashable {
-        case server
-        case secret
-        case name
-        case device
+    var serverURL: URL? {
+        let value = server.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: value), url.scheme != nil, url.host != nil else { return nil }
+        return url
     }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: StateTheme.Space.section) {
-                    masthead
-                    documentationCard
-                    form
-                    actions
-                    demoEntry
-                    reassurance
-                }
-                .frame(maxWidth: 560)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, StateTheme.Space.section)
-                .padding(.top, StateTheme.Space.stage)
-                .padding(.bottom, StateTheme.Space.stage + StateTheme.Space.section)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .background(StateTheme.warmBackground.ignoresSafeArea())
-            #if os(iOS)
-            .navigationBarHidden(true)
-            #endif
-            .sheet(isPresented: $scansCode) { scanner }
-        }
+    var secret: String {
+        (method == .bootstrap ? bootstrapToken : pairingCode).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    // MARK: Sections
-
-    private var masthead: some View {
-        HStack(alignment: .center, spacing: StateTheme.Space.block) {
-            StateMark(size: 62)
-
-            VStack(alignment: .leading, spacing: StateTheme.Space.tight) {
-                Text(verbatim: "State")
-                    .font(.title.bold())
-                    .foregroundStyle(StateTheme.graphite)
-                Text("Connect \(Platform.deviceNoun) to your own server.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var documentationCard: some View {
-        NavigationLink {
-            DocumentationView()
-        } label: {
-            HStack(spacing: StateTheme.Space.group) {
-                Image(systemName: "book")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(StateTheme.accent)
-                    .frame(width: 42, height: 42)
-                    .background(StateTheme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                VStack(alignment: .leading, spacing: StateTheme.Space.hairline) {
-                    Text("No server yet? Start here")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(StateTheme.graphite)
-                    Text("Set up the server, pair \(Platform.deviceNoun), connect your agents.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                }
-
-                Spacer(minLength: StateTheme.Space.tight)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(StateTheme.Space.block)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(StateTheme.accentSoft.opacity(0.7))
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("open-documentation")
-    }
-
-    private var form: some View {
-        VStack(alignment: .leading, spacing: StateTheme.Space.block) {
-            FieldGroup(label: String(localized: "Server address")) {
-                TextField(String(localized: "Server URL"), text: $server, prompt: Text(verbatim: "https://state.example.com"))
-                    .textContentType(.URL)
-                    .stateURLKeyboard()
-                    .stateNoAutocapitalization()
-                    .autocorrectionDisabled()
-                    .submitLabel(.next)
-                    .focused($focusedField, equals: .server)
-                    .onSubmit { focusedField = .secret }
-            }
-
-            VStack(alignment: .leading, spacing: StateTheme.Space.inner) {
-                Picker(String(localized: "How to connect"), selection: $method.animation(StateTheme.stateChange)) {
-                    Text("First setup").tag(Method.bootstrap)
-                    Text("Pairing code").tag(Method.pairingCode)
-                }
-                .pickerStyle(.segmented)
-
-                switch method {
-                case .bootstrap:
-                    FieldGroup(label: String(localized: "Bootstrap token")) {
-                        SecureField(String(localized: "Bootstrap token"), text: $bootstrapToken)
-                            .focused($focusedField, equals: .secret)
-                    }
-                    helper(String(localized: "Printed once by your server with state-server bootstrap-token. It makes \(Platform.deviceNoun) the owner."))
-                case .pairingCode:
-                    FieldGroup(label: String(localized: "One-time pairing code")) {
-                        SecureField(String(localized: "One-time pairing code"), text: $pairingCode)
-                            .textContentType(.oneTimeCode)
-                            .focused($focusedField, equals: .secret)
-                    }
-                    helper(String(localized: "Created in State on an already paired device, under Settings."))
-                }
-            }
-
-            FieldGroup(label: String(localized: "Your name")) {
-                TextField(String(localized: "Your name"), text: $displayName)
-                    .textContentType(.name)
-                    .submitLabel(.next)
-                    .focused($focusedField, equals: .name)
-                    .onSubmit { focusedField = .device }
-            }
-
-            FieldGroup(label: String(localized: "Device name")) {
-                TextField(String(localized: "Device name"), text: $deviceName)
-                    .submitLabel(.done)
-                    .focused($focusedField, equals: .device)
-                    .onSubmit { connect() }
-            }
-        }
-    }
-
-    private var actions: some View {
-        VStack(spacing: StateTheme.Space.group) {
-            Button {
-                connect()
-            } label: {
-                HStack(spacing: StateTheme.Space.inner) {
-                    if isConnecting {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.white)
-                    }
-                    Text("Connect")
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, StateTheme.Space.snug)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!canConnect || isConnecting)
-            .animation(StateTheme.stateChange, value: canConnect)
-
-            #if os(iOS)
-            if DataScannerViewController.isSupported {
-                Button {
-                    scansCode = true
-                } label: {
-                    Label(String(localized: "Scan pairing QR code"), systemImage: "qrcode.viewfinder")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, StateTheme.Space.hairline)
-                }
-                .buttonStyle(.bordered)
-            }
-            #else
-            pairingLinkEntry
-            #endif
-        }
-    }
-
-    /// A Mac has no camera scanner, so the same payload is pasted as text and
-    /// runs through exactly the same parser the scanner uses.
-    private var pairingLinkEntry: some View {
-        VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
-            FieldGroup(label: String(localized: "Pairing link")) {
-                TextField(String(localized: "Pairing link"), text: $pairingLink)
-                    .stateNoAutocapitalization()
-                    .autocorrectionDisabled()
-                    .submitLabel(.done)
-                    .onSubmit { applyPairingLink() }
-            }
-            HStack(alignment: .firstTextBaseline, spacing: StateTheme.Space.group) {
-                Button(String(localized: "Use pairing link")) { applyPairingLink() }
-                    .buttonStyle(.bordered)
-                    .disabled(pairingLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                helper(String(localized: "Paste the link the State server shows next to its QR code."))
-            }
-        }
-    }
-
-    private var demoEntry: some View {
-        VStack(spacing: StateTheme.Space.snug) {
-            Divider()
-            Button {
-                Task { await model.enterDemo() }
-            } label: {
-                Text("Look around without a server")
-                    .font(.subheadline)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(StateTheme.accent)
-            .accessibilityIdentifier("explore-demo")
-            .padding(.top, StateTheme.Space.tight)
-        }
-    }
-
-    private var reassurance: some View {
-        Label(
-            String(localized: "Credentials stay in the iOS Keychain. Reminder data remains on your own server."),
-            systemImage: "lock.shield"
-        )
-        .labelStyle(.tight)
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-    }
-
-    @ViewBuilder
-    private var scanner: some View {
-        #if os(iOS)
-        NavigationStack {
-            PairingScannerView { value in
-                applyScanned(value)
-                scansCode = false
-            }
-            .ignoresSafeArea(edges: .bottom)
-            .navigationTitle("Scan pairing code")
-            .stateInlineNavigationTitle()
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { scansCode = false }
-                }
-            }
-        }
-        #endif
-    }
-
-    private func helper(_ text: String) -> some View {
-        Text(text)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    // MARK: Behavior
-
-    private var canConnect: Bool {
-        guard let url = URL(string: server.trimmingCharacters(in: .whitespacesAndNewlines)), url.scheme != nil else {
-            return false
-        }
-        let secret = method == .bootstrap ? bootstrapToken : pairingCode
-        return !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    var canConnect: Bool {
+        serverURL != nil
+            && !secret.isEmpty
+            && !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !deviceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !secret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func connect() {
-        guard canConnect, let url = URL(string: server.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
-        focusedField = nil
-        isConnecting = true
-        Task {
-            await model.connect(
-                serverURL: url,
-                bootstrapToken: method == .bootstrap ? bootstrapToken : nil,
-                pairingCode: method == .pairingCode ? pairingCode : nil,
-                displayName: displayName,
-                deviceName: deviceName,
-                certificateFingerprint: server.trimmingCharacters(in: .whitespacesAndNewlines) == scannedServer ? certificateFingerprint : nil,
-                relayURL: server.trimmingCharacters(in: .whitespacesAndNewlines) == scannedServer ? scannedRelayURL : nil
-            )
-            isConnecting = false
-        }
+    /// Whether the address still belongs to the scanned code, so its pinned
+    /// certificate and relay may be used.
+    var usesScannedServer: Bool {
+        !scannedServer.isEmpty && server.trimmingCharacters(in: .whitespacesAndNewlines) == scannedServer
     }
 
-    private func applyPairingLink() {
-        let value = pairingLink.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return }
-        applyScanned(value)
-    }
-
-    private func applyScanned(_ value: String) {
-        guard let payload = PairingPayload(value: value) else {
-            model.presentedError = String(localized: "This is not a valid State pairing code.")
-            return
+    /// Applies a scanned or pasted pairing link. Returns false for anything
+    /// that is not a State pairing payload.
+    func apply(_ value: String) -> Bool {
+        guard let payload = PairingPayload(value: value.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return false
         }
         server = payload.serverURL.absoluteString
         scannedServer = server
@@ -333,28 +68,417 @@ struct ConnectView: View {
             pairingCode = code
             method = .pairingCode
         }
+        return true
     }
 }
 
-/// A labelled input. The label above the field survives long localized strings
-/// that a leading label would squeeze.
-private struct FieldGroup<Content: View>: View {
-    let label: String
-    @ViewBuilder let content: Content
+/// The first screen after the welcome. One statement, one way forward, and
+/// the manual route one tap away for when there is no code to scan.
+struct ConnectView: View {
+    @Bindable var model: AppModel
+
+    private enum Route: Hashable {
+        case manual
+        case confirm
+    }
+
+    @State private var draft = ConnectDraft()
+    @State private var path: [Route] = []
+    @State private var scansCode = false
+    @State private var clipboardMessage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
-            Text(label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            content
-                .textFieldStyle(.plain)
-                .padding(.horizontal, StateTheme.Space.group)
-                .padding(.vertical, StateTheme.Space.group)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.stateRowBackground)
-                )
+        NavigationStack(path: $path) {
+            landing
+                .navigationDestination(for: Route.self) { route in
+                    switch route {
+                    case .manual:
+                        ManualConnectView(model: model, draft: draft)
+                    case .confirm:
+                        ConfirmConnectView(model: model, draft: draft)
+                    }
+                }
+        }
+        .sheet(isPresented: $scansCode) { scanner }
+    }
+
+    // MARK: Landing
+
+    private var landing: some View {
+        #if os(macOS)
+        // One centered block: on a Mac the actions belong right under the
+        // statement, not at the bottom edge of a large window.
+        VStack(spacing: 0) {
+            Spacer(minLength: StateTheme.Space.stage)
+            hero
+            actions
+                .frame(width: 320)
+                .padding(.top, 36)
+            footer
+                .padding(.top, StateTheme.Space.section)
+            Spacer(minLength: StateTheme.Space.stage)
+        }
+        .padding(StateTheme.Space.stage)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(StateTheme.ground.ignoresSafeArea())
+        #else
+        VStack(spacing: 0) {
+            Spacer(minLength: StateTheme.Space.stage)
+            hero
+            Spacer(minLength: StateTheme.Space.stage)
+            actions
+                .frame(maxWidth: 440)
+            footer
+                .padding(.top, StateTheme.Space.section)
+        }
+        .padding(.horizontal, StateTheme.Space.stage)
+        .padding(.bottom, StateTheme.Space.block)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(StateTheme.ground.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        #endif
+    }
+
+    private var hero: some View {
+        VStack(spacing: StateTheme.Space.section) {
+            StateMark(size: 80)
+
+            VStack(spacing: StateTheme.Space.inner) {
+                Text("Connect your server")
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(StateTheme.graphite)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(landingSubtitle)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: 340)
+    }
+
+    private var actions: some View {
+        VStack(spacing: StateTheme.Space.group) {
+            if hasCodeAction {
+                primaryAction
+                Button {
+                    path.append(.manual)
+                } label: {
+                    Text("Enter address")
+                }
+                .buttonStyle(.stateSecondary)
+                .accessibilityIdentifier("enter-address")
+            } else {
+                Button {
+                    path.append(.manual)
+                } label: {
+                    Text("Enter address")
+                }
+                .buttonStyle(.statePrimary)
+                .accessibilityIdentifier("enter-address")
+            }
+
+            if let clipboardMessage {
+                Text(clipboardMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
+        }
+        .animation(StateTheme.stateChange, value: clipboardMessage)
+    }
+
+    private var landingSubtitle: String {
+        #if os(macOS)
+        String(localized: "Paste the pairing link your State server shows, or enter its address.")
+        #else
+        String(localized: "Scan the pairing code your State server shows, or enter its address.")
+        #endif
+    }
+
+    /// Whether this device can take a pairing code directly: a camera
+    /// scanner on iPhone and iPad, the clipboard on the Mac.
+    private var hasCodeAction: Bool {
+        #if os(iOS)
+        DataScannerViewController.isSupported
+        #else
+        true
+        #endif
+    }
+
+    @ViewBuilder
+    private var primaryAction: some View {
+        #if os(iOS)
+        if DataScannerViewController.isSupported {
+            Button {
+                scansCode = true
+            } label: {
+                Label(String(localized: "Scan pairing code"), systemImage: "qrcode.viewfinder")
+            }
+            .buttonStyle(.statePrimary)
+            .accessibilityIdentifier("scan-pairing-code")
+        }
+        #else
+        Button {
+            pastePairingLink()
+        } label: {
+            Label(String(localized: "Paste pairing link"), systemImage: "doc.on.clipboard")
+        }
+        .buttonStyle(.statePrimary)
+        .keyboardShortcut("v", modifiers: .command)
+        .accessibilityIdentifier("paste-pairing-link")
+        #endif
+    }
+
+    private var footer: some View {
+        HStack(spacing: StateTheme.Space.section) {
+            NavigationLink {
+                DocumentationView()
+            } label: {
+                Text("No server yet?")
+            }
+            .accessibilityIdentifier("open-documentation")
+
+            Button {
+                Task { await model.enterDemo() }
+            } label: {
+                Text("Try without a server")
+            }
+            .accessibilityIdentifier("explore-demo")
+        }
+        .buttonStyle(.plain)
+        .font(.footnote.weight(.medium))
+        .foregroundStyle(.secondary)
+    }
+
+    // MARK: Scanning
+
+    @ViewBuilder
+    private var scanner: some View {
+        #if os(iOS)
+        NavigationStack {
+            PairingScannerView { value in
+                scansCode = false
+                accept(value)
+            }
+            .ignoresSafeArea(edges: .bottom)
+            .navigationTitle("Scan pairing code")
+            .stateInlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { scansCode = false }
+                }
+            }
+        }
+        #endif
+    }
+
+    private func pastePairingLink() {
+        #if os(macOS)
+        let value = NSPasteboard.general.string(forType: .string) ?? ""
+        if draft.apply(value) {
+            clipboardMessage = nil
+            path.append(.confirm)
+        } else {
+            clipboardMessage = String(localized: "No pairing link on the clipboard. Copy it in the State Server app first.")
+        }
+        #endif
+    }
+
+    private func accept(_ value: String) {
+        guard draft.apply(value) else {
+            model.presentedError = String(localized: "This is not a valid State pairing code.")
+            return
+        }
+        path.append(.confirm)
+    }
+}
+
+// MARK: - Confirmation after a scan
+
+/// A scanned code already carries the server and the secret, so all that is
+/// left is who is connecting.
+private struct ConfirmConnectView: View {
+    @Bindable var model: AppModel
+    @Bindable var draft: ConnectDraft
+
+    var body: some View {
+        Form {
+            Section {
+                HStack(spacing: StateTheme.Space.group) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(StateTheme.onAccent, StateTheme.accent)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: StateTheme.Space.hairline) {
+                        Text(draft.serverURL?.host ?? draft.server)
+                            .font(.headline)
+                            .foregroundStyle(StateTheme.graphite)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text(draft.certificateFingerprint == nil
+                             ? String(localized: "Pairing code received.")
+                             : String(localized: "Local Mac. Certificate verified from the pairing code."))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, StateTheme.Space.tight)
+            }
+
+            DeviceIdentitySection(draft: draft)
+        }
+        .formStyle(.grouped)
+        .stateReadableWidth()
+        .stateBackground()
+        .navigationTitle(String(localized: "Server found"))
+        .stateInlineNavigationTitle()
+        .safeAreaInset(edge: .bottom) {
+            ConnectButton(model: model, draft: draft)
+        }
+    }
+}
+
+// MARK: - Manual entry
+
+/// The long way, for a server without a code on screen: address, access and
+/// this device, grouped the way Settings groups a new account.
+private struct ManualConnectView: View {
+    @Bindable var model: AppModel
+    @Bindable var draft: ConnectDraft
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case server
+        case secret
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                TextField(String(localized: "Server address"), text: $draft.server, prompt: Text(verbatim: "https://state.example.com"))
+                    .textContentType(.URL)
+                    .stateURLKeyboard()
+                    .stateNoAutocapitalization()
+                    .autocorrectionDisabled()
+                    .submitLabel(.next)
+                    .focused($focusedField, equals: .server)
+                    .onSubmit { focusedField = .secret }
+            } header: {
+                Text("Server")
+            }
+
+            Section {
+                Picker(String(localized: "Access"), selection: $draft.method.animation(StateTheme.stateChange)) {
+                    Text("Pairing code").tag(ConnectDraft.Method.pairingCode)
+                    Text("First setup").tag(ConnectDraft.Method.bootstrap)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                switch draft.method {
+                case .pairingCode:
+                    SecureField(String(localized: "Pairing code"), text: $draft.pairingCode)
+                        .textContentType(.oneTimeCode)
+                        .focused($focusedField, equals: .secret)
+                case .bootstrap:
+                    SecureField(String(localized: "Bootstrap token"), text: $draft.bootstrapToken)
+                        .focused($focusedField, equals: .secret)
+                }
+            } header: {
+                Text("Access")
+            } footer: {
+                Text(draft.method == .pairingCode
+                     ? String(localized: "Create a code in State on a device that is already connected, under Settings.")
+                     : String(localized: "Your server prints the token once with state-server bootstrap-token. This device becomes the owner."))
+            }
+
+            DeviceIdentitySection(draft: draft)
+        }
+        .formStyle(.grouped)
+        .stateReadableWidth()
+        .stateBackground()
+        .navigationTitle(String(localized: "Enter address"))
+        .stateInlineNavigationTitle()
+        .safeAreaInset(edge: .bottom) {
+            ConnectButton(model: model, draft: draft)
+        }
+        .onAppear {
+            if draft.server.isEmpty { focusedField = .server }
+        }
+    }
+}
+
+// MARK: - Shared pieces
+
+private struct DeviceIdentitySection: View {
+    @Bindable var draft: ConnectDraft
+
+    var body: some View {
+        Section {
+            TextField(String(localized: "Your name"), text: $draft.displayName)
+                .textContentType(.name)
+            TextField(String(localized: "Device name"), text: $draft.deviceName)
+        } header: {
+            Text("This device")
+        } footer: {
+            Text("Credentials stay in the Keychain. Your reminders stay on your server.")
+        }
+    }
+}
+
+private struct ConnectButton: View {
+    @Bindable var model: AppModel
+    @Bindable var draft: ConnectDraft
+    @State private var isConnecting = false
+
+    var body: some View {
+        Button {
+            connect()
+        } label: {
+            HStack(spacing: StateTheme.Space.inner) {
+                if isConnecting {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(StateTheme.onAccent)
+                }
+                Text(isConnecting ? String(localized: "Connecting") : String(localized: "Connect"))
+            }
+        }
+        .buttonStyle(.statePrimary)
+        .disabled(!draft.canConnect || isConnecting)
+        .keyboardShortcut(.defaultAction)
+        #if os(macOS)
+        .frame(width: 320)
+        #else
+        .frame(maxWidth: 440)
+        #endif
+        .padding(.horizontal, StateTheme.Space.section)
+        .padding(.top, StateTheme.Space.group)
+        .padding(.bottom, StateTheme.Space.inner)
+        .frame(maxWidth: .infinity)
+        .background(StateTheme.ground.opacity(0.94).ignoresSafeArea())
+        .accessibilityIdentifier("connect")
+    }
+
+    private func connect() {
+        guard draft.canConnect, let url = draft.serverURL else { return }
+        isConnecting = true
+        Task {
+            await model.connect(
+                serverURL: url,
+                bootstrapToken: draft.method == .bootstrap ? draft.bootstrapToken : nil,
+                pairingCode: draft.method == .pairingCode ? draft.pairingCode : nil,
+                displayName: draft.displayName,
+                deviceName: draft.deviceName,
+                certificateFingerprint: draft.usesScannedServer ? draft.certificateFingerprint : nil,
+                relayURL: draft.usesScannedServer ? draft.scannedRelayURL : nil
+            )
+            isConnecting = false
         }
     }
 }

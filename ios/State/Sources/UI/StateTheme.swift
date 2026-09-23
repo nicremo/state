@@ -3,37 +3,48 @@ import SwiftUI
 /// The design tokens the whole app draws from. Everything here adapts to light
 /// and dark appearance, because a self hosted tool gets opened at every hour.
 enum StateTheme {
-    /// Deep indigo, taken from the glowing core of the app icon and calmed down
-    /// until it reads as ink rather than neon. Light appearance keeps it dark
-    /// enough for white text on a filled button, dark appearance lifts it far
-    /// enough to stay legible on near black.
+    /// Ink. The one interactive color, taken from the black mark of the app
+    /// icon: near black on light ground, near white on dark ground, so every
+    /// control reads as printed rather than tinted.
     static let accent = Color(
-        light: (0.22, 0.26, 0.62, 1),
-        dark: (0.62, 0.66, 0.98, 1)
+        light: (0.071, 0.075, 0.086, 1),
+        dark: (0.955, 0.960, 0.970, 1)
     )
 
     /// The accent at the strength a filled capsule or a tinted background needs.
     static let accentSoft = Color(
-        light: (0.22, 0.26, 0.62, 0.10),
-        dark: (0.62, 0.66, 0.98, 0.18)
+        light: (0.071, 0.075, 0.086, 0.06),
+        dark: (0.955, 0.960, 0.970, 0.12)
     )
 
-    /// Warm ivory in light appearance, echoing the glow behind the app icon.
-    static let warmBackground = Color(
-        light: (0.973, 0.969, 0.956, 1),
-        dark: (0.055, 0.059, 0.071, 1)
+    /// Text and glyphs that sit on an ink filled control.
+    static let onAccent = Color(
+        light: (1, 1, 1, 1),
+        dark: (0.043, 0.047, 0.055, 1)
     )
 
-    /// The primary text color. Slightly warmer than pure label so it sits well
-    /// on the ivory background.
+    /// The ground of every screen: a cool, almost white paper in light
+    /// appearance and the launch ink in dark appearance.
+    static let ground = Color(
+        light: (0.965, 0.970, 0.978, 1),
+        dark: (0.043, 0.047, 0.055, 1)
+    )
+
+    /// The pale blue grey behind the icon's mark. Launch screen, splash and the
+    /// welcome moment stand on it, so the icon the owner tapped seems to open.
+    static let mist = Color(
+        light: (0.871, 0.906, 0.941, 1),
+        dark: (0.043, 0.047, 0.055, 1)
+    )
+
+    /// The yellow dot of the icon. Used once per screen at most, never for text.
+    static let signal = Color(red: 0.878, green: 0.867, blue: 0.157)
+
+    /// The primary text color.
     static let graphite = Color(
-        light: (0.12, 0.13, 0.16, 1),
-        dark: (0.90, 0.91, 0.94, 1)
+        light: (0.071, 0.075, 0.086, 1),
+        dark: (0.920, 0.928, 0.940, 1)
     )
-
-    /// The launch and onboarding backdrop. Always dark, because the app icon is
-    /// a lit object on a dark ground and the first screen should be that object.
-    static let markBackdrop = Color(red: 0.055, green: 0.059, blue: 0.071)
 
     /// The 4 point spacing scale. Named by role, not by number, so a change of
     /// rhythm stays a one line change.
@@ -63,12 +74,10 @@ enum StateTheme {
 }
 
 extension View {
-    /// One ground for every screen. The system grouped background is faintly
-    /// blue; State's is faintly warm, so the app and the lit mark on the launch
-    /// screen belong to the same world.
+    /// One ground for every screen, shared with the launch screen.
     func stateBackground() -> some View {
         scrollContentBackground(.hidden)
-            .background(StateTheme.warmBackground.ignoresSafeArea())
+            .background(StateTheme.ground.ignoresSafeArea())
     }
 }
 
@@ -165,7 +174,8 @@ struct StateMark: View {
             .scaledToFit()
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
-            .shadow(color: .black.opacity(0.35), radius: size * 0.1, y: size * 0.04)
+            .shadow(color: .black.opacity(0.10), radius: size * 0.06, y: size * 0.03)
+            .shadow(color: .black.opacity(0.08), radius: size * 0.18, y: size * 0.10)
             .opacity(progress)
             .scaleEffect(0.9 + 0.1 * progress)
             .accessibilityHidden(true)
@@ -219,4 +229,58 @@ enum StateDateFormatter {
         guard let time else { return day }
         return "\(day), \(time)"
     }
+}
+
+/// The one filled action per screen: ink on paper, printed rather than tinted.
+struct StatePrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .foregroundStyle(StateTheme.onAccent)
+            .frame(maxWidth: .infinity, minHeight: StateControlMetrics.height)
+            .background(StateTheme.accent, in: RoundedRectangle(cornerRadius: StateControlMetrics.radius, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: StateControlMetrics.radius, style: .continuous))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.25)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(.smooth(duration: 0.16), value: configuration.isPressed)
+            .animation(StateTheme.stateChange, value: isEnabled)
+    }
+}
+
+/// The quiet second choice next to a primary action.
+struct StateSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .foregroundStyle(StateTheme.accent)
+            .frame(maxWidth: .infinity, minHeight: StateControlMetrics.height)
+            .background(StateTheme.accentSoft, in: RoundedRectangle(cornerRadius: StateControlMetrics.radius, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: StateControlMetrics.radius, style: .continuous))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.6 : 1) : 0.35)
+            .animation(.smooth(duration: 0.16), value: configuration.isPressed)
+    }
+}
+
+/// Button geometry per platform: a thumb sized bar on iPhone and iPad, a
+/// pointer sized one on the Mac.
+enum StateControlMetrics {
+    #if os(macOS)
+    static let height: CGFloat = 40
+    static let radius: CGFloat = 10
+    #else
+    static let height: CGFloat = 54
+    static let radius: CGFloat = 16
+    #endif
+}
+
+extension ButtonStyle where Self == StatePrimaryButtonStyle {
+    static var statePrimary: StatePrimaryButtonStyle { StatePrimaryButtonStyle() }
+}
+
+extension ButtonStyle where Self == StateSecondaryButtonStyle {
+    static var stateSecondary: StateSecondaryButtonStyle { StateSecondaryButtonStyle() }
 }

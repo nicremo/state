@@ -10,7 +10,7 @@ struct StateRootView: View {
         ZStack {
             stage
                 .tint(StateTheme.accent)
-                .background(StateTheme.warmBackground.ignoresSafeArea())
+                .background(StateTheme.ground.ignoresSafeArea())
                 .modifier(StateLifecycle(model: model))
 
             if showsSplash {
@@ -21,7 +21,7 @@ struct StateRootView: View {
         }
         .task {
             guard showsSplash else { return }
-            try? await Task.sleep(for: .milliseconds(reduceMotion ? 400 : 1_150))
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 350 : 900))
             withAnimation(.easeOut(duration: 0.45)) { showsSplash = false }
         }
         .alert(

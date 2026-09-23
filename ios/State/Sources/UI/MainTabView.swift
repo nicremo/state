@@ -87,7 +87,7 @@ struct ReminderCollectionView: View {
             if filteredReminders.isEmpty {
                 emptyState
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(StateTheme.warmBackground.ignoresSafeArea())
+                    .background(StateTheme.ground.ignoresSafeArea())
             } else {
                 List(selection: selection) {
                     ForEach(filteredReminders) { reminder in

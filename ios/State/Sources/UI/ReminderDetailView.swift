@@ -94,7 +94,7 @@ struct ReminderDetailView: View {
                 ProgressView()
                     .controlSize(.large)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(StateTheme.warmBackground)
+                    .background(StateTheme.ground)
             }
         }
         .sensoryFeedback(.success, trigger: completionFeedback)

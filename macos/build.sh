@@ -12,7 +12,7 @@ go build -trimpath -ldflags '-s -w' -o "$APP/Contents/Resources/statectl" ./cmd/
 cp macos/Info.plist "$APP/Contents/Info.plist"
 ICON_DIR="$ROOT/build/StateServer.iconset"
 mkdir -p "$ICON_DIR"
-ICON="$ROOT/ios/State/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
+ICON="$ROOT/macos/AppIcon-1024.png"
 for SIZE in 16 32 128 256 512; do
     sips -z "$SIZE" "$SIZE" "$ICON" --out "$ICON_DIR/icon_${SIZE}x${SIZE}.png" >/dev/null
     DOUBLE=$((SIZE * 2))
