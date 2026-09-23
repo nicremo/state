@@ -50,6 +50,8 @@ The dashed connection from the Mac Server to the relay is optional and arrives w
 
 `desktop` is the Mac mode. It serves HTTPS on port 9847 for the local network using a self-signed certificate whose SHA-256 fingerprint travels inside the pairing QR code, and it serves plain HTTP on `127.0.0.1:9848` for local programs such as `statectl`. Management runs over inherited process pipes, not over a network endpoint, and the mode requires a `.local` Bonjour hostname.
 
+The Mac Server app stays a pure server: it starts and supervises the server process and offers the pairing UI, and the runner is never part of it.
+
 Both modes keep the same data model, the same REST API under `/api/v1`, the same MCP endpoint at `/mcp`, the same scheduler and the same signed audit chain. Only the transport and the packaging differ. Desktop data lives in `~/Library/Application Support/State Server`, private to the current user. Server data lives in the `/data` volume.
 
 ## 3. One client, three form factors
