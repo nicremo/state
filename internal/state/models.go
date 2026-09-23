@@ -55,11 +55,11 @@ const (
 )
 
 type Schedule struct {
-	LocalDate         string       `json:"local_date"`
-	LocalTime         string       `json:"local_time,omitempty"`
-	TimeZone          string       `json:"time_zone"`
-	Mode              TimeZoneMode `json:"mode"`
-	PrewarningMinutes int          `json:"prewarning_minutes,omitempty"`
+	LocalDate         string       `json:"local_date" jsonschema:"Local calendar date as YYYY-MM-DD."`
+	LocalTime         string       `json:"local_time,omitempty" jsonschema:"Local wall clock time as HH:MM in 24-hour format. Omit for an all-day reminder."`
+	TimeZone          string       `json:"time_zone" jsonschema:"IANA time zone name such as Europe/Berlin."`
+	Mode              TimeZoneMode `json:"mode" jsonschema:"Either fixed (fire at this time in time_zone, use when the user names a zone) or floating (fire at this wall clock time wherever the owner is)."`
+	PrewarningMinutes int          `json:"prewarning_minutes,omitempty" jsonschema:"Minutes before the due time for an early notification. Omit or 0 for none."`
 }
 
 type RecurrenceFrequency string
@@ -72,9 +72,9 @@ const (
 )
 
 type RecurrenceRule struct {
-	Frequency RecurrenceFrequency `json:"frequency"`
-	Interval  int                 `json:"interval"`
-	UntilDate string              `json:"until_date,omitempty"`
+	Frequency RecurrenceFrequency `json:"frequency" jsonschema:"One of daily, weekly, monthly or yearly."`
+	Interval  int                 `json:"interval" jsonschema:"Repeat every N units, at least 1."`
+	UntilDate string              `json:"until_date,omitempty" jsonschema:"Optional last date as YYYY-MM-DD."`
 }
 
 type OccurrenceSeed struct {

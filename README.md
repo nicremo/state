@@ -14,6 +14,8 @@ New here? [`DOCUMENTATION.md`](DOCUMENTATION.md) walks through the whole setup: 
 - `state-runner`: An outbound-only worker on an opted-in workstation that claims eligible agent runs, launches local harness adapters and reports redacted results.
 - `State`: A native SwiftUI app for iOS 18 or later with GRDB offline storage and a Notification Service Extension.
 
+See [the product lineup](docs/product-lineup.md) for how the iPhone, iPad and Mac apps, the Mac Server and the VPS Server fit together.
+
 ```mermaid
 flowchart LR
     H["Codex, Claude Code, OpenCode"] --> C["statectl"]
@@ -107,6 +109,19 @@ statectl revoke --profile codex
 statectl uninstall --harness codex
 ```
 
+### Terminal fallback
+
+Agents without MCP support, and humans in a terminal, use the same reminder tools through `statectl`. These commands are another client of the same audited contract, never a second store:
+
+```bash
+statectl reminder create --profile codex \
+  --title "Monthly reporting" \
+  --source-text "I need to do the monthly report every month" \
+  --date 2026-10-01 --time 09:00 --tz Europe/Berlin --repeat monthly
+```
+
+`statectl reminder add-context`, `schedule`, `show` and `search` cover the rest. Every write carries the original wording in `--source-text`, and `--json` prints the raw server response for scripts.
+
 ## MCP tools
 
 The Streamable HTTP endpoint is `/mcp`. It exposes:
@@ -141,7 +156,7 @@ state-runner pair --server https://state.example.com --code ONE_TIME_CODE --name
 state-runner run
 ```
 
-The runner polls outbound-only, validates the hash-pinned task contract against its local configuration, writes the contract and status under the project's `.state/runs/` directory, launches the matching local harness adapter and reports a redacted result. The owner watches the lifecycle in the iOS app, approves sensitive capabilities per run, and receives an encrypted push when a run finishes. Unattended policies are limited to low-risk capabilities; everything else stays supervised.
+The runner polls outbound-only, validates the hash-pinned task contract against its local configuration, writes the contract and status under the project's `.state/runs/` directory, launches the matching local harness adapter (`codex`, `claude-code`, `opencode`, `pi-agent`, `deepseek-harness`) and reports a redacted result. `pi-agent` runs `pi --print` and `deepseek-harness` runs `dsh --profile headless`, each with the prompt as a single argument. The owner watches the lifecycle in the iOS app, approves sensitive capabilities per run, and receives an encrypted push when a run finishes. Unattended policies are limited to low-risk capabilities; everything else stays supervised.
 
 Read [`docs/agent-execution-implementation-plan.md`](docs/agent-execution-implementation-plan.md) for the full design and [`docs/agent-execution-extension.md`](docs/agent-execution-extension.md) for the originating concept.
 

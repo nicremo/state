@@ -26,8 +26,14 @@ the app links to Login Items in System Settings.
 - Starts a separate server process and shows its status every five seconds.
 - Closing the window leaves the menu bar app and server running.
 - Stopping the server or quitting the app shuts down the database cleanly.
-- Retries an unexpected process exit up to three times, with a delay. The retry
-  budget resets after one minute of healthy operation.
+- Restarts an unexpected process exit with exponential backoff from two seconds up to
+  one minute and never gives up. A run of at least one minute counts as healthy and
+  resets the backoff.
+- Treats sleep and wake as normal. The server pauses with the Mac, so the silence during
+  sleep is not a hang, and the app asks for a fresh status after waking.
+- Writes the server's structured events to a rotating log file under
+  `~/Library/Logs/State Server`. Request bodies, credentials and pairing payloads are
+  never persisted.
 - Exiting or crashing the parent closes its private pipe and stops the server.
 - Autostart is optional. No source code or program updates run automatically.
 - Existing iOS client installations and remote servers are not migrated or altered.
@@ -62,6 +68,21 @@ self-signed certificate. The updated client stores the pin with its server sessi
 accepts only that exact certificate at that origin and rejects redirects. Standard
 HTTPS connections and older pairing QR codes remain supported.
 
+Renaming the Mac changes its Bonjour name, so the server replaces the stored
+certificate for the new name. The fingerprint changes with it, and paired iPhones
+pair again once with the new QR code.
+
+## Optional push relay
+
+The Mac server can advertise a public push relay, for example a State relay on a VPS, so a paired
+iPhone receives notifications outside the home network while the Mac stays reachable. Enter the
+address under **Push unterwegs (optional)** in the app; **Übernehmen** stores it and restarts the
+server, and the pairing QR code then carries it as the `relay` parameter. The iPhone keeps that
+address with its server session, so switching servers cannot inherit the address of an earlier
+connection, and the relay only forwards sealed envelopes, which keeps the content end to end
+encrypted. Leave the field empty for local-only delivery, because the server never requires a
+relay and never contacts one itself.
+
 ## Background and offline limits
 
 The server runs while the user is logged in and the Mac is awake. It does not
@@ -71,6 +92,40 @@ iOS does not permit uninterrupted arbitrary background polling. Previously synce
 reminders and local notifications remain available offline. New remote reminders
 arrive when the app can synchronize again. This local setup does not configure
 APNs or claim delivery to a suspended iPhone or outside the local network.
+
+## Troubleshooting
+
+Server events are written to `~/Library/Logs/State Server/server.log`. The file and its
+directory are readable by the current user only. It rotates at 5 MB and keeps
+`server.log.1` to `server.log.3` next to the current file. The Diagnose area of the
+window shows the last exit code and the number of consecutive failed starts, and the
+window and menu both offer **Log im Finder zeigen** and **Log anzeigen**.
+
+An unexpected exit is retried with exponential backoff: 2, 4, 8, 16, 32 and then 60
+seconds. The app never gives up. A port conflict or a crash loop therefore shows up as
+repeated restarts instead of a server that stays silently down. Stopping the server
+resets the backoff.
+
+Sleep is normal and not a fault. The server pauses with the Mac, so missing status
+lines during sleep do not mark it unresponsive. After waking, the app asks for a fresh
+status and starts the server again only if the process is gone.
+
+**Bei der Anmeldung starten** registers the app through `SMAppService.mainApp`. Check
+the registration with:
+
+```bash
+sfltool dumpbtm | grep -i state
+```
+
+The command may ask for administrator rights. Signed builds can also be checked in
+System Settings under General > Login Items.
+
+Check both listeners when the iPhone cannot reach the Mac:
+
+```bash
+lsof -nP -iTCP:9847 -sTCP:LISTEN
+lsof -nP -iTCP:9848 -sTCP:LISTEN
+```
 
 ## Verification
 

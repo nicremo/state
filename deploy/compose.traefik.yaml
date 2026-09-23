@@ -1,0 +1,32 @@
+# Production overlay for a host that already runs Traefik.
+# Usage: docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.traefik.yaml up -d --build
+services:
+  state-server:
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${PROXY_NETWORK:-proxy-network}
+      traefik.http.routers.state-server.rule: Host(`state.${STATE_DOMAIN:?set STATE_DOMAIN}`)
+      traefik.http.routers.state-server.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.state-server.tls: "true"
+      traefik.http.routers.state-server.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.state-server.loadbalancer.server.port: "8090"
+
+  state-relay:
+    environment:
+      STATE_RELAY_APNS_TEAM_ID: ${STATE_RELAY_APNS_TEAM_ID:?set STATE_RELAY_APNS_TEAM_ID}
+      STATE_RELAY_APNS_KEY_ID: ${STATE_RELAY_APNS_KEY_ID:?set STATE_RELAY_APNS_KEY_ID}
+      STATE_RELAY_APNS_PRIVATE_KEY_FILE: /run/secrets/apns_key
+    secrets:
+      - apns_key
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${PROXY_NETWORK:-proxy-network}
+      traefik.http.routers.state-relay.rule: Host(`relay.${STATE_DOMAIN:?set STATE_DOMAIN}`)
+      traefik.http.routers.state-relay.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.state-relay.tls: "true"
+      traefik.http.routers.state-relay.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.state-relay.loadbalancer.server.port: "8091"
+
+secrets:
+  apns_key:
+    file: ./secrets/apns_key.p8

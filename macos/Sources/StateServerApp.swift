@@ -72,6 +72,8 @@ private struct MenuContent: View {
             Button("Server starten") { controller.start() }
         }
         Divider()
+        Button("Log anzeigen") { controller.revealLog() }
+        Divider()
         Button("State Server beenden") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
