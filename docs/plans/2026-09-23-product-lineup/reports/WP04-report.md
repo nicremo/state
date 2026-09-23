@@ -2,7 +2,7 @@
 
 **Status:** DONE
 **Branch:** wp/04-statectl-reminder-cli
-**Letzter Commit:** dieser Report-Commit, davor `22c947b docs: show the statectl reminder fallback`
+**Letzter Commit:** `git log -1` auf dem Branch, dazu dieser Report; letzter Umsetzungs-Commit `95dc555 fix: reject a broken reminder schedule before connecting`
 
 ## Ergebnis in drei Sätzen
 
