@@ -77,6 +77,8 @@ final class ServerController {
         }
     }
 
+    var consecutiveFailures: Int { restartPolicy.consecutiveFailures }
+
     func launch() {
         guard !launched else { return }
         launched = true
