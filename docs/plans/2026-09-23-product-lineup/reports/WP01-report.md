@@ -2,7 +2,7 @@
 
 **Status:** DONE
 **Branch:** wp/01-product-lineup-doc
-**Letzter Commit:** fd90ebe docs: follow the runner LaunchAgent decision in the lineup
+**Letzter Commit:** a81ce49 docs: keep the Mac Server app a pure server in the lineup
 
 ## Ergebnis in drei Sätzen
 
@@ -10,7 +10,7 @@
 
 ## Erledigte Tasks
 
-- [x] Task 1: `docs/product-lineup.md` neu angelegt, zehn Pflichtabschnitte in der vorgegebenen Reihenfolge, Mermaid-Diagramm zeichengleich aus der Vorlage. Commits `39dd330` und `fd90ebe`.
+- [x] Task 1: `docs/product-lineup.md` neu angelegt, zehn Pflichtabschnitte in der vorgegebenen Reihenfolge, Mermaid-Diagramm zeichengleich aus der Vorlage. Commits `39dd330`, `fd90ebe` und `a81ce49`.
 - [x] Task 2: `README.md`, Abschnitt `## Components`, genau ein zusätzlicher Absatz mit dem vorgegebenen Satz, sonst nichts geändert. Commit `816fbb5`.
 - [x] Task 3: Selbstprüfung, siehe Prüfungen.
 
@@ -45,7 +45,7 @@
 
 1. **Basis-Branch.** Das Protokoll in Abschnitt 4.1 verlangt einen Worktree auf `origin/main`. Auf `origin/main` fehlen die Pflichtquellen `macos/README.md` und `docs/LOCAL_MAC_CONNECTION.md`, sie liegen nur auf dem Integrations-Branch. Der WP-Branch wurde deshalb von `bc42fbe` abgezweigt und nach dem Plan-Commit des Koordinators (`e74c673 docs: plan the product lineup as parallel work packages`) per Rebase darauf neu aufgebaut. Dadurch ist das Plan-Set im Branch enthalten und der Link-Check grün. Phase 1 des Koordinators ist weiterhin offen.
 2. **Plan-Set war beim Start nicht im Repository.** `docs/plans/` lag zunächst nur untracked im Haupt-Worktree, deshalb war der Link-Check zu Beginn rot. Mit `e74c673` löst er sich ohne Änderung am Dokument auf. Es wurde nichts aus dem Plan-Set in diesen Branch kopiert oder verändert.
-3. **Die Runner-Entscheidung änderte sich während der Arbeit.** Abschnitt 2 Punkt 3 des Master-Plans wurde vom Koordinator umgestellt: Der Runner läuft als eigener LaunchAgent (`state-runner service install`) und nicht in der Mac-App, weil die App-Sandbox der App-Store-App keine Agenten-CLIs starten darf. Abschnitt 6, der Diagrammknoten und der WP10-Titel wurden nachgezogen (Commit `fd90ebe`).
+3. **Die Runner-Entscheidung änderte sich während der Arbeit.** Abschnitt 2 Punkt 3 des Master-Plans wurde vom Koordinator umgestellt: Der Runner läuft als eigener LaunchAgent (`state-runner service install`) und nicht in der Mac-App, weil die App-Sandbox der App-Store-App keine Agenten-CLIs starten darf. Abschnitt 6, der Diagrammknoten und der WP10-Titel wurden nachgezogen (Commit `fd90ebe`). Mit Commit `a81ce49` steht zusätzlich ausdrücklich im Dokument, dass die Mac-Server-App ein reiner Server bleibt.
 4. **Reverse Proxy.** Der Master-Plan nennt Traefik, `README.md` und `docs/operations.md` nennen Nginx Proxy Manager. Das Dokument bleibt neutral bei "TLS reverse proxy" und beschreibt nur, was `deploy/compose.yaml` tatsächlich festlegt.
 5. **Drei Wege, vierte Aussage.** Abschnitt 5 beschreibt die drei Wege aus der Vorgabe und stellt die Mac-App danach in einem eigenen Absatz dar, statt sie als vierten Weg zu zählen.
 6. **APNs-Status.** Abschnitt 5 qualifiziert App Attest als Produktionsanforderung und nennt den heutigen Zustand des Stacks (Entwicklungs-Attest erlaubt, APNs im Dry-Run). Der Master-Plan formuliert hier absolut, `deploy/compose.yaml` und `docs/operations.md` zeigen den Zwischenstand.
