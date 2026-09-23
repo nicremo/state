@@ -161,7 +161,7 @@ Zum Test `TestShippedAdaptersPassPromptAsSingleArgvElement`: er legt ein gefäls
 
 Der Beweis, dass die neuen Tests wirklich greifen: nach dem Schreiben der Tests und vor der Implementierung schlugen `TestDefaultAdaptersIncludePiAgent`, `TestDefaultAdaptersIncludeDeepSeekHarness`, `TestShippedAdaptersReportMissingBinary` und `TestDefaultAdaptersContainShippedAdaptersOnly` fehl. `TestPolicyValidationAcceptsNewAdapterLabels` lief bereits vorher grün, was der Beleg für Task 1 ist.
 
-Die Prüfungen liefen zweimal: einmal auf dem ursprünglichen Basis-Commit `ae6ab23` und nach dem Rebase auf den aktuellen `origin/main` (`4254d1b`) erneut. Beide Läufe waren vollständig grün. Nach der Ergänzung des argv-Tests lief die Gesamtsuite ein drittes Mal grün (15 Pakete, `internal/runner` 9.725s). Ausgabe des zweiten Laufs:
+Die Prüfungen liefen mehrfach: auf dem ursprünglichen Basis-Commit `ae6ab23`, nach dem Rebase auf den aktuellen `origin/main` (`4254d1b`) erneut und nach der Ergänzung des argv-Tests ein drittes Mal. Alle Läufe waren vollständig grün. Zum Abschluss lief die Suite auf der eingefrorenen Revision `a64cbcf` mit `-count=1`, also ohne Testergebnisse aus dem Cache, und war ebenfalls vollständig grün (15 Pakete, `internal/runner` 11.807s). Ausgabe des zweiten Laufs:
 
 ```text
 $ gofmt -l ./cmd ./internal
