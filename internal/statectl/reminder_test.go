@@ -2,14 +2,22 @@ package statectl
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	stateauth "github.com/nicremo/state/internal/auth"
+	"github.com/nicremo/state/internal/mcpserver"
 	"github.com/nicremo/state/internal/state"
+	"github.com/nicremo/state/internal/store"
+	"github.com/pocketbase/pocketbase"
 )
 
 const testReminderID = "01990000-0000-7000-8000-000000000001"
@@ -709,5 +717,229 @@ func TestSearchRejectsEmptyQuery(t *testing.T) {
 	}
 	if len(fake.calls) != 0 {
 		t.Fatalf("Search() called %v, want no tool call", fake.callNames())
+	}
+}
+
+func mustUUIDv7() func() (string, error) {
+	return func() (string, error) {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return "", err
+		}
+		return id.String(), nil
+	}
+}
+
+// newReminderTestSession boots a real State MCP server in memory and connects
+// to it exactly like the CLI does, over streamable HTTP with a bearer token.
+func newReminderTestSession(t *testing.T) *mcp.ClientSession {
+	t.Helper()
+
+	handler, token := newReminderTestHandler(t)
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", handler)
+	httpServer := httptest.NewServer(mux)
+	t.Cleanup(httpServer.Close)
+
+	session, err := ConnectRemote(context.Background(), Profile{ServerURL: httpServer.URL}, token, "test-version")
+	if err != nil {
+		t.Fatalf("ConnectRemote() error = %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
+func newReminderTestHandler(t *testing.T) (http.Handler, string) {
+	t.Helper()
+
+	app := pocketbase.NewWithConfig(pocketbase.Config{
+		DefaultDataDir:   t.TempDir(),
+		HideStartBanner:  true,
+		DataMaxOpenConns: 1,
+		DataMaxIdleConns: 1,
+		AuxMaxOpenConns:  1,
+		AuxMaxIdleConns:  1,
+	})
+	if err := app.Bootstrap(); err != nil {
+		t.Fatalf("Bootstrap() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := app.ResetBootstrapState(); err != nil {
+			t.Errorf("ResetBootstrapState() error = %v", err)
+		}
+	})
+	seed := make([]byte, ed25519.SeedSize)
+	for index := range seed {
+		seed[index] = byte(index + 21)
+	}
+	repository, err := store.NewPocketBaseRepository(app, ed25519.NewKeyFromSeed(seed))
+	if err != nil {
+		t.Fatalf("NewPocketBaseRepository() error = %v", err)
+	}
+	authManager, err := stateauth.NewManager(app, "bootstrap-secret")
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+	ownerCredential, err := authManager.BootstrapOwner(context.Background(), "bootstrap-secret", stateauth.OwnerBootstrapRequest{
+		DisplayName: "Fabian",
+		DeviceName:  "iPhone",
+	})
+	if err != nil {
+		t.Fatalf("BootstrapOwner() error = %v", err)
+	}
+	owner, err := authManager.Authenticate(context.Background(), ownerCredential.Token)
+	if err != nil {
+		t.Fatalf("Authenticate(owner) error = %v", err)
+	}
+	pairing, err := authManager.CreatePairingCode(context.Background(), owner, stateauth.PairingCodeRequest{
+		Harness:     "codex",
+		DisplayName: "Codex",
+		DeviceName:  "MacBook",
+	})
+	if err != nil {
+		t.Fatalf("CreatePairingCode() error = %v", err)
+	}
+	credential, err := authManager.ExchangePairingCode(context.Background(), pairing.Code)
+	if err != nil {
+		t.Fatalf("ExchangePairingCode() error = %v", err)
+	}
+	handler := mcpserver.NewHandler(mcpserver.Config{
+		Auth:    authManager,
+		State:   state.NewService(repository),
+		Version: "test-version",
+	})
+	return handler, credential.Token
+}
+
+type reminderDetail struct {
+	Reminder state.Reminder  `json:"reminder"`
+	Comments []state.Comment `json:"comments"`
+}
+
+func (detail reminderDetail) commentBodies() []string {
+	bodies := make([]string, 0, len(detail.Comments))
+	for _, comment := range detail.Comments {
+		bodies = append(bodies, comment.Body)
+	}
+	return bodies
+}
+
+func TestReminderServiceAgainstInMemoryServer(t *testing.T) {
+	t.Parallel()
+
+	session := newReminderTestSession(t)
+	service := NewReminderService(session, "Europe/Berlin", mustUUIDv7())
+	ctx := context.Background()
+
+	created, err := service.Create(ctx, CreateReminderOptions{
+		Title:       "Monthly reporting",
+		Description: "Prepare the report for the board.",
+		SourceText:  "I need to do the monthly report every month",
+		Schedule: ScheduleOptions{
+			Date:       "2026-10-01",
+			Time:       "09:00",
+			TimeZone:   "Europe/Berlin",
+			Prewarning: 30,
+			Repeat:     "monthly",
+			Interval:   1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if created.ID == "" || created.Title != "Monthly reporting" || created.Revision != 1 {
+		t.Fatalf("Create() = %#v", created)
+	}
+	if created.Schedule == nil || created.Schedule.Mode != state.TimeZoneModeFixed {
+		t.Fatalf("Create() schedule = %#v", created.Schedule)
+	}
+
+	raw, err := service.Show(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("Show() error = %v", err)
+	}
+	var detail reminderDetail
+	if err := json.Unmarshal(raw, &detail); err != nil {
+		t.Fatalf("Show() returned undecodable JSON: %v", err)
+	}
+	if detail.Reminder.Recurrence == nil {
+		t.Fatalf("Show() recurrence = %#v", detail.Reminder.Recurrence)
+	}
+	if detail.Reminder.Recurrence.Frequency != state.RecurrenceMonthly || detail.Reminder.Recurrence.Interval != 1 {
+		t.Fatalf("Show() recurrence = %#v", detail.Reminder.Recurrence)
+	}
+	if detail.Reminder.Schedule == nil || detail.Reminder.Schedule.LocalTime != "09:00" {
+		t.Fatalf("Show() schedule = %#v", detail.Reminder.Schedule)
+	}
+
+	if err := service.AddContext(ctx, created.ID, "Ask finance for the numbers.", "add context to the report"); err != nil {
+		t.Fatalf("AddContext() error = %v", err)
+	}
+	raw, err = service.Show(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("Show() after AddContext error = %v", err)
+	}
+	if err := json.Unmarshal(raw, &detail); err != nil {
+		t.Fatalf("Show() after AddContext returned undecodable JSON: %v", err)
+	}
+	if bodies := detail.commentBodies(); len(bodies) != 1 || bodies[0] != "Ask finance for the numbers." {
+		t.Fatalf("Show() comments = %v", bodies)
+	}
+
+	rescheduled, err := service.Reschedule(ctx, created.ID, ScheduleOptions{
+		Date:     "2026-11-01",
+		Time:     "09:00",
+		TimeZone: "Europe/Berlin",
+		Repeat:   "monthly",
+		Interval: 1,
+	}, false, false, "move the report to November")
+	if err != nil {
+		t.Fatalf("Reschedule() error = %v", err)
+	}
+	if rescheduled.Revision <= created.Revision {
+		t.Fatalf("Reschedule() revision = %d, want more than %d", rescheduled.Revision, created.Revision)
+	}
+	if rescheduled.Schedule == nil || rescheduled.Schedule.LocalDate != "2026-11-01" {
+		t.Fatalf("Reschedule() schedule = %#v", rescheduled.Schedule)
+	}
+
+	matches, err := service.Search(ctx, "reporting", 20)
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	searchResult := struct {
+		Reminders []state.Reminder `json:"reminders"`
+	}{}
+	if err := json.Unmarshal(matches, &searchResult); err != nil {
+		t.Fatalf("Search() returned undecodable JSON: %v", err)
+	}
+	if len(searchResult.Reminders) != 1 || searchResult.Reminders[0].ID != created.ID {
+		t.Fatalf("Search() = %s", matches)
+	}
+}
+
+func TestReminderServiceCreateIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	session := newReminderTestSession(t)
+	service := NewReminderService(session, "Europe/Berlin", mustUUIDv7())
+	ctx := context.Background()
+
+	options := CreateReminderOptions{
+		Title:      "Idempotent capture",
+		SourceText: "remind me to file the taxes",
+		RequestID:  "01990000-0000-7000-8000-0000000000ab",
+		Schedule:   ScheduleOptions{Date: "2026-10-01", TimeZone: "Europe/Berlin"},
+	}
+	first, err := service.Create(ctx, options)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	second, err := service.Create(ctx, options)
+	if err != nil {
+		t.Fatalf("second Create() error = %v", err)
+	}
+	if first.ID != second.ID {
+		t.Fatalf("Create() ids = %s and %s, want the same reminder", first.ID, second.ID)
 	}
 }
