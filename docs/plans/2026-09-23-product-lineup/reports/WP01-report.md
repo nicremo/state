@@ -18,7 +18,7 @@
 
 | Datei | Änderung |
 | --- | --- |
-| `docs/product-lineup.md` | Neu, 140 Zeilen. Zehn Abschnitte, Mermaid-Diagramm in Abschnitt 1, Tabellen in den Abschnitten 1, 4, 7 und 10. |
+| `docs/product-lineup.md` | Neu, 142 Zeilen. Zehn Abschnitte, Mermaid-Diagramm in Abschnitt 1, Tabellen in den Abschnitten 1, 4, 7 und 10. |
 | `README.md` | Eine Zeile im Abschnitt `## Components`, keine weitere Änderung. |
 | `docs/plans/2026-09-23-product-lineup/reports/WP01-report.md` | Dieser Report. |
 
@@ -35,7 +35,7 @@
 | Mermaid-Vergleich gegen die Vorlage (Python, Zeichenvergleich) | identisch, 23 Zeilen, auch mit dem am 23.09. geänderten Knoten `state-runner<br/>user LaunchAgent` |
 | Portabgleich 8090 und 8091 | stimmt mit `deploy/compose.yaml`, `cmd/state-server/main.go:78` und `cmd/state-relay/main.go:70` |
 | Portabgleich 9847 und 9848 | stimmt mit `macos/README.md` und `cmd/state-server/desktop.go:66,67` |
-| Datenschutzprüfung | keine Treffer für Team-ID, E-Mail, echte Domains, Tokens oder Registry-Pfade, nur die öffentliche Bundle-ID `com.fabincrm.state` |
+| Datenschutzprüfung (`docs/product-lineup.md` und `README.md`) | keine Treffer für Team-ID, E-Mail, echte Domains, Tokens oder Registry-Pfade, nur die öffentliche Bundle-ID `com.fabincrm.state` |
 | Gedankenstrichprüfung | 0 Treffer für Geviertstrich und Halbgeviertstrich |
 | `git status` | sauber |
 | `gofmt -l ./cmd ./internal`, `go vet ./...`, `go test -race ./...` | nicht anwendbar, keine Go-Änderung |
@@ -54,7 +54,7 @@
 ## Offene Fragen und Risiken
 
 1. **Der Master-Plan widerspricht sich beim Runner.** Abschnitt 2 Punkt 3 sagt jetzt, der Runner ist ein eigener LaunchAgent außerhalb der App. Abschnitt 6 Punkt 6 sagt weiterhin, ein fälliger Reminder startet "über den Runner der Mac-App" eine Agent-Session. Das Dokument folgt Abschnitt 2. Abschnitt 6 des Master-Plans sollte nachgezogen werden.
-2. **Die PR-Ansicht ist noch verrauscht.** `main` enthält den Integrationsstand inzwischen als `4254d1b` (#38), der WP-Branch basiert aber auf dem inhaltlich gleichen Stand `e74c673`. Deshalb zeigt GitHub im Draft-PR 61 Dateien, obwohl inhaltlich nur drei Dateien neu sind (`git diff --stat origin/main HEAD` ergibt drei Dateien, 210 Zeilen). Nach `git merge origin/main` im WP-Worktree zeigt der PR genau diese drei Dateien. Der Merge ist konfliktfrei, weil Plan-Set und `README.md` in beiden Ständen bytegleich sind.
+2. **Die PR-Ansicht ist noch verrauscht.** `main` enthält den Integrationsstand inzwischen als `4254d1b` (#38), der WP-Branch basiert aber auf dem inhaltlich gleichen Stand `e74c673`. Deshalb zeigt GitHub im Draft-PR 61 Dateien, obwohl inhaltlich nur drei Dateien neu sind (`git diff --stat origin/main HEAD` ergibt drei Dateien, 210 Zeilen). Nach `git merge origin/main` im WP-Worktree zeigt der PR genau diese drei Dateien. Der Merge ist konfliktfrei, weil beide Seiten gegenüber der Merge-Basis dieselben Änderungen an `README.md` und am Plan-Set enthalten.
 3. **Abschnitt 10 verlinkt elf Plan-Dateien.** Wird eine Plan-Datei umbenannt, muss der Link im Dokument mitgezogen werden. Die Namen stammen aus dem Plan-Set vom 23.09.2026.
 4. **WP07** ist die Voraussetzung für die gestrichelte Relay-Verbindung im Diagramm.
 5. **E-Mail-Adresse im Plan-Set.** `docs/plans/2026-09-23-product-lineup/README.md` nennt `fb200386@gmail.com` als Pflichtwert für `git config user.email`. Die Adresse steht bereits in öffentlichen Commits, ist also nicht neu. Mit dem Plan-Commit `e74c673` liegt sie aber erstmals als Dateiinhalt im Repository und damit auch in diesem Branch.
