@@ -2,7 +2,7 @@
 
 **Status:** PARTIAL
 **Branch:** wp/07-relay-for-local-server
-**Letzter Commit:** NOCH_FUELLEN
+**Letzter Commit:** 868562d chore: register the new relay tests in the xcode project (danach folgen nur Report-Commits)
 
 ## Ergebnis in drei Sätzen
 
