@@ -120,6 +120,110 @@ func TestDesktopRejectsPublicNetworkAndInvalidHost(t *testing.T) {
 	}
 }
 
+func TestValidDesktopRelayURL(t *testing.T) {
+	for value, expected := range map[string]bool{
+		"":                                  true,
+		"https://relay.example.com":         true,
+		"https://relay.example.com:8443":    true,
+		"https://relay.example.com/push":    true,
+		"http://relay.example.com":          false,
+		"https://user@relay.example.com":    false,
+		"https://user:pw@relay.example.com": false,
+		"https://relay.example.com/?x=1":    false,
+		"https://relay.example.com/#frag":   false,
+		"relay.example.com":                 false,
+		"//relay.example.com":               false,
+		"https://":                          false,
+		"not a url":                         false,
+	} {
+		if validDesktopRelayURL(value) != expected {
+			t.Fatalf("validDesktopRelayURL(%q) = %v", value, !expected)
+		}
+	}
+}
+
+func TestDesktopPairingURLCarriesTheRelay(t *testing.T) {
+	parsed, err := url.Parse(desktopPairingURL("https://mac.local:9847", "code-1", "fingerprint-1", "https://relay.example.com"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Scheme != "state" || parsed.Host != "pair" {
+		t.Fatalf("unexpected pairing scheme: %s", parsed)
+	}
+	query := parsed.Query()
+	if query.Get("server") != "https://mac.local:9847" || query.Get("code") != "code-1" ||
+		query.Get("fingerprint") != "fingerprint-1" || query.Get("relay") != "https://relay.example.com" {
+		t.Fatalf("pairing link lost values: %v", query)
+	}
+	without, err := url.Parse(desktopPairingURL("https://mac.local:9847", "code-1", "fingerprint-1", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, present := without.Query()["relay"]; present {
+		t.Fatal("pairing link advertises a relay without configuration")
+	}
+}
+
+func TestDesktopRejectsInvalidRelayURL(t *testing.T) {
+	input, writer := io.Pipe()
+	defer func() { _ = writer.Close() }()
+	err := runDesktop(
+		[]string{"--data", t.TempDir(), "--host", "test.local", "--https", "127.0.0.1:0", "--local-http", "127.0.0.1:0", "--relay-url", "http://relay.example.com"},
+		input, io.Discard, io.Discard, slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	if err == nil {
+		t.Fatal("desktop started with a plain HTTP relay")
+	}
+}
+
+func TestDesktopAdvertisesConfiguredRelay(t *testing.T) {
+	data := t.TempDir()
+	input, writer := io.Pipe()
+	output, result := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		err := runDesktop(
+			[]string{"--data", data, "--host", "test.local", "--https", "127.0.0.1:0", "--local-http", "127.0.0.1:0", "--relay-url", "https://relay.example.com"},
+			input, result, io.Discard, slog.New(slog.NewTextHandler(io.Discard, nil)),
+		)
+		_ = result.Close()
+		done <- err
+	}()
+	reader := json.NewDecoder(output)
+	var status desktopStatus
+	if err := reader.Decode(&status); err != nil {
+		t.Fatal("read desktop status:", err)
+	}
+	if status.RelayURL != "https://relay.example.com" {
+		t.Fatalf("status does not advertise the relay: %q", status.RelayURL)
+	}
+	if _, err := io.WriteString(writer, "{\"action\":\"pair\"}\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := reader.Decode(&status); err != nil {
+		t.Fatal("read desktop status:", err)
+	}
+	if status.Pairing == nil {
+		t.Fatal("missing pairing")
+	}
+	pairing, err := url.Parse(status.Pairing.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pairing.Query().Get("relay") != "https://relay.example.com" {
+		t.Fatalf("pairing link does not carry the relay: %s", status.Pairing.URL)
+	}
+	_ = writer.Close()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("desktop server did not stop")
+	}
+}
+
 // syncWriter collects the desktop server's stderr while it runs on another goroutine.
 type syncWriter struct {
 	mutex sync.Mutex
