@@ -3,7 +3,7 @@
 **Status:** DONE
 **Branch:** wp/08-runner-adapters
 **Basis:** origin/main 4254d1b, nach Rebase auf den aktuellen Stand
-**Letzter Commit vor diesem Report:** d55f0b8 `test: pin the prompt boundary and the registry names of the shipped adapters`
+**Letzter inhaltlicher Commit:** d55f0b8 `test: pin the prompt boundary and the registry names of the shipped adapters`
 
 Commits auf dem Branch, älteste zuerst:
 
@@ -14,6 +14,8 @@ Commits auf dem Branch, älteste zuerst:
 d703616 docs: correct WP08 report citations and verified profile behaviour
 d55f0b8 test: pin the prompt boundary and the registry names of the shipped adapters
 ```
+
+Der geprüfte Code-Stand ist `d55f0b8`. Alle Commits danach ändern ausschließlich diesen Report.
 
 
 ## Ergebnis in drei Sätzen
