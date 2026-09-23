@@ -5,7 +5,10 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // ServiceLabel is the launchd label of the per-user state-runner agent.
@@ -108,4 +111,116 @@ func LaunchAgentsDir(home string) string {
 // ServiceLogDir is the directory that receives the runner stdout/stderr logs.
 func ServiceLogDir(home string) string {
 	return filepath.Join(home, "Library", "Logs", "State Runner")
+}
+
+// Launchctl abstracts the launchctl calls so tests never touch the real system.
+type Launchctl interface {
+	Bootstrap(domain string, plistPath string) error   // launchctl bootstrap gui/<uid> <plist>
+	Bootout(domain string, label string) error         // launchctl bootout gui/<uid>/<label>
+	Print(domain string, label string) (string, error) // launchctl print gui/<uid>/<label>
+}
+
+// ServiceManager installs, removes and inspects the per-user runner agent.
+type ServiceManager struct {
+	launchAgentsDir string
+	launchctl       Launchctl
+	uid             int
+}
+
+// NewServiceManager returns a manager that writes into launchAgentsDir and
+// talks to launchctl through the given implementation.
+func NewServiceManager(launchAgentsDir string, launchctl Launchctl, uid int) *ServiceManager {
+	return &ServiceManager{launchAgentsDir: launchAgentsDir, launchctl: launchctl, uid: uid}
+}
+
+// Domain is the launchd domain of the logged-in user, for example gui/501.
+func (manager *ServiceManager) Domain() string {
+	return fmt.Sprintf("gui/%d", manager.uid)
+}
+
+// PlistPath is the launch agent file this manager owns.
+func (manager *ServiceManager) PlistPath() string {
+	return filepath.Join(manager.launchAgentsDir, ServiceLabel+".plist")
+}
+
+// Install writes the launch agent and loads it. It is idempotent: an already
+// loaded agent is booted out first, and a missing one is fine.
+func (manager *ServiceManager) Install(spec ServiceSpec) (plistPath string, err error) {
+	contents, err := LaunchAgentPlist(spec)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(manager.launchAgentsDir, 0o755); err != nil {
+		return "", fmt.Errorf("create launch agents directory: %w", err)
+	}
+	if err := os.MkdirAll(spec.LogDir, 0o755); err != nil {
+		return "", fmt.Errorf("create runner log directory: %w", err)
+	}
+	plistPath = manager.PlistPath()
+	if err := os.WriteFile(plistPath, contents, 0o644); err != nil {
+		return "", fmt.Errorf("write launch agent: %w", err)
+	}
+	// A bootout failure only means the agent is not loaded yet.
+	_ = manager.launchctl.Bootout(manager.Domain(), ServiceLabel)
+	if err := manager.launchctl.Bootstrap(manager.Domain(), plistPath); err != nil {
+		return "", fmt.Errorf("load launch agent %s: %w", plistPath, err)
+	}
+	return plistPath, nil
+}
+
+// Uninstall boots the agent out and removes its plist. Both steps tolerate an
+// agent that was never installed.
+func (manager *ServiceManager) Uninstall() error {
+	_ = manager.launchctl.Bootout(manager.Domain(), ServiceLabel)
+	if err := os.Remove(manager.PlistPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove launch agent: %w", err)
+	}
+	return nil
+}
+
+// Status reports whether launchd currently runs the agent.
+func (manager *ServiceManager) Status() (running bool, detail string, err error) {
+	output, err := manager.launchctl.Print(manager.Domain(), ServiceLabel)
+	if err != nil {
+		return false, output, err
+	}
+	return strings.Contains(output, "state = running"), output, nil
+}
+
+// ExecLaunchctl talks to the real /bin/launchctl with fixed arguments.
+type ExecLaunchctl struct{}
+
+// NewExecLaunchctl returns the production launchctl implementation.
+func NewExecLaunchctl() Launchctl {
+	return ExecLaunchctl{}
+}
+
+func (ExecLaunchctl) Bootstrap(domain string, plistPath string) error {
+	return runLaunchctl("bootstrap", domain, plistPath)
+}
+
+func (ExecLaunchctl) Bootout(domain string, label string) error {
+	return runLaunchctl("bootout", domain+"/"+label)
+}
+
+func (ExecLaunchctl) Print(domain string, label string) (string, error) {
+	command := exec.Command("/bin/launchctl", "print", domain+"/"+label)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return stdout.String(), fmt.Errorf("launchctl print %s/%s: %w: %s", domain, label, err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.String(), nil
+}
+
+func runLaunchctl(arguments ...string) error {
+	command := exec.Command("/bin/launchctl", arguments...)
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return fmt.Errorf("launchctl %s: %w: %s", strings.Join(arguments, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
 }

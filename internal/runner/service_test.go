@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -130,5 +131,209 @@ func TestLaunchAgentPlistRejectsInvalidSpecs(t *testing.T) {
 				t.Fatalf("LaunchAgentPlist(%+v) succeeded, want error", spec)
 			}
 		})
+	}
+}
+
+type fakeLaunchctl struct {
+	calls        []string
+	printOutput  string
+	printErr     error
+	bootstrapErr error
+	bootoutErr   error
+}
+
+func (fake *fakeLaunchctl) Bootstrap(domain string, plistPath string) error {
+	fake.calls = append(fake.calls, "bootstrap "+domain+" "+plistPath)
+	return fake.bootstrapErr
+}
+
+func (fake *fakeLaunchctl) Bootout(domain string, label string) error {
+	fake.calls = append(fake.calls, "bootout "+domain+" "+label)
+	return fake.bootoutErr
+}
+
+func (fake *fakeLaunchctl) Print(domain string, label string) (string, error) {
+	fake.calls = append(fake.calls, "print "+domain+" "+label)
+	return fake.printOutput, fake.printErr
+}
+
+func TestServiceManagerInstallWritesTheAgentAndBootstrapsIt(t *testing.T) {
+	t.Parallel()
+
+	spec := testSpec(t)
+	launchAgentsDir := filepath.Join(t.TempDir(), "LaunchAgents")
+	launchctl := &fakeLaunchctl{}
+	manager := NewServiceManager(launchAgentsDir, launchctl, 501)
+
+	plistPath, err := manager.Install(spec)
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	if plistPath != filepath.Join(launchAgentsDir, ServiceLabel+".plist") {
+		t.Fatalf("Install() path = %q", plistPath)
+	}
+	info, err := os.Stat(plistPath)
+	if err != nil {
+		t.Fatalf("stat plist: %v", err)
+	}
+	if info.Mode().Perm() != 0o644 {
+		t.Fatalf("plist mode = %v, want 0644", info.Mode().Perm())
+	}
+	if _, err := os.Stat(spec.LogDir); err != nil {
+		t.Fatalf("log directory was not created: %v", err)
+	}
+	want := []string{
+		"bootout gui/501 " + ServiceLabel,
+		"bootstrap gui/501 " + plistPath,
+	}
+	if strings.Join(launchctl.calls, "|") != strings.Join(want, "|") {
+		t.Fatalf("launchctl calls = %v, want %v", launchctl.calls, want)
+	}
+}
+
+func TestServiceManagerInstallIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	spec := testSpec(t)
+	launchctl := &fakeLaunchctl{}
+	manager := NewServiceManager(t.TempDir(), launchctl, 501)
+
+	first, err := manager.Install(spec)
+	if err != nil {
+		t.Fatalf("first Install() error = %v", err)
+	}
+	second, err := manager.Install(spec)
+	if err != nil {
+		t.Fatalf("second Install() error = %v", err)
+	}
+	if first != second {
+		t.Fatalf("Install() returned %q then %q", first, second)
+	}
+	if len(launchctl.calls) != 4 {
+		t.Fatalf("launchctl calls = %v, want bootout and bootstrap twice", launchctl.calls)
+	}
+}
+
+func TestServiceManagerInstallIgnoresBootoutFailure(t *testing.T) {
+	t.Parallel()
+
+	spec := testSpec(t)
+	launchctl := &fakeLaunchctl{bootoutErr: errors.New("Could not find service")}
+	manager := NewServiceManager(t.TempDir(), launchctl, 501)
+
+	if _, err := manager.Install(spec); err != nil {
+		t.Fatalf("Install() error = %v, want nil for a not-loaded service", err)
+	}
+	if len(launchctl.calls) != 2 {
+		t.Fatalf("launchctl calls = %v, want bootout then bootstrap", launchctl.calls)
+	}
+}
+
+func TestServiceManagerInstallReportsBootstrapFailure(t *testing.T) {
+	t.Parallel()
+
+	spec := testSpec(t)
+	launchctl := &fakeLaunchctl{bootstrapErr: errors.New("Bootstrap failed: 5: Input/output error")}
+	manager := NewServiceManager(t.TempDir(), launchctl, 501)
+
+	if _, err := manager.Install(spec); err == nil {
+		t.Fatal("Install() succeeded after a failed bootstrap")
+	}
+}
+
+func TestServiceManagerInstallRejectsInvalidSpec(t *testing.T) {
+	t.Parallel()
+
+	spec := testSpec(t)
+	spec.Executable = "state-runner"
+	manager := NewServiceManager(t.TempDir(), &fakeLaunchctl{}, 501)
+
+	if _, err := manager.Install(spec); err == nil {
+		t.Fatal("Install() accepted a relative executable path")
+	}
+}
+
+func TestServiceManagerUninstallRemovesTheAgent(t *testing.T) {
+	t.Parallel()
+
+	spec := testSpec(t)
+	launchctl := &fakeLaunchctl{}
+	manager := NewServiceManager(t.TempDir(), launchctl, 501)
+
+	plistPath, err := manager.Install(spec)
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	launchctl.calls = nil
+	if err := manager.Uninstall(); err != nil {
+		t.Fatalf("Uninstall() error = %v", err)
+	}
+	if _, err := os.Stat(plistPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("plist still exists after uninstall: %v", err)
+	}
+	if len(launchctl.calls) != 1 || launchctl.calls[0] != "bootout gui/501 "+ServiceLabel {
+		t.Fatalf("launchctl calls = %v, want one bootout", launchctl.calls)
+	}
+}
+
+func TestServiceManagerUninstallWithoutAgentSucceeds(t *testing.T) {
+	t.Parallel()
+
+	launchctl := &fakeLaunchctl{bootoutErr: errors.New("Could not find service")}
+	manager := NewServiceManager(t.TempDir(), launchctl, 501)
+
+	if err := manager.Uninstall(); err != nil {
+		t.Fatalf("Uninstall() error = %v, want nil for a missing agent", err)
+	}
+}
+
+func TestServiceManagerStatusReadsLaunchctlState(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		output  string
+		running bool
+	}{
+		{name: "running", output: "\tstate = running\n\tpid = 4711\n", running: true},
+		{name: "exited", output: "\tstate = exited\n\tlast exit code = 1\n", running: false},
+		{name: "waiting", output: "\tstate = waiting\n", running: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			launchctl := &fakeLaunchctl{printOutput: testCase.output}
+			manager := NewServiceManager(t.TempDir(), launchctl, 501)
+
+			running, detail, err := manager.Status()
+			if err != nil {
+				t.Fatalf("Status() error = %v", err)
+			}
+			if running != testCase.running {
+				t.Fatalf("Status() running = %v, want %v", running, testCase.running)
+			}
+			if !strings.Contains(detail, strings.TrimSpace(strings.Split(strings.TrimSpace(testCase.output), "\n")[0])) {
+				t.Fatalf("Status() detail = %q, want it to carry the launchctl output", detail)
+			}
+			if len(launchctl.calls) != 1 || launchctl.calls[0] != "print gui/501 "+ServiceLabel {
+				t.Fatalf("launchctl calls = %v, want one print", launchctl.calls)
+			}
+		})
+	}
+}
+
+func TestServiceManagerStatusReportsLaunchctlErrors(t *testing.T) {
+	t.Parallel()
+
+	launchctl := &fakeLaunchctl{printErr: errors.New("Could not find service")}
+	manager := NewServiceManager(t.TempDir(), launchctl, 501)
+
+	running, _, err := manager.Status()
+	if err == nil {
+		t.Fatal("Status() succeeded for a missing agent")
+	}
+	if running {
+		t.Fatal("Status() reported running for a missing agent")
 	}
 }
