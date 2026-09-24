@@ -2,6 +2,8 @@ package state
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"sort"
@@ -108,7 +110,7 @@ func (service *Service) CreateNote(ctx context.Context, actor Actor, input Creat
 	note.CreatedAt = now
 	note.UpdatedAt = now
 
-	event, err := service.buildAuditEvent(eventID, "", AuditActionNoteCreated, actor, now, input.ClientTime, input.Source, input.SourceExcerpt, nil, note, []string{"archived", "document", "plain_text", "summary", "title"}, note.Revision, input.CorrelationID, input.ClientRequestID)
+	event, err := service.buildAuditEvent(eventID, "", AuditActionNoteCreated, actor, now, input.ClientTime, input.Source, input.SourceExcerpt, nil, noteSnapshot(note), []string{"archived", "document", "plain_text", "summary", "title"}, note.Revision, input.CorrelationID, input.ClientRequestID)
 	if err != nil {
 		return Note{}, err
 	}
@@ -125,6 +127,17 @@ func (service *Service) UpdateNote(ctx context.Context, actor Actor, noteID stri
 	}
 	if input.Archived != nil && actor.Kind != ActorKindOwner && actor.Kind != ActorKindDevice {
 		return Note{}, ErrForbidden
+	}
+
+	// A retry after a lost response must return the stored result, not a
+	// revision conflict against the revision it produced itself.
+	if stored, found, err := service.repository.LookupNoteRequest(ctx, input.ClientRequestID, actor.ID); err != nil {
+		return Note{}, err
+	} else if found {
+		return stored, nil
+	}
+	if input.ExpectedRevision <= 0 {
+		return Note{}, ErrInvalidInput
 	}
 
 	current, err := service.repository.GetNote(ctx, noteID)
@@ -178,7 +191,7 @@ func (service *Service) UpdateNote(ctx context.Context, actor Actor, noteID stri
 	now := service.clock().UTC()
 	updated.Revision = current.Revision + 1
 	updated.UpdatedAt = now
-	event, err := service.buildAuditEvent(eventID, "", action, actor, now, input.ClientTime, input.Source, input.SourceExcerpt, current, updated, changed, updated.Revision, input.CorrelationID, input.ClientRequestID)
+	event, err := service.buildAuditEvent(eventID, "", action, actor, now, input.ClientTime, input.Source, input.SourceExcerpt, noteDigest(current), noteSnapshot(updated), changed, updated.Revision, input.CorrelationID, input.ClientRequestID)
 	if err != nil {
 		return Note{}, err
 	}
@@ -207,7 +220,7 @@ func (service *Service) ListNoteHistory(ctx context.Context, noteID string) ([]A
 // applyNoteTitle sets a written title, or derives one from the document when
 // the written title is empty.
 func applyNoteTitle(note *Note, title string) {
-	title = strings.TrimSpace(title)
+	title = singleLine(title)
 	if title != "" {
 		note.Title = title
 		note.TitleSource = NoteFieldSourceUser
@@ -221,7 +234,7 @@ func applyNoteTitle(note *Note, title string) {
 // applyNoteSummary sets a written summary, or derives one. A derived title
 // already shows the first line, so the derived summary starts after it.
 func applyNoteSummary(note *Note, summary string) {
-	summary = strings.TrimSpace(summary)
+	summary = singleLine(summary)
 	if summary != "" {
 		note.Summary = summary
 		note.SummarySource = NoteFieldSourceUser
@@ -236,7 +249,9 @@ func applyNoteSummary(note *Note, summary string) {
 }
 
 func validateNote(note Note) error {
-	if note.Title == "" && strings.TrimSpace(note.Document) == "" {
+	// A document of markers only ("---", an empty code block) has no text
+	// to name the note after; the list would show a blank row.
+	if note.Title == "" {
 		return ErrInvalidInput
 	}
 	if len(note.Document) > MaxNoteDocumentBytes || !utf8.ValidString(note.Document) {
@@ -265,25 +280,44 @@ func changedNoteFields(before Note, after Note) []string {
 }
 
 var (
-	noteHeadingMarker     = regexp.MustCompile(`^#{1,6}\s+`)
-	noteOrderedListMarker = regexp.MustCompile(`^\d{1,3}[.)]\s+`)
-	noteInlineMarkers     = strings.NewReplacer("**", "", "__", "", "~~", "", "`", "", "*", "")
-	noteLinePrefixes      = []string{"- [ ] ", "- [x] ", "- [X] ", "- ", "* ", "+ ", "> "}
+	noteHeadingMarker     = regexp.MustCompile(`^#{1,6}([ \t]+|$)`)
+	noteOrderedListMarker = regexp.MustCompile(`^[0-9]{1,3}[.)][ \t]+`)
+	// A checklist item without text, as the format bar inserts it.
+	emptyTaskMarkers = map[string]bool{"- [ ]": true, "- [x]": true, "- [X]": true, "* [ ]": true, "* [x]": true, "* [X]": true}
+	noteLinePrefixes = []string{"- [ ] ", "- [x] ", "- [X] ", "* [ ] ", "* [x] ", "* [X] ", "- ", "* ", "+ ", "> "}
+	// Emphasis is stripped only where Markdown would render it: paired markers
+	// that hug their text. "2 * 3", "a*b" and snake_case stay as written.
+	noteEmphasis = []struct {
+		pattern     *regexp.Regexp
+		replacement string
+	}{
+		{regexp.MustCompile("`([^`]+)`"), "$1"},
+		{regexp.MustCompile(`\*\*([^ \t*](?:[^*]*[^ \t*])?)\*\*`), "$1"},
+		{regexp.MustCompile(`(^|[^A-Za-z0-9_])__([^ \t_](?:[^_]*[^ \t_])?)__([^A-Za-z0-9_]|$)`), "$1$2$3"},
+		{regexp.MustCompile(`~~([^ \t~](?:[^~]*[^ \t~])?)~~`), "$1"},
+		{regexp.MustCompile(`\*([^ \t*](?:[^*]*[^ \t*])?)\*`), "$1"},
+		{regexp.MustCompile(`(^|[^A-Za-z0-9_])_([^ \t_](?:[^_]*[^ \t_])?)_([^A-Za-z0-9_]|$)`), "$1$2$3"},
+	}
 )
 
 // NotePlainText strips Markdown markers so search, MCP and CLI see readable
-// text. Code blocks keep their lines verbatim.
+// text. Code blocks keep their lines verbatim. The app mirrors this function
+// in NoteText.plainText; both must change together.
 func NotePlainText(document string) string {
 	lines := strings.Split(strings.ReplaceAll(document, "\r\n", "\n"), "\n")
 	out := make([]string, 0, len(lines))
-	inCode := false
+	fence := ""
 	for _, raw := range lines {
 		line := strings.TrimSpace(raw)
-		if strings.HasPrefix(line, "```") {
-			inCode = !inCode
+		if marker := codeFence(line); marker != "" && (fence == "" || marker == fence) {
+			if fence == "" {
+				fence = marker
+			} else {
+				fence = ""
+			}
 			continue
 		}
-		if inCode {
+		if fence != "" {
 			out = append(out, strings.TrimRight(raw, " \t"))
 			continue
 		}
@@ -291,6 +325,9 @@ func NotePlainText(document string) string {
 			continue
 		}
 		line = noteHeadingMarker.ReplaceAllString(line, "")
+		if emptyTaskMarkers[line] {
+			continue
+		}
 		for _, prefix := range noteLinePrefixes {
 			if strings.HasPrefix(line, prefix) {
 				line = strings.TrimPrefix(line, prefix)
@@ -298,9 +335,75 @@ func NotePlainText(document string) string {
 			}
 		}
 		line = noteOrderedListMarker.ReplaceAllString(line, "")
-		out = append(out, strings.TrimSpace(noteInlineMarkers.Replace(line)))
+		for _, emphasis := range noteEmphasis {
+			line = emphasis.pattern.ReplaceAllString(line, emphasis.replacement)
+		}
+		out = append(out, strings.TrimSpace(line))
 	}
 	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+func codeFence(line string) string {
+	switch {
+	case strings.HasPrefix(line, "```"):
+		return "```"
+	case strings.HasPrefix(line, "~~~"):
+		return "~~~"
+	default:
+		return ""
+	}
+}
+
+// singleLine turns a written title or summary into one clean line: control
+// characters become spaces or disappear, so a note cannot carry terminal
+// escape sequences into a CLI listing.
+func singleLine(text string) string {
+	var builder strings.Builder
+	for _, character := range text {
+		switch {
+		case character == '\t' || character == '\n' || character == '\r':
+			builder.WriteRune(' ')
+		case character < 0x20 || character == 0x7f:
+			continue
+		default:
+			builder.WriteRune(character)
+		}
+	}
+	return strings.Join(strings.Fields(builder.String()), " ")
+}
+
+// noteSnapshot is what an audit event keeps of a note: everything except the
+// derived plain text, which the document already contains.
+func noteSnapshot(note Note) map[string]any {
+	return map[string]any{
+		"id":             note.ID,
+		"title":          note.Title,
+		"title_source":   note.TitleSource,
+		"document":       note.Document,
+		"summary":        note.Summary,
+		"summary_source": note.SummarySource,
+		"archived":       note.Archived,
+		"revision":       note.Revision,
+		"updated_at":     note.UpdatedAt,
+	}
+}
+
+// noteDigest stands for the previous version in an update event. The full
+// previous document is already in the event that created that version, so
+// storing it again would double every edit in an append-only log.
+func noteDigest(note Note) map[string]any {
+	digest := sha256.Sum256([]byte(note.Document))
+	return map[string]any{
+		"id":              note.ID,
+		"title":           note.Title,
+		"title_source":    note.TitleSource,
+		"summary":         note.Summary,
+		"summary_source":  note.SummarySource,
+		"archived":        note.Archived,
+		"revision":        note.Revision,
+		"document_sha256": hex.EncodeToString(digest[:]),
+		"document_bytes":  len(note.Document),
+	}
 }
 
 // DeriveNoteTitle takes the first non-empty line, as Apple Notes does.

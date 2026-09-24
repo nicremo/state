@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/nicremo/state/internal/state"
 )
@@ -43,9 +44,18 @@ func (handler *Handler) listNotes(writer http.ResponseWriter, request *http.Requ
 		writeError(writer, state.ErrInvalidInput, nil)
 		return
 	}
+	includeArchived := false
+	if raw := request.URL.Query().Get("include_archived"); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(writer, state.ErrInvalidInput, nil)
+			return
+		}
+		includeArchived = parsed
+	}
 	notes, err := handler.state.ListNotes(request.Context(), state.NoteListOptions{
 		Query:           request.URL.Query().Get("q"),
-		IncludeArchived: request.URL.Query().Get("include_archived") == "true",
+		IncludeArchived: includeArchived,
 		Limit:           limit,
 	})
 	if err != nil {

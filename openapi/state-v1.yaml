@@ -498,7 +498,7 @@ paths:
     get:
       tags: [Notes]
       operationId: listNotes
-      description: Owner, device and harness. Newest change first. Runners receive 403.
+      description: Owner, device and harness. Newest change first. Runners receive 403, and note events are removed from the change feed and briefing they read.
       parameters:
         - { name: q, in: query, schema: { type: string }, description: Full-text query over title, summary and plain text. }
         - { name: include_archived, in: query, schema: { type: boolean, default: false } }
@@ -1212,7 +1212,9 @@ components:
       required: [id, reminder_id, action, actor, server_time, changed_fields, revision, correlation_id, client_request_id, hash, signature]
       properties:
         id: { $ref: "#/components/schemas/UUIDv7" }
-        reminder_id: { $ref: "#/components/schemas/UUIDv7" }
+        reminder_id:
+          type: string
+          description: UUIDv7 of the reminder, or an empty string for project, policy, runner and note events.
         note_id:
           $ref: "#/components/schemas/UUIDv7"
           description: Present on note events (note.created, note.updated, note.archived, note.restored), which carry no reminder.
@@ -1347,7 +1349,7 @@ components:
           items: { $ref: "#/components/schemas/Change" }
     Export:
       type: object
-      required: [api_version, generated_at, cursor, reminders]
+      required: [api_version, generated_at, cursor, reminders, notes]
       properties:
         api_version: { type: string, const: v1 }
         generated_at: { type: string, format: date-time }
@@ -1378,8 +1380,7 @@ components:
         title_source: { $ref: "#/components/schemas/NoteFieldSource" }
         document:
           type: string
-          maxLength: 262144
-          description: Canonical content as Markdown (CommonMark plus - [ ] checklists and --- dividers).
+          description: Canonical content as Markdown (CommonMark plus - [ ] checklists and --- dividers). At most 262144 UTF-8 bytes; JSON Schema maxLength counts characters, so the byte limit is enforced by the server.
         plain_text: { type: string, description: Derived text without Markdown markers, used for search. }
         summary: { type: string, maxLength: 280 }
         summary_source: { $ref: "#/components/schemas/NoteFieldSource" }
@@ -1394,7 +1395,7 @@ components:
           description: A title or a non-empty document is required.
           properties:
             title: { type: string, maxLength: 200 }
-            document: { type: string, maxLength: 262144 }
+            document: { type: string, description: At most 262144 UTF-8 bytes. }
             summary: { type: string, maxLength: 280 }
     UpdateNoteRequest:
       allOf:
@@ -1403,7 +1404,7 @@ components:
           required: [expected_revision]
           properties:
             title: { type: string, maxLength: 200, description: An empty string returns to the derived title. }
-            document: { type: string, maxLength: 262144 }
+            document: { type: string, description: At most 262144 UTF-8 bytes. }
             summary: { type: string, maxLength: 280, description: An empty string returns to the derived summary. }
             archived: { type: boolean, description: Owner and devices only. }
             expected_revision: { type: integer, format: int64, minimum: 1 }

@@ -385,6 +385,11 @@ func resolveTextInput(inlineFlag string, inlineValue string, fileFlag string, fi
 }
 
 func readReminderText(path string) (string, error) {
+	return readTextFile(path, maxReminderFileBytes)
+}
+
+// readTextFile reads a file, or stdin for "-", up to limit bytes.
+func readTextFile(path string, limit int) (string, error) {
 	var reader io.Reader
 	if path == "-" {
 		reader = os.Stdin
@@ -396,12 +401,12 @@ func readReminderText(path string) (string, error) {
 		defer file.Close()
 		reader = file
 	}
-	content, err := io.ReadAll(io.LimitReader(reader, maxReminderFileBytes+1))
+	content, err := io.ReadAll(io.LimitReader(reader, int64(limit)+1))
 	if err != nil {
 		return "", err
 	}
-	if len(content) > maxReminderFileBytes {
-		return "", fmt.Errorf("%s is larger than 64 KB", path)
+	if len(content) > limit {
+		return "", fmt.Errorf("%s is larger than %d KB", path, limit/1024)
 	}
 	return string(content), nil
 }

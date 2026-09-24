@@ -9,10 +9,14 @@ import (
 	"io"
 	"strings"
 
+	"github.com/nicremo/state/internal/state"
 	"github.com/nicremo/state/internal/statectl"
 )
 
 const noteUsage = "usage: statectl note <list|show|create|update>"
+
+// maxNoteDocumentBytes is the server's limit, not the smaller reminder one.
+const maxNoteDocumentBytes = state.MaxNoteDocumentBytes
 
 func runNote(args []string, stdout io.Writer, stderr io.Writer) error {
 	if len(args) == 0 {
@@ -107,7 +111,7 @@ func runNoteCreate(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	document := ""
 	if *documentFile != "" {
-		text, err := readReminderText(*documentFile)
+		text, err := readTextFile(*documentFile, maxNoteDocumentBytes)
 		if err != nil {
 			return err
 		}
@@ -152,7 +156,7 @@ func runNoteUpdate(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	options := statectl.UpdateNoteOptions{NoteID: *noteID, SourceText: *sourceText, RequestID: *requestID, Title: title.value, Summary: summary.value}
 	if *documentFile != "" {
-		text, err := readReminderText(*documentFile)
+		text, err := readTextFile(*documentFile, maxNoteDocumentBytes)
 		if err != nil {
 			return err
 		}
@@ -205,7 +209,7 @@ func writeStoredNote(stdout io.Writer, stored statectl.StoredNote, raw json.RawM
 	if asJSON {
 		return writeIndentedJSON(stdout, raw)
 	}
-	_, err := fmt.Fprintf(stdout, "stored note %s %q\n", stored.ID, stored.Title)
+	_, err := fmt.Fprintf(stdout, "stored note %s %q\n", stored.ID, terminalSafe(stored.Title))
 	return err
 }
 
@@ -221,9 +225,9 @@ func writeNoteList(stdout io.Writer, raw json.RawMessage) error {
 		return err
 	}
 	for _, note := range list.Notes {
-		line := fmt.Sprintf("%s %q", note.ID, note.Title)
+		line := fmt.Sprintf("%s %q", note.ID, terminalSafe(note.Title))
 		if note.Summary != "" {
-			line += "  " + note.Summary
+			line += "  " + terminalSafe(note.Summary)
 		}
 		if _, err := fmt.Fprintln(stdout, line); err != nil {
 			return err
@@ -244,6 +248,20 @@ func writeNoteDetail(stdout io.Writer, raw json.RawMessage) error {
 		return fmt.Errorf("decode note: %w", err)
 	}
 	_, err := fmt.Fprintf(stdout, "note %s %q, revision %d, %d events\n\n%s\n",
-		detail.Note.ID, detail.Note.Title, detail.Note.Revision, len(detail.History), strings.TrimRight(detail.Note.Document, "\n"))
+		detail.Note.ID, terminalSafe(detail.Note.Title), detail.Note.Revision, len(detail.History), terminalSafe(strings.TrimRight(detail.Note.Document, "\n")))
 	return err
+}
+
+// terminalSafe removes control characters except line breaks and tabs, so a
+// note written by an agent cannot drive the terminal with escape sequences.
+func terminalSafe(text string) string {
+	return strings.Map(func(character rune) rune {
+		if character == '\n' || character == '\t' {
+			return character
+		}
+		if character < 0x20 || character == 0x7f || (character >= 0x80 && character < 0xa0) {
+			return -1
+		}
+		return character
+	}, text)
 }

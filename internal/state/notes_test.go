@@ -290,3 +290,99 @@ func TestDeriveNoteSummaryIsBounded(t *testing.T) {
 		t.Fatalf("summary length %d: %q", len([]rune(summary)), summary)
 	}
 }
+
+func TestUpdateNoteRetryReturnsTheStoredResult(t *testing.T) {
+	t.Parallel()
+	service, repository, _ := newNoteService(t)
+	note, _ := service.CreateNote(context.Background(), noteOwner, CreateNoteInput{Document: "A", ClientRequestID: "01989d45-2222-7000-8000-000000000001"})
+	document := "B"
+	input := UpdateNoteInput{Document: &document, ExpectedRevision: 1, ClientRequestID: "01989d45-2222-7000-8000-000000000002"}
+	first, err := service.UpdateNote(context.Background(), noteOwner, note.ID, input)
+	if err != nil {
+		t.Fatalf("first update error = %v", err)
+	}
+	retried, err := service.UpdateNote(context.Background(), noteOwner, note.ID, input)
+	if err != nil || retried.Revision != first.Revision || retried.Document != "B" {
+		t.Fatalf("retry = %#v, %v; want the stored revision 2", retried, err)
+	}
+	events, _ := repository.ListNoteAuditEvents(context.Background(), note.ID)
+	if len(events) != 2 {
+		t.Fatalf("retry wrote another event: %d", len(events))
+	}
+}
+
+func TestNoteAuditSnapshotsStayBounded(t *testing.T) {
+	t.Parallel()
+	service, repository, _ := newNoteService(t)
+	big := "# Gross\n" + strings.Repeat("wort ", 20000)
+	note, _ := service.CreateNote(context.Background(), noteOwner, CreateNoteInput{Document: big, ClientRequestID: "01989d45-2222-7000-8000-000000000003"})
+	changed := big + "\nneu"
+	if _, err := service.UpdateNote(context.Background(), noteOwner, note.ID, UpdateNoteInput{Document: &changed, ExpectedRevision: 1, ClientRequestID: "01989d45-2222-7000-8000-000000000004"}); err != nil {
+		t.Fatalf("update error = %v", err)
+	}
+	events, _ := repository.ListNoteAuditEvents(context.Background(), note.ID)
+	for _, event := range events {
+		if strings.Contains(string(event.AfterSnapshot), "plain_text") || strings.Contains(string(event.BeforeSnapshot), "plain_text") {
+			t.Fatalf("snapshot carries the derived plain text")
+		}
+		if len(event.BeforeSnapshot) > 2048 {
+			t.Fatalf("before snapshot holds the document again: %d bytes", len(event.BeforeSnapshot))
+		}
+		if !strings.Contains(string(event.AfterSnapshot), "neu") && event.Action == AuditActionNoteUpdated {
+			t.Fatalf("after snapshot lost the new document")
+		}
+	}
+}
+
+func TestNotesNeedAReadableTitle(t *testing.T) {
+	t.Parallel()
+	service, _, _ := newNoteService(t)
+	for index, document := range []string{"---", "```\n```", "***", "#"} {
+		_, err := service.CreateNote(context.Background(), noteOwner, CreateNoteInput{Document: document, ClientRequestID: "01989d45-2222-7000-8000-00000000010" + string(rune('0'+index))})
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("document %q error = %v, want ErrInvalidInput", document, err)
+		}
+	}
+}
+
+func TestNoteTitlesDropControlCharacters(t *testing.T) {
+	t.Parallel()
+	service, _, _ := newNoteService(t)
+	note, err := service.CreateNote(context.Background(), noteOwner, CreateNoteInput{
+		Title: "line1\nline2\x1b[31m", Summary: "a\tb\x07", Document: "x", ClientRequestID: "01989d45-2222-7000-8000-000000000020",
+	})
+	if err != nil {
+		t.Fatalf("CreateNote() error = %v", err)
+	}
+	if note.Title != "line1 line2[31m" || note.Summary != "a b" {
+		t.Fatalf("title %q summary %q", note.Title, note.Summary)
+	}
+}
+
+func TestNoteUpdateNeedsARevision(t *testing.T) {
+	t.Parallel()
+	service, _, _ := newNoteService(t)
+	note, _ := service.CreateNote(context.Background(), noteOwner, CreateNoteInput{Document: "A", ClientRequestID: "01989d45-2222-7000-8000-000000000030"})
+	document := "B"
+	if _, err := service.UpdateNote(context.Background(), noteOwner, note.ID, UpdateNoteInput{Document: &document, ClientRequestID: "01989d45-2222-7000-8000-000000000031"}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("missing revision error = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestNotePlainTextKeepsOrdinaryCharacters(t *testing.T) {
+	t.Parallel()
+	cases := map[string]string{
+		"2 * 3 = 6 and a*b":             "2 * 3 = 6 and a*b",
+		"snake_case_name":               "snake_case_name",
+		"*kursiv* und **fett**":         "kursiv und fett",
+		"_kursiv_ und __fett__":         "kursiv und fett",
+		"~~alt~~ und `code`":            "alt und code",
+		"~~~\n# keine Überschrift\n~~~": "# keine Überschrift",
+		"#":                             "",
+	}
+	for input, want := range cases {
+		if got := NotePlainText(input); got != want {
+			t.Errorf("NotePlainText(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

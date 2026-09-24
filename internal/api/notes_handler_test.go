@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/nicremo/state/internal/state"
@@ -137,5 +138,60 @@ func TestExportIncludesNotesAndSkipsEventsWithoutReminder(t *testing.T) {
 	decodeResponse(t, exportResponse, &exported)
 	if len(exported.Notes) != 1 || exported.Notes[0].Note.ID != note.ID || len(exported.Notes[0].History) != 1 {
 		t.Fatalf("exported notes = %#v", exported.Notes)
+	}
+}
+
+func TestRunnersSeeNoNoteContentInChangesOrBriefing(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+	owner := bootstrapOwner(t, handler)
+	runner := pairActor(t, handler, owner.Token, map[string]any{"kind": "runner", "display_name": "Mac mini"})
+	performJSONRequest(t, handler, http.MethodPost, "/api/v1/notes", owner.Token, map[string]any{
+		"document":          "# Geheim\nTOPSECRET-NOTE-CONTENT",
+		"client_request_id": requestID(t),
+	})
+
+	for _, path := range []string{"/api/v1/changes?after=0", "/api/v1/briefing"} {
+		response := performJSONRequest(t, handler, http.MethodGet, path, runner.Token, nil)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status = %d", path, response.Code)
+		}
+		if strings.Contains(response.Body.String(), "TOPSECRET") || strings.Contains(response.Body.String(), "note_id") {
+			t.Fatalf("%s leaked note data to a runner: %s", path, response.Body.String())
+		}
+	}
+	ownerChanges := performJSONRequest(t, handler, http.MethodGet, "/api/v1/changes?after=0", owner.Token, nil)
+	if !strings.Contains(ownerChanges.Body.String(), "note_id") {
+		t.Fatal("the owner lost note events in the change feed")
+	}
+}
+
+func TestNotesListParsesIncludeArchivedLikeABoolean(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+	owner := bootstrapOwner(t, handler)
+	createResponse := performJSONRequest(t, handler, http.MethodPost, "/api/v1/notes", owner.Token, map[string]any{
+		"document": "Alt", "client_request_id": requestID(t),
+	})
+	var note state.Note
+	decodeResponse(t, createResponse, &note)
+	performJSONRequest(t, handler, http.MethodPatch, "/api/v1/notes/"+note.ID, owner.Token, map[string]any{
+		"archived": true, "expected_revision": 1, "client_request_id": requestID(t),
+	})
+	for _, value := range []string{"1", "TRUE", "true"} {
+		response := performJSONRequest(t, handler, http.MethodGet, "/api/v1/notes?include_archived="+value, owner.Token, nil)
+		if !strings.Contains(response.Body.String(), note.ID) {
+			t.Fatalf("include_archived=%s hid the archived note", value)
+		}
+	}
+	if response := performJSONRequest(t, handler, http.MethodGet, "/api/v1/notes?include_archived=vielleicht", owner.Token, nil); response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid include_archived status = %d", response.Code)
+	}
+	if response := performJSONRequest(t, handler, http.MethodPatch, "/api/v1/notes/"+note.ID, owner.Token, map[string]any{
+		"document": "x", "client_request_id": requestID(t),
+	}); response.Code != http.StatusBadRequest {
+		t.Fatalf("missing expected_revision status = %d, want 400", response.Code)
 	}
 }

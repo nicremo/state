@@ -1,0 +1,86 @@
+[
+  {
+    "document": "# Einkauf\n\nMilch und **Brot** holen.\n- [ ] Eier",
+    "plain_text": "Einkauf\n\nMilch und Brot holen.\nEier",
+    "title": "Einkauf",
+    "summary": "Milch und Brot holen. Eier"
+  },
+  {
+    "document": "Erste Zeile\nZweite Zeile",
+    "plain_text": "Erste Zeile\nZweite Zeile",
+    "title": "Erste Zeile",
+    "summary": "Zweite Zeile"
+  },
+  {
+    "document": "## Plan\n1. `go test` *jetzt*\n- [x] erledigt\n---\n\u003e Zitat\n```\n# code\n```",
+    "plain_text": "Plan\ngo test jetzt\nerledigt\nZitat\n# code",
+    "title": "Plan",
+    "summary": "go test jetzt erledigt Zitat # code"
+  },
+  {
+    "document": "2 * 3 = 6 and a*b",
+    "plain_text": "2 * 3 = 6 and a*b",
+    "title": "2 * 3 = 6 and a*b",
+    "summary": ""
+  },
+  {
+    "document": "snake_case_name and __fett__ and _kursiv_",
+    "plain_text": "snake_case_name and fett and kursiv",
+    "title": "snake_case_name and fett and kursiv",
+    "summary": ""
+  },
+  {
+    "document": "~~~\n# keine Überschrift\n~~~\nText danach",
+    "plain_text": "# keine Überschrift\nText danach",
+    "title": "# keine Überschrift",
+    "summary": "Text danach"
+  },
+  {
+    "document": "#hashtag bleibt\nzweite",
+    "plain_text": "#hashtag bleibt\nzweite",
+    "title": "#hashtag bleibt",
+    "summary": "zweite"
+  },
+  {
+    "document": "~**~ seltsam",
+    "plain_text": "~**~ seltsam",
+    "title": "~**~ seltsam",
+    "summary": ""
+  },
+  {
+    "document": "١. arabische Ziffer\n# kein Leerzeichen",
+    "plain_text": "١. arabische Ziffer\n# kein Leerzeichen",
+    "title": "١. arabische Ziffer",
+    "summary": "# kein Leerzeichen"
+  },
+  {
+    "document": "Titel\r\nmit CRLF\r\n- [ ] Aufgabe",
+    "plain_text": "Titel\nmit CRLF\nAufgabe",
+    "title": "Titel",
+    "summary": "mit CRLF Aufgabe"
+  },
+  {
+    "document": "   eingerückt   \n\n\n  zweite  ",
+    "plain_text": "eingerückt\n\n\nzweite",
+    "title": "eingerückt",
+    "summary": "zweite"
+  },
+  {
+    "document": "Ein sehr langer erster Satz mit Umlauten äöü und Emoji 👨‍👩‍👧‍👦 der weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht\nkurz",
+    "plain_text": "Ein sehr langer erster Satz mit Umlauten äöü und Emoji 👨‍👩‍👧‍👦 der weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht\nkurz",
+    "title": "Ein sehr langer erster Satz mit Umlauten äöü und Emoji 👨‍👩‍👧‍👦 der weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weit…",
+    "summary": "kurz"
+  },
+  {
+    "document": "Titel\nZusammenfassung mit vielen Wörtern die über die Grenze hinausgeht damit abgeschnitten wird und ein Auslassungszeichen am Ende steht, das ist wichtig für die Liste in der App und die CLI Ausgabe gleichermaßen",
+    "plain_text": "Titel\nZusammenfassung mit vielen Wörtern die über die Grenze hinausgeht damit abgeschnitten wird und ein Auslassungszeichen am Ende steht, das ist wichtig für die Liste in der App und die CLI Ausgabe gleichermaßen",
+    "title": "Titel",
+    "summary": "Zusammenfassung mit vielen Wörtern die über die Grenze hinausgeht damit abgeschnitten wird und ein Auslassungszeichen am Ende steht, das ist wichtig für die Li…"
+  },
+  {
+    "document": "- [ ]\n- [x] leer davor",
+    "plain_text": "leer davor",
+    "title": "leer davor",
+    "summary": ""
+  }
+]

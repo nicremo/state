@@ -122,6 +122,15 @@ func (repository *PocketBaseRepository) UpdateNote(_ context.Context, note state
 	return result, nil
 }
 
+func (repository *PocketBaseRepository) LookupNoteRequest(_ context.Context, clientRequestID string, actorID string) (state.Note, bool, error) {
+	var note state.Note
+	_, found, err := lookupIdempotentValue(repository.app, clientRequestID, actorID, "note", &note)
+	if err != nil || !found {
+		return state.Note{}, false, err
+	}
+	return note, true, nil
+}
+
 func (repository *PocketBaseRepository) GetNote(_ context.Context, noteID string) (state.Note, error) {
 	return getNote(repository.app, noteID)
 }

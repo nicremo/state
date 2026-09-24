@@ -96,3 +96,39 @@ func TestMCPNoteToolsRejectRunners(t *testing.T) {
 		t.Fatalf("runner search_notes = %#v", result)
 	}
 }
+
+func TestMCPCreateNoteAcceptsATitleWithoutDocument(t *testing.T) {
+	t.Parallel()
+
+	fixture := newTestMCPFixture(t)
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", fixture.handler)
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	session := connectToolSession(t, server.URL+"/mcp", fixture.pairHarness(t, "codex", "Codex", "MacBook"))
+
+	created := callTool(t, session, "create_note", map[string]any{
+		"title":             "Nur ein Titel",
+		"client_request_id": "01989f08-2222-7000-8000-000000000010",
+		"source_text":       "Notiz nur mit Titel",
+	})
+	noteID := created["note"].(map[string]any)["id"].(string)
+	for index := 0; index < 60; index++ {
+		title := "Titel " + string(rune('A'+index%26)) + string(rune('a'+index/26))
+		callTool(t, session, "update_note", map[string]any{
+			"note_id":           noteID,
+			"expected_revision": index + 1,
+			"title":             title,
+			"client_request_id": "01989f08-3333-7000-8000-0000000" + string(rune('a'+index/26)) + string(rune('a'+index%26)) + "000",
+			"source_text":       "Umbenennen",
+		})
+	}
+	detail := callTool(t, session, "get_note", map[string]any{"note_id": noteID})
+	history := detail["history"].([]any)
+	if len(history) > 50 {
+		t.Fatalf("get_note returned %d history events, want at most 50", len(history))
+	}
+	if _, hasSnapshot := history[0].(map[string]any)["after_snapshot"]; hasSnapshot {
+		t.Fatal("get_note history carries full snapshots into the agent context")
+	}
+}

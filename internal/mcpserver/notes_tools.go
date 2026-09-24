@@ -19,7 +19,7 @@ type getNoteInput struct {
 
 type createNoteInput struct {
 	Title           string `json:"title,omitempty" jsonschema:"Optional title. Leave empty to use the first line of the document."`
-	Document        string `json:"document" jsonschema:"Note content as Markdown: headings, lists, - [ ] checklists, --- dividers. Never include secrets."`
+	Document        string `json:"document,omitempty" jsonschema:"Note content as Markdown: headings, lists, - [ ] checklists, --- dividers. Never include secrets."`
 	ClientRequestID string `json:"client_request_id" jsonschema:"Stable UUIDv7 for idempotent retries."`
 	SourceText      string `json:"source_text" jsonschema:"Relevant original user wording that caused this write."`
 	CorrelationID   string `json:"correlation_id,omitempty" jsonschema:"Optional UUIDv7 shared by related actions."`
@@ -111,7 +111,7 @@ func (server *server) getNote(ctx context.Context, request *mcp.CallToolRequest,
 	if err != nil {
 		return nil, nil, err
 	}
-	return nil, map[string]any{"note": note, "history": history}, nil
+	return nil, map[string]any{"note": note, "history": compactNoteHistory(history)}, nil
 }
 
 func (server *server) createNote(ctx context.Context, request *mcp.CallToolRequest, input createNoteInput) (*mcp.CallToolResult, any, error) {
@@ -154,4 +154,35 @@ func (server *server) updateNote(ctx context.Context, request *mcp.CallToolReque
 	}
 	server.notifySync(ctx, actor.ID)
 	return nil, map[string]any{"stored": true, "note": note}, nil
+}
+
+// maxNoteHistoryForAgents bounds what get_note puts into an agent's context.
+// The full chain, snapshots included, stays available over REST.
+const maxNoteHistoryForAgents = 50
+
+type noteHistoryItem struct {
+	Action        state.AuditAction `json:"action"`
+	Actor         state.Actor       `json:"actor"`
+	ServerTime    time.Time         `json:"server_time"`
+	SourceExcerpt string            `json:"source_excerpt,omitempty"`
+	ChangedFields []string          `json:"changed_fields"`
+	Revision      int64             `json:"revision"`
+}
+
+func compactNoteHistory(events []state.AuditEvent) []noteHistoryItem {
+	if len(events) > maxNoteHistoryForAgents {
+		events = events[len(events)-maxNoteHistoryForAgents:]
+	}
+	items := make([]noteHistoryItem, 0, len(events))
+	for _, event := range events {
+		items = append(items, noteHistoryItem{
+			Action:        event.Action,
+			Actor:         event.Actor,
+			ServerTime:    event.ServerTime,
+			SourceExcerpt: event.SourceExcerpt,
+			ChangedFields: event.ChangedFields,
+			Revision:      event.Revision,
+		})
+	}
+	return items
 }

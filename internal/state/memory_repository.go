@@ -35,6 +35,7 @@ type MemoryRepository struct {
 	requestRuns        map[string]AgentRun
 	notes              map[string]Note
 	requestNotes       map[string]Note
+	requestNoteActors  map[string]string
 	auditChain         []AuditEvent
 	lastAuditHash      string
 	signingKey         ed25519.PrivateKey
@@ -60,6 +61,7 @@ func NewMemoryRepository() *MemoryRepository {
 		requestRuns:        make(map[string]AgentRun),
 		notes:              make(map[string]Note),
 		requestNotes:       make(map[string]Note),
+		requestNoteActors:  make(map[string]string),
 		signingKey:         ed25519.NewKeyFromSeed(seed[:]),
 	}
 }
@@ -928,6 +930,7 @@ func (repository *MemoryRepository) CreateNote(_ context.Context, note Note, eve
 	}
 	repository.appendAuditEvent(event)
 	repository.notes[note.ID] = note
+	repository.requestNoteActors[clientRequestID] = event.Actor.ID
 	repository.requestNotes[clientRequestID] = note
 	return note, nil
 }
@@ -949,7 +952,24 @@ func (repository *MemoryRepository) UpdateNote(_ context.Context, note Note, exp
 	repository.appendAuditEvent(event)
 	repository.notes[note.ID] = note
 	repository.requestNotes[clientRequestID] = note
+	repository.requestNoteActors[clientRequestID] = event.Actor.ID
 	return note, nil
+}
+
+// LookupNoteRequest mirrors the PocketBase idempotency table: a request ID
+// belongs to the actor that used it first.
+func (repository *MemoryRepository) LookupNoteRequest(_ context.Context, clientRequestID string, actorID string) (Note, bool, error) {
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+
+	note, ok := repository.requestNotes[clientRequestID]
+	if !ok {
+		return Note{}, false, nil
+	}
+	if repository.requestNoteActors[clientRequestID] != actorID {
+		return Note{}, false, ErrForbidden
+	}
+	return note, true, nil
 }
 
 func (repository *MemoryRepository) GetNote(_ context.Context, noteID string) (Note, error) {

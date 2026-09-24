@@ -59,6 +59,7 @@ type Repository interface {
 	GetNote(context.Context, string) (Note, error)
 	ListNotes(context.Context, NoteListOptions) ([]Note, error)
 	ListNoteAuditEvents(context.Context, string) ([]AuditEvent, error)
+	LookupNoteRequest(ctx context.Context, clientRequestID string, actorID string) (Note, bool, error)
 }
 
 type Service struct {
