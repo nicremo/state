@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ (conflict copy)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (Konfliktkopie)"
+          }
+        }
+      }
+    },
     "%@ Agent" : {
       "localizations" : {
         "de" : {
@@ -3527,6 +3537,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dein Server, deine Daten"
+          }
+        }
+      }
+    },
+    "demo.note.document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Ideen für das Wochenende\nDie Notizen in State sind eine flache Liste ohne Ordner. Die erste Zeile wird zum Titel.\n\n- [x] Notizen-Tab ausprobieren\n- [ ] Eine eigene Notiz anlegen\n- [ ] Einen Agenten eine Notiz schreiben lassen\n\n---\n\nAgenten lesen Notizen über `search_notes` und `get_note`."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Ideas for the weekend\nNotes in State are one flat list without folders. The first line becomes the title.\n\n- [x] Try the Notes tab\n- [ ] Write a note of your own\n- [ ] Let an agent write a note\n\n---\n\nAgents read notes through `search_notes` and `get_note`."
           }
         }
       }

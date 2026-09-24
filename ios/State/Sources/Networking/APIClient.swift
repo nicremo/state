@@ -3,8 +3,16 @@ import Foundation
 protocol StateAPI: Sendable {
     func getChanges(after: Int64, limit: Int) async throws -> ChangesResponse
     func getReminder(id: String) async throws -> ReminderDetail
+    func getNote(id: String) async throws -> Note
     func send(mutation: PendingMutation) async throws -> Data
     func confirmOccurrences(_ identifiers: [String]) async throws
+}
+
+extension StateAPI {
+    /// Clients that predate notes, and test doubles, have no notes to serve.
+    func getNote(id: String) async throws -> Note {
+        throw StateAPIError.notFound
+    }
 }
 
 enum StateAPIError: Error, LocalizedError, Sendable {
@@ -61,6 +69,11 @@ actor APIClient: StateAPI {
     func getReminder(id: String) async throws -> ReminderDetail {
         let data = try await request(path: "/api/v1/reminders/\(id)")
         return try StateJSON.decoder.decode(ReminderDetail.self, from: data)
+    }
+
+    func getNote(id: String) async throws -> Note {
+        let data = try await request(path: "/api/v1/notes/\(id)")
+        return try StateJSON.decoder.decode(Note.self, from: data)
     }
 
     func send(mutation: PendingMutation) async throws -> Data {
