@@ -110,8 +110,8 @@ enum NoteText {
             if ["---", "***", "___"].contains(line) { continue }
             line = replace(headingMarker, in: line, with: "")
             if emptyTaskMarkers.contains(line) { continue }
-            for prefix in linePrefixes where line.hasPrefix(prefix) {
-                line.removeFirst(prefix.count)
+            for prefix in linePrefixes where hasScalarPrefix(line, prefix) {
+                line = String(String.UnicodeScalarView(line.unicodeScalars.dropFirst(prefix.unicodeScalars.count)))
                 break
             }
             line = replace(orderedListMarker, in: line, with: "")
@@ -125,7 +125,7 @@ enum NoteText {
 
     static func title(_ document: String) -> String {
         guard let first = lines(plainText(document)).first else { return "" }
-        return truncate(first, to: titleLimit)
+        return truncate(singleLine(first), to: titleLimit)
     }
 
     static func summary(_ document: String) -> String {
@@ -133,7 +133,31 @@ enum NoteText {
     }
 
     static func summarize(_ lines: [String]) -> String {
-        truncate(lines.joined(separator: " "), to: summaryLimit)
+        truncate(singleLine(lines.joined(separator: " ")), to: summaryLimit)
+    }
+
+    /// Go's singleLine: tabs and line breaks become spaces, other control
+    /// characters disappear, and runs of spaces collapse like strings.Fields.
+    static func singleLine(_ text: String) -> String {
+        var cleaned = String.UnicodeScalarView()
+        for scalar in text.unicodeScalars {
+            switch scalar.value {
+            case 0x09, 0x0A, 0x0D: cleaned.append(" ")
+            case 0x00..<0x20, 0x7F: continue
+            default: cleaned.append(scalar)
+            }
+        }
+        var words: [String] = []
+        var current = String.UnicodeScalarView()
+        for scalar in cleaned {
+            if isGoSpace(scalar) {
+                if !current.isEmpty { words.append(String(current)); current = String.UnicodeScalarView() }
+            } else {
+                current.append(scalar)
+            }
+        }
+        if !current.isEmpty { words.append(String(current)) }
+        return words.joined(separator: " ")
     }
 
     static func lines(_ text: String) -> [String] {
@@ -166,9 +190,15 @@ enum NoteText {
     }
 
     private static func codeFence(_ line: String) -> String? {
-        if line.hasPrefix("```") { return "```" }
-        if line.hasPrefix("~~~") { return "~~~" }
+        if hasScalarPrefix(line, "```") { return "```" }
+        if hasScalarPrefix(line, "~~~") { return "~~~" }
         return nil
+    }
+
+    /// Prefix test on Unicode scalars, as Go compares bytes. Swift's hasPrefix
+    /// compares characters, so "- " followed by a combining mark would not match.
+    private static func hasScalarPrefix(_ text: String, _ prefix: String) -> Bool {
+        text.unicodeScalars.starts(with: prefix.unicodeScalars)
     }
 
     /// Go's strings.TrimSpace, which trims what unicode.IsSpace reports.

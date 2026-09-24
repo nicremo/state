@@ -10,13 +10,14 @@ enum NoteEditing {
         let line = lines[index]
         let indentation = line.prefix { $0 == " " || $0 == "\t" }
         let rest = line.dropFirst(indentation.count)
-        for (open, done) in [("- [ ] ", "- [x] "), ("* [ ] ", "* [x] ")] {
-            if rest.hasPrefix(open) {
-                lines[index] = indentation + done + rest.dropFirst(open.count)
-                return lines.joined(separator: "\n")
-            }
-            if rest.hasPrefix(done) || rest.hasPrefix(done.replacingOccurrences(of: "x", with: "X")) {
-                lines[index] = indentation + open + rest.dropFirst(done.count)
+        // Matched without the trailing space, so an empty item "- [ ]" flips too.
+        let trailing = rest.hasSuffix("\r") ? "\r" : ""
+        let body = trailing.isEmpty ? Substring(rest) : rest.dropLast()
+        for (open, done) in [("- [ ]", "- [x]"), ("* [ ]", "* [x]")] {
+            let doneUpper = done.replacingOccurrences(of: "x", with: "X")
+            for (from, to) in [(open, done), (done, open), (doneUpper, open)]
+                where body == from || body.hasPrefix(from + " ") {
+                lines[index] = indentation + to + body.dropFirst(from.count) + trailing
                 return lines.joined(separator: "\n")
             }
         }

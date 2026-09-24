@@ -22,6 +22,7 @@ enum MarkdownBlocks {
         var blocks: [MarkdownBlock] = []
         var paragraph: [String] = []
         var code: [String]?
+        var codeFence: String?
 
         func flushParagraph() {
             let text = paragraph.joined(separator: " ").trimmingCharacters(in: .whitespaces)
@@ -32,13 +33,15 @@ enum MarkdownBlocks {
         for (index, rawLine) in source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n").enumerated() {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
 
-            if line.hasPrefix("```") {
+            if let marker = fenceMarker(line), codeFence == nil || codeFence == marker {
                 if let lines = code {
                     blocks.append(.code(lines.joined(separator: "\n")))
                     code = nil
+                    codeFence = nil
                 } else {
                     flushParagraph()
                     code = []
+                    codeFence = marker
                 }
                 continue
             }
@@ -73,6 +76,13 @@ enum MarkdownBlocks {
         }
         flushParagraph()
         return blocks
+    }
+
+    /// Both fence styles; a block ends only with its own kind of fence.
+    private static func fenceMarker(_ line: String) -> String? {
+        if line.hasPrefix("```") { return "```" }
+        if line.hasPrefix("~~~") { return "~~~" }
+        return nil
     }
 
     private static func heading(_ line: String) -> MarkdownBlock? {

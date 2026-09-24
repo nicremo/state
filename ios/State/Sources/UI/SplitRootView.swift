@@ -9,6 +9,11 @@ struct SplitRootView: View {
     @State private var section: StateTab? = .today
     @State private var selectedReminderID: String?
     @State private var selectedNoteID: String?
+    /// Identity of the note detail. It changes when the owner picks another
+    /// note, not when a note being written gets its first identifier, so the
+    /// open editor survives that moment.
+    @State private var noteDetailKey = UUID()
+    @State private var revealingCreatedNote = false
     @State private var opensNotificationSettings = false
     @State private var opensEditor = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -66,7 +71,14 @@ struct SplitRootView: View {
             windowWidth = width
         }
         .onChange(of: selectedReminderID) { _, selection in revealDetail(for: selection) }
-        .onChange(of: selectedNoteID) { _, selection in revealDetail(for: selection) }
+        .onChange(of: selectedNoteID) { _, selection in
+            if revealingCreatedNote {
+                revealingCreatedNote = false
+            } else {
+                noteDetailKey = UUID()
+                revealDetail(for: selection)
+            }
+        }
         .onChange(of: section) { _, _ in
             selectedReminderID = nil
             selectedNoteID = nil
@@ -109,11 +121,14 @@ struct SplitRootView: View {
                 NoteDetailView(
                     model: model,
                     noteID: selectedNoteID == NoteRoute.newSelection ? nil : selectedNoteID,
-                    onCreate: { created in self.selectedNoteID = created },
+                    onCreate: { created in
+                        revealingCreatedNote = true
+                        self.selectedNoteID = created
+                    },
                     onClose: { self.selectedNoteID = nil }
                 )
             }
-            .id(selectedNoteID)
+            .id(noteDetailKey)
         } else {
             ContentUnavailableView(String(localized: "Select a note"), systemImage: "note.text")
         }

@@ -17,12 +17,18 @@ struct NoteDetailView: View {
     /// The note as the editor found it, or as it was last saved from here.
     @State private var editBase: Note?
     @State private var isSaving = false
+    @State private var pendingSave: PendingSave?
     @State private var selection: TextSelection?
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
     private enum Field { case title, body }
+
+    private struct PendingSave {
+        let reveal: Bool
+        let isFinal: Bool
+    }
 
     init(model: AppModel, noteID: String?, onCreate: ((String) -> Void)? = nil, onClose: (() -> Void)? = nil) {
         self.model = model
@@ -57,11 +63,12 @@ struct NoteDetailView: View {
             guard isEditing else { return }
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
-            await save(reveal: false)
+            // The save itself must not be cancelled by the next keystroke.
+            Task { await save(reveal: true, isFinal: false) }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active, isEditing {
-                Task { await save(reveal: false) }
+                Task { await save(reveal: true, isFinal: false) }
             }
         }
         .onChange(of: titleDraft) { _, title in
@@ -70,7 +77,7 @@ struct NoteDetailView: View {
         }
         .onDisappear {
             if isEditing {
-                Task { await save(reveal: false) }
+                Task { await save(reveal: false, isFinal: true) }
             }
         }
     }
@@ -311,7 +318,7 @@ struct NoteDetailView: View {
 
     private func finishEditing() async {
         let wasArchived = currentNote?.archived ?? false
-        await save(reveal: true)
+        await save(reveal: true, isFinal: true)
         focus = nil
         if noteID == nil || currentNote == nil || (currentNote?.archived == true && !wasArchived) {
             // Nothing was written, or the emptied note was archived.
@@ -331,12 +338,21 @@ struct NoteDetailView: View {
     }
 
     /// Writes the drafts. New notes are created on the first save that has
-    /// something to keep; later saves edit that note. Saves never overlap, so
-    /// a slow first save cannot create the note twice.
-    private func save(reveal: Bool) async {
+    /// something to keep; later saves edit that note. Saves never overlap:
+    /// a save requested while one runs is carried out right after it, with
+    /// the text as it is then, so nothing typed in between is dropped.
+    private func save(reveal: Bool, isFinal: Bool) async {
+        pendingSave = PendingSave(reveal: reveal || pendingSave?.reveal == true, isFinal: isFinal || pendingSave?.isFinal == true)
         guard !isSaving else { return }
         isSaving = true
         defer { isSaving = false }
+        while let request = pendingSave {
+            pendingSave = nil
+            await performSave(reveal: request.reveal, isFinal: request.isFinal)
+        }
+    }
+
+    private func performSave(reveal: Bool, isFinal: Bool) async {
         let title = titleDraft
         let document = documentDraft
 
@@ -351,18 +367,21 @@ struct NoteDetailView: View {
         let unchanged = document == base.document
             && (title.isEmpty ? base.titleSource == Note.derivedSource : title == base.title && base.titleSource == Note.userSource)
         guard !unchanged else { return }
-        switch await model.saveNote(id: noteID, title: title, document: document, base: base) {
+        switch await model.saveNote(id: noteID, title: title, document: document, base: base, isFinal: isFinal) {
         case let .saved(note):
             editBase = note
         case let .savedAsCopy(copyID):
             // The note changed elsewhere; keep editing the copy that holds
-            // this text so further typing does not create more copies.
+            // this text, under its own title, so further typing neither
+            // creates more copies nor strips the conflict mark.
             self.noteID = copyID
-            editBase = model.note(id: copyID)
+            let copy = model.note(id: copyID)
+            editBase = copy
+            titleDraft = copy?.title ?? titleDraft
             if reveal { onCreate?(copyID) }
         case .archivedEmpty:
             editBase = model.note(id: noteID)
-        case .rejected:
+        case .skipped, .rejected:
             break
         }
     }

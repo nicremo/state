@@ -109,4 +109,14 @@ final class NoteMarkdownTests: XCTestCase {
         let (result, _) = NoteEditing.wrap("**", in: text, range: range)
         XCTAssertEqual(result, "ein **wichtiges** Wort")
     }
+
+    func testAnEmptyChecklistItemCanBeTicked() {
+        XCTAssertEqual(NoteEditing.toggleTask(atLine: 1, in: "Liste\n- [ ]"), "Liste\n- [x]")
+        XCTAssertEqual(NoteEditing.toggleTask(atLine: 0, in: "- [X] fertig"), "- [ ] fertig")
+        XCTAssertEqual(NoteEditing.toggleTask(atLine: 0, in: "- [ ] a\r\nb"), "- [x] a\r\nb")
+    }
+
+    func testTildeFencesKeepChecklistsInsideAsCode() {
+        XCTAssertEqual(MarkdownBlocks.parse("~~~\n- [ ] kein Häkchen\n~~~"), [.code("- [ ] kein Häkchen")])
+    }
 }

@@ -8,6 +8,8 @@ enum NoteSaveOutcome: Sendable, Equatable {
     case savedAsCopy(String)
     /// Title and text were cleared, which archives the note.
     case archivedEmpty
+    /// Nothing to write yet, such as an empty moment while typing.
+    case skipped
     case rejected
 }
 
@@ -54,6 +56,7 @@ final class AppModel {
     private(set) var noteAliases: [String: String] = [:]
     private(set) var noteSyncErrors: [String: String] = [:]
     private var pendingNoteSync: Task<Void, Never>?
+    private var needsAnotherSync = false
     private(set) var activity: [AuditEvent] = []
     private(set) var conflicts: [StoredConflict] = []
     private(set) var agents: [Actor] = []
@@ -170,9 +173,20 @@ final class AppModel {
     }
 
     func synchronize() async {
-        guard let syncEngine, !isSyncing else { return }
+        guard let syncEngine else { return }
+        guard !isSyncing else {
+            // An edit during a running sync gets its own sync right after.
+            needsAnotherSync = true
+            return
+        }
         isSyncing = true
-        defer { isSyncing = false }
+        defer {
+            isSyncing = false
+            if needsAnotherSync {
+                needsAnotherSync = false
+                Task { await synchronize() }
+            }
+        }
         do {
             try await syncEngine.sync()
             await syncExecutionState()
@@ -1253,6 +1267,8 @@ final class AppModel {
             await reloadCache()
             scheduleNoteSync()
             return note.id
+        } catch is CancellationError {
+            return nil
         } catch {
             presentedError = error.localizedDescription
             return nil
@@ -1263,7 +1279,7 @@ final class AppModel {
     /// found it: when the stored note changed since then, for example because
     /// an agent edited it, the typed text is kept as a conflict copy instead of
     /// silently replacing the other edit.
-    func saveNote(id: String, title: String, document: String, base: Note) async -> NoteSaveOutcome {
+    func saveNote(id: String, title: String, document: String, base: Note, isFinal: Bool = true) async -> NoteSaveOutcome {
         guard !NoteText.exceedsDocumentLimit(document) else {
             presentedError = String(localized: "This note is too long to sync.")
             return .rejected
@@ -1273,10 +1289,16 @@ final class AppModel {
         do {
             guard let current = try await database.note(id: id) else { return .rejected }
             if isEmpty {
+                // Cleared text is archived only when the editor closes. While
+                // typing, an empty moment is just a moment.
+                guard isFinal else { return .skipped }
                 _ = try await database.editNote(id: id) { $0.archived = true }
                 await afterNoteEdit()
                 return .archivedEmpty
             }
+            // The editor did not touch the text: keep the stored text, which
+            // may hold an agent's edit made while the editor was open.
+            let document = document == base.document ? current.document : document
             if current.document != base.document, document != current.document, document != base.document {
                 let copy = Note.local(
                     id: UUIDv7.generate().uuidString.lowercased(),
@@ -1294,6 +1316,8 @@ final class AppModel {
             }
             await afterNoteEdit()
             return saved.map(NoteSaveOutcome.saved) ?? .rejected
+        } catch is CancellationError {
+            return .rejected
         } catch {
             presentedError = error.localizedDescription
             return .rejected

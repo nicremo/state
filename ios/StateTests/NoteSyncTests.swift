@@ -165,14 +165,6 @@ final class NoteSyncTests: XCTestCase {
         XCTAssertEqual(stored?.document, "lokal")
     }
 
-    func testRetriedPatchReusesItsRequestID() async throws {
-        let database = try StateDatabase(path: temporaryDatabasePath())
-        try await database.insertLocalNote(Note.local(id: "0198a2b9-0000-7000-8000-00000000c008", title: "", document: "x", at: Date()))
-        let first = try await database.notePatchRequestID(id: "0198a2b9-0000-7000-8000-00000000c008")
-        let second = try await database.notePatchRequestID(id: "0198a2b9-0000-7000-8000-00000000c008")
-        XCTAssertEqual(first, second)
-    }
-
     func testPullFetchesNotesNamedInTheChangeFeed() async throws {
         let database = try StateDatabase(path: temporaryDatabasePath())
         let note = try StateJSON.decoder.decode(Note.self, from: Data(serverJSON.utf8))
@@ -328,5 +320,195 @@ private actor FakeNoteServer: StateAPI {
             signature: "s",
             noteID: note.id
         )
+    }
+}
+
+// MARK: Regressions from the verification review
+
+private actor LossyAPI: StateAPI {
+    let inner: FakeNoteServer
+    var dropNextResponse = false
+    var beforeSend: (@Sendable () async -> Void)?
+    init(_ inner: FakeNoteServer) { self.inner = inner }
+    func dropNext() { dropNextResponse = true }
+    func setBeforeSend(_ hook: (@Sendable () async -> Void)?) { beforeSend = hook }
+    var beforeChanges: (@Sendable () async -> Void)?
+    func setBeforeChanges(_ hook: (@Sendable () async -> Void)?) { beforeChanges = hook }
+    func getChanges(after: Int64, limit: Int) async throws -> ChangesResponse {
+        if let hook = beforeChanges { beforeChanges = nil; await hook() }
+        return try await inner.getChanges(after: after, limit: limit)
+    }
+    func getReminder(id: String) async throws -> ReminderDetail { try await inner.getReminder(id: id) }
+    func getNote(id: String) async throws -> Note { try await inner.getNote(id: id) }
+    func confirmOccurrences(_ identifiers: [String]) async throws {}
+    func send(mutation: PendingMutation) async throws -> Data {
+        if let hook = beforeSend { beforeSend = nil; await hook() }
+        let data = try await inner.send(mutation: mutation)
+        if dropNextResponse { dropNextResponse = false; throw URLError(.timedOut) }
+        return data
+    }
+}
+
+extension NoteSyncTests {
+    /// PATCH reached the server, the response was lost, the user typed more.
+    func testALostPatchResponseDoesNotSwallowLaterTyping() async throws {
+        let database = try StateDatabase(path: temporaryDatabasePath())
+        let server = FakeNoteServer()
+        let api = LossyAPI(server)
+        try await database.insertLocalNote(Note.local(id: "0198a2b9-0000-7000-8000-00000000d001", title: "", document: "Basis", at: Date()))
+        try await SyncEngine(database: database, api: api).sync()
+        let noteID = try await database.notes()[0].id
+
+        _ = try await database.editNote(id: noteID) { $0.apply(title: nil, document: "Basis\nA1") }
+        await api.dropNext()
+        do { try await SyncEngine(database: database, api: api).sync(); XCTFail("expected URLError") } catch is URLError {}
+        _ = try await database.editNote(id: noteID) { $0.apply(title: nil, document: "Basis\nA1\nA2") }
+        try await SyncEngine(database: database, api: api).sync()
+        try await SyncEngine(database: database, api: api).sync()
+
+        let local = try await database.note(id: noteID)
+        let onServer = await server.document(of: noteID)
+        XCTAssertEqual(local?.document, "Basis\nA1\nA2", "LOCAL lost the second edit")
+        XCTAssertEqual(onServer, "Basis\nA1\nA2", "SERVER never got the second edit")
+    }
+
+    /// POST reached the server, the response was lost, the user typed more.
+    func testALostCreateResponseDoesNotSwallowLaterTyping() async throws {
+        let database = try StateDatabase(path: temporaryDatabasePath())
+        let server = FakeNoteServer()
+        let api = LossyAPI(server)
+        let id = "0198a2b9-0000-7000-8000-00000000d002"
+        try await database.insertLocalNote(Note.local(id: id, title: "", document: "Neu", at: Date()))
+        await api.dropNext()
+        do { try await SyncEngine(database: database, api: api).sync(); XCTFail("expected URLError") } catch is URLError {}
+        _ = try await database.editNote(id: id) { $0.apply(title: nil, document: "Neu\nweiter getippt") }
+        try await SyncEngine(database: database, api: api).sync()
+        try await SyncEngine(database: database, api: api).sync()
+
+        let local = try await database.note(id: id)
+        XCTAssertEqual(local?.document, "Neu\nweiter getippt", "LOCAL lost the typing after a lost create response")
+    }
+
+    /// The user types while a PATCH that will 409 is in flight.
+    func testTypingDuringAConflictingPushEndsUpInTheCopy() async throws {
+        let database = try StateDatabase(path: temporaryDatabasePath())
+        let server = FakeNoteServer()
+        let api = LossyAPI(server)
+        try await database.insertLocalNote(Note.local(id: "0198a2b9-0000-7000-8000-00000000d003", title: "", document: "Einkauf", at: Date()))
+        try await SyncEngine(database: database, api: api).sync()
+        let noteID = try await database.notes()[0].id
+        await server.editElsewhere(id: noteID, document: "Einkauf\nvom Agenten")
+        _ = try await database.editNote(id: noteID) { $0.apply(title: nil, document: "Einkauf\nL1") }
+        await api.setBeforeSend {
+            _ = try? await database.editNote(id: noteID) { $0.apply(title: nil, document: "Einkauf\nL1\nL2 im Flug") }
+        }
+        try await SyncEngine(database: database, api: api).sync()
+        try await SyncEngine(database: database, api: api).sync()
+
+        let all = try await database.notes(includeArchived: true)
+        XCTAssertTrue(all.contains { $0.document.contains("L2 im Flug") }, "text typed during the conflicting push vanished: \(all.map(\.document))")
+    }
+
+    /// A never-synced note whose create response was lost is archived offline.
+    func testArchivingAfterALostCreateArchivesOnTheServer() async throws {
+        let database = try StateDatabase(path: temporaryDatabasePath())
+        let server = FakeNoteServer()
+        let api = LossyAPI(server)
+        let id = "0198a2b9-0000-7000-8000-00000000d004"
+        try await database.insertLocalNote(Note.local(id: id, title: "", document: "Wegwerfen", at: Date()))
+        await api.dropNext()
+        do { try await SyncEngine(database: database, api: api).sync(); XCTFail("expected URLError") } catch is URLError {}
+        _ = try await database.editNote(id: id) { $0.archived = true }
+        try await SyncEngine(database: database, api: api).sync()
+
+        let local = try await database.notes(includeArchived: true)
+        let serverCount = await server.count
+        XCTAssertFalse(serverCount == 1 && local.isEmpty, "server keeps a live note the device deleted locally; the next pull resurrects it")
+    }
+
+    @MainActor
+    func testATitleOnlySaveKeepsAnAgentsEdit() async throws {
+        let database = try StateDatabase(path: temporaryDatabasePath())
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "state-tests-\(UUID().uuidString)"))
+        let model = AppModel(database: database, sessionRepository: SessionRepository(defaults: defaults))
+        var server = Note.local(id: "0198a2b9-0000-7000-8000-00000000d005", title: "", document: "Plan\nalt", at: Date())
+        try await database.applyServer(note: server)
+        let fetchedBase = try await database.note(id: server.id)
+        let editorBase = try XCTUnwrap(fetchedBase)
+        // An agent edits; the pull applies it while the editor is open.
+        server.apply(title: nil, document: "Plan\nneu vom Agenten")
+        server.revision += 1
+        try await database.applyServer(note: server)
+        // The user only typed a title.
+        _ = await model.saveNote(id: server.id, title: "Mein Titel", document: editorBase.document, base: editorBase)
+        let stored = try await database.note(id: server.id)
+        XCTAssertEqual(stored?.document, "Plan\nneu vom Agenten", "a title-only save reverted the agent's document")
+    }
+
+    @MainActor
+    func testClearingWhileTypingDoesNotArchive() async throws {
+        let database = try StateDatabase(path: temporaryDatabasePath())
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "state-tests-\(UUID().uuidString)"))
+        let model = AppModel(database: database, sessionRepository: SessionRepository(defaults: defaults))
+        let note = Note.local(id: "0198a2b9-0000-7000-8000-00000000d006", title: "", document: "Alt", at: Date())
+        try await database.applyServer(note: note)
+        let fetched0 = try await database.note(id: note.id)
+        var base = try XCTUnwrap(fetched0)
+        // Autosave fires while the user has selected all and deleted.
+        let first = await model.saveNote(id: note.id, title: "", document: "", base: base, isFinal: false)
+        XCTAssertEqual(first, .skipped, "an autosave of an empty moment writes nothing")
+        let fetched1 = try await database.note(id: note.id)
+        base = try XCTUnwrap(fetched1)
+        // The user keeps typing the new text.
+        _ = await model.saveNote(id: note.id, title: "", document: "Ganz neu", base: base, isFinal: false)
+        let stored = try await database.note(id: note.id)
+        XCTAssertEqual(stored?.archived, false, "the note being edited stays archived and has left the list")
+        let final = await model.saveNote(id: note.id, title: "", document: "", base: try XCTUnwrap(stored), isFinal: true)
+        XCTAssertEqual(final, .archivedEmpty, "closing the editor on an empty note archives it")
+    }
+
+    @MainActor
+    func testACancelledAutosaveShowsNoError() async throws {
+        let database = try StateDatabase(path: temporaryDatabasePath())
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "state-tests-\(UUID().uuidString)"))
+        let model = AppModel(database: database, sessionRepository: SessionRepository(defaults: defaults))
+        let note = Note.local(id: "0198a2b9-0000-7000-8000-00000000d007", title: "", document: "Alt", at: Date())
+        try await database.applyServer(note: note)
+        let fetched2 = try await database.note(id: note.id)
+        let base = try XCTUnwrap(fetched2)
+        let task = Task { @MainActor in
+            _ = await model.saveNote(id: note.id, title: "", document: "Alt\nneu", base: base)
+        }
+        task.cancel()
+        await task.value
+        XCTAssertNil(model.presentedError, "a cancelled autosave pops an error: \(model.presentedError ?? "")")
+    }
+
+    /// A pull skips a dirty note; the user then reverts the edit (e.g. ticks
+    /// and unticks a box). The note must not stay on the old server version.
+    func testAnUndoneEditMovesToTheNewestServerVersion() async throws {
+        let database = try StateDatabase(path: temporaryDatabasePath())
+        let server = FakeNoteServer()
+        let api = LossyAPI(server)
+        try await database.insertLocalNote(Note.local(id: "0198a2b9-0000-7000-8000-00000000d008", title: "", document: "Liste\n- [ ] a", at: Date()))
+        try await SyncEngine(database: database, api: api).sync()
+        let noteID = try await database.notes()[0].id
+        // An agent edits on the server, with a change-feed entry.
+        var agent = try await server.getNote(id: noteID)
+        agent.apply(title: nil, document: "Liste\n- [ ] a\n- [ ] vom Agenten")
+        agent.revision += 1
+        await server.seed(agent, cursor: 50)
+        // The user ticks the box while the sync is between push and pull.
+        await api.setBeforeChanges {
+            _ = try? await database.editNote(id: noteID) { $0.apply(title: nil, document: NoteEditing.toggleTask(atLine: 1, in: $0.document)) }
+        }
+        try await SyncEngine(database: database, api: api).sync()
+        // ... and unticks it again.
+        _ = try await database.editNote(id: noteID) { $0.apply(title: nil, document: NoteEditing.toggleTask(atLine: 1, in: $0.document)) }
+        try await SyncEngine(database: database, api: api).sync()
+        try await SyncEngine(database: database, api: api).sync()
+
+        let local = try await database.note(id: noteID)
+        XCTAssertEqual(local?.document, "Liste\n- [ ] a\n- [ ] vom Agenten", "the device is stuck on an old server version")
     }
 }
