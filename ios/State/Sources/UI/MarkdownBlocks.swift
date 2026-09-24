@@ -84,9 +84,15 @@ enum MarkdownBlocks {
         return text.isEmpty ? nil : .heading(level: hashes, text: text)
     }
 
+    private static let taskMarkers: [(String, Bool)] = [
+        ("- [ ]", false), ("- [x]", true), ("- [X]", true),
+        ("* [ ]", false), ("* [x]", true), ("* [X]", true),
+    ]
+
+    /// A checklist item, also an empty one: the format bar inserts "- [ ] "
+    /// and the trailing space is gone once the line is trimmed.
     private static func task(_ line: String, index: Int) -> MarkdownBlock? {
-        for (marker, checked) in [("- [ ] ", false), ("- [x] ", true), ("- [X] ", true), ("* [ ] ", false), ("* [x] ", true)]
-            where line.hasPrefix(marker) {
+        for (marker, checked) in taskMarkers where line == marker || line.hasPrefix(marker + " ") {
             let text = line.dropFirst(marker.count).trimmingCharacters(in: .whitespaces)
             return .task(checked: checked, text: text, line: index)
         }

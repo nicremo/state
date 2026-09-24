@@ -5,17 +5,27 @@ import SwiftUI
 /// on a phone. Headings carry more space above than below; list markers hang
 /// outside the text so wrapped lines align.
 struct MarkdownView: View {
+    /// `compact` fits a reminder description under its title; `document` is a
+    /// note read on its own, with body-sized text and real heading sizes.
+    enum Style {
+        case compact
+        case document
+    }
+
     let blocks: [MarkdownBlock]
+    var style: Style = .compact
     /// When set, checklist items are buttons that report their source line.
     var onToggleTask: ((Int) -> Void)?
 
-    init(_ source: String, onToggleTask: ((Int) -> Void)? = nil) {
+    init(_ source: String, style: Style = .compact, onToggleTask: ((Int) -> Void)? = nil) {
         blocks = MarkdownBlocks.parse(source)
+        self.style = style
         self.onToggleTask = onToggleTask
     }
 
-    init(blocks: [MarkdownBlock], onToggleTask: ((Int) -> Void)? = nil) {
+    init(blocks: [MarkdownBlock], style: Style = .compact, onToggleTask: ((Int) -> Void)? = nil) {
         self.blocks = blocks
+        self.style = style
         self.onToggleTask = onToggleTask
     }
 
@@ -29,17 +39,28 @@ struct MarkdownView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var textFont: Font { style == .document ? .body : .callout }
+
+    private func headingFont(level: Int) -> Font {
+        switch (style, level) {
+        case (.document, 1): .title3.weight(.semibold)
+        case (.document, 2): .headline
+        case (.document, _): .subheadline.weight(.semibold)
+        case (.compact, _): .subheadline.weight(.semibold)
+        }
+    }
+
     @ViewBuilder
     private func view(for block: MarkdownBlock) -> some View {
         switch block {
-        case let .heading(_, text):
+        case let .heading(level, text):
             Text(inlineMarkdown: text)
-                .font(.subheadline.weight(.semibold))
+                .font(headingFont(level: level))
                 .foregroundStyle(StateTheme.graphite)
                 .accessibilityAddTraits(.isHeader)
         case let .paragraph(text):
             Text(inlineMarkdown: text)
-                .font(.callout)
+                .font(textFont)
                 .foregroundStyle(StateTheme.graphite.opacity(0.86))
         case let .bullet(text):
             listItem(marker: "•", text: text)
@@ -67,12 +88,12 @@ struct MarkdownView: View {
     private func taskItem(checked: Bool, text: String, line: Int) -> some View {
         let label = HStack(alignment: .firstTextBaseline, spacing: StateTheme.Space.inner) {
             Image(systemName: checked ? "checkmark.circle.fill" : "circle")
-                .font(.body)
-                .foregroundStyle(checked ? StateTheme.accent : Color.secondary.opacity(0.6))
-                .contentTransition(.symbolEffect(.replace))
+                .font(textFont)
+                .foregroundStyle(checked ? StateTheme.accent : Color.secondary)
                 .frame(minWidth: 16)
+                .accessibilityHidden(true)
             Text(inlineMarkdown: text)
-                .font(.callout)
+                .font(textFont)
                 .foregroundStyle(checked ? Color.secondary : StateTheme.graphite.opacity(0.86))
                 .strikethrough(checked, color: .secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -81,23 +102,31 @@ struct MarkdownView: View {
             Button {
                 onToggleTask(line)
             } label: {
-                label.contentShape(Rectangle())
+                label
+                    .frame(minHeight: StateControlMetrics.tapTarget)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityAddTraits(checked ? .isSelected : [])
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(inlineMarkdown: text))
+            .accessibilityValue(checked ? String(localized: "Checked") : String(localized: "Not checked"))
+            .accessibilityAddTraits(.isToggle)
         } else {
             label
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(inlineMarkdown: text))
+                .accessibilityValue(checked ? String(localized: "Checked") : String(localized: "Not checked"))
         }
     }
 
     private func listItem(marker: String, text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: StateTheme.Space.inner) {
             Text(verbatim: marker)
-                .font(.callout.monospacedDigit())
+                .font(textFont.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 16, alignment: .trailing)
             Text(inlineMarkdown: text)
-                .font(.callout)
+                .font(textFont)
                 .foregroundStyle(StateTheme.graphite.opacity(0.86))
         }
     }

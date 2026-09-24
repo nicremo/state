@@ -1,6 +1,16 @@
 import Foundation
 import Observation
 
+/// What happened to an edit saved from the note editor.
+enum NoteSaveOutcome: Sendable, Equatable {
+    case saved(Note)
+    /// The stored note changed meanwhile; the typed text became a new note.
+    case savedAsCopy(String)
+    /// Title and text were cleared, which archives the note.
+    case archivedEmpty
+    case rejected
+}
+
 struct ReminderDraft: Sendable {
     var title = ""
     var description = ""
@@ -40,6 +50,10 @@ final class AppModel {
     private(set) var session: ServerSession?
     private(set) var reminders: [Reminder] = []
     private(set) var notes: [Note] = []
+    private(set) var archivedNotes: [Note] = []
+    private(set) var noteAliases: [String: String] = [:]
+    private(set) var noteSyncErrors: [String: String] = [:]
+    private var pendingNoteSync: Task<Void, Never>?
     private(set) var activity: [AuditEvent] = []
     private(set) var conflicts: [StoredConflict] = []
     private(set) var agents: [Actor] = []
@@ -821,7 +835,11 @@ final class AppModel {
             policies = try await database.policies()
             runners = try await database.runners()
             let loadedNotes = try await database.notes()
+            let loadedArchive = try await database.archivedNotes()
             notes = isDemo ? loadedNotes.filter { demoVisibleIDs.contains($0.id) } : loadedNotes
+            archivedNotes = isDemo ? loadedArchive.filter { demoVisibleIDs.contains($0.id) } : loadedArchive
+            noteAliases = try await database.noteAliases()
+            noteSyncErrors = try await database.noteSyncErrors()
             if isDemo {
                 reminders = loadedReminders.filter { demoVisibleIDs.contains($0.id) }
                 activity = loadedActivity.filter { $0.reminderID.map(demoVisibleIDs.contains) ?? false }
@@ -1056,7 +1074,7 @@ final class AppModel {
             ),
             cursor: nil
         )
-        try await database.apply(note: Note.local(
+        try await database.applyServer(note: Note.local(
             id: Self.demoNoteID,
             title: "",
             document: String(localized: "demo.note.document"),
@@ -1212,145 +1230,123 @@ final class AppModel {
 
     // MARK: Notes
 
-    /// Writes the note locally first, then queues it for the server. Returns
-    /// the identifier the note has after the attempt to synchronize.
+    /// Writes a new note locally and returns its identifier at once; the push
+    /// runs in the background. Nil when there is nothing to keep.
     @discardableResult
     func createNote(title: String, document: String) async -> String? {
+        guard !NoteText.exceedsDocumentLimit(document) else {
+            presentedError = String(localized: "This note is too long to sync.")
+            return nil
+        }
+        let note = Note.local(
+            id: UUIDv7.generate().uuidString.lowercased(),
+            title: NoteText.clampTitle(title),
+            document: document,
+            at: Date()
+        )
+        guard !note.title.isEmpty else { return nil }
         do {
-            let now = Date()
-            let provisionalID = UUIDv7.generate().uuidString.lowercased()
-            let note = Note.local(id: provisionalID, title: title, document: document, at: now)
-            try await database.apply(note: note)
+            try await database.insertLocalNote(note)
             if isDemo {
-                demoVisibleIDs.insert(provisionalID)
-                await reloadCache()
-                return provisionalID
+                demoVisibleIDs.insert(note.id)
             }
-            let requestID = UUIDv7.generate().uuidString.lowercased()
-            let request = CreateNoteRequest(
-                title: note.titleSource == Note.userSource ? note.title : nil,
-                document: document,
-                clientTime: now,
-                source: "ios",
-                clientRequestID: requestID
-            )
-            _ = try await database.enqueue(
-                method: "POST",
-                path: SyncEngine.notesPath,
-                body: StateJSON.encoder.encode(request),
-                entityID: provisionalID
-            )
             await reloadCache()
-            await synchronize()
-            return notes.contains { $0.id == provisionalID }
-                ? provisionalID
-                : notes.first { $0.document == document }?.id
+            scheduleNoteSync()
+            return note.id
         } catch {
             presentedError = error.localizedDescription
             return nil
         }
     }
 
-    /// Saves an edit. `title` nil keeps the current title, an empty string
-    /// returns to the title derived from the first line.
-    func updateNote(id: String, title: String?, document: String) async {
-        await mutateNote(id: id) { note in
-            note.apply(title: title, document: document)
-        } request: { current, expectedRevision, now, requestID in
-            UpdateNoteRequest(
-                title: title,
-                document: document == current.document ? nil : document,
-                archived: nil,
-                expectedRevision: expectedRevision,
-                clientTime: now,
-                source: "ios",
-                clientRequestID: requestID
-            )
+    /// Saves an edit made in the editor. `base` is the note as the editor
+    /// found it: when the stored note changed since then, for example because
+    /// an agent edited it, the typed text is kept as a conflict copy instead of
+    /// silently replacing the other edit.
+    func saveNote(id: String, title: String, document: String, base: Note) async -> NoteSaveOutcome {
+        guard !NoteText.exceedsDocumentLimit(document) else {
+            presentedError = String(localized: "This note is too long to sync.")
+            return .rejected
+        }
+        let title = NoteText.clampTitle(title)
+        let isEmpty = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && NoteText.title(document).isEmpty
+        do {
+            guard let current = try await database.note(id: id) else { return .rejected }
+            if isEmpty {
+                _ = try await database.editNote(id: id) { $0.archived = true }
+                await afterNoteEdit()
+                return .archivedEmpty
+            }
+            if current.document != base.document, document != current.document, document != base.document {
+                let copy = Note.local(
+                    id: UUIDv7.generate().uuidString.lowercased(),
+                    title: NoteText.conflictCopyTitle(for: title.isEmpty ? current.title : title),
+                    document: document,
+                    at: Date()
+                )
+                try await database.insertLocalNote(copy)
+                if isDemo { demoVisibleIDs.insert(copy.id) }
+                await afterNoteEdit()
+                return .savedAsCopy(copy.id)
+            }
+            let saved = try await database.editNote(id: id) { note in
+                note.apply(title: title, document: document)
+            }
+            await afterNoteEdit()
+            return saved.map(NoteSaveOutcome.saved) ?? .rejected
+        } catch {
+            presentedError = error.localizedDescription
+            return .rejected
+        }
+    }
+
+    /// Ticks one checklist line. The toggle runs against the stored document
+    /// inside the write, so quick taps on several items all land.
+    func toggleNoteTask(id: String, line: Int) async {
+        do {
+            _ = try await database.editNote(id: id) { note in
+                note.apply(title: nil, document: NoteEditing.toggleTask(atLine: line, in: note.document))
+            }
+            await afterNoteEdit()
+        } catch {
+            presentedError = error.localizedDescription
         }
     }
 
     func setNoteArchived(id: String, archived: Bool) async {
-        await mutateNote(id: id) { note in
-            note.archived = archived
-        } request: { _, expectedRevision, now, requestID in
-            UpdateNoteRequest(
-                title: nil,
-                document: nil,
-                archived: archived,
-                expectedRevision: expectedRevision,
-                clientTime: now,
-                source: "ios",
-                clientRequestID: requestID
-            )
+        do {
+            _ = try await database.editNote(id: id) { $0.archived = archived }
+            await afterNoteEdit()
+        } catch {
+            presentedError = error.localizedDescription
         }
     }
 
+    /// Finds a note in the list or the archive, also under the provisional
+    /// identifier it had before its first sync.
     func note(id: String) -> Note? {
-        notes.first { $0.id == id }
+        let resolved = noteAliases[id] ?? id
+        return notes.first { $0.id == resolved } ?? archivedNotes.first { $0.id == resolved }
     }
 
-    /// Also finds archived notes, which the list does not hold.
-    func storedNote(id: String) async -> Note? {
-        try? await database.note(id: id)
+    func noteSyncError(id: String) -> String? {
+        noteSyncErrors[noteAliases[id] ?? id]
     }
 
-    func archivedNotes() async -> [Note] {
-        (try? await database.notes(includeArchived: true).filter(\.archived)) ?? []
+    private func afterNoteEdit() async {
+        await reloadCache()
+        scheduleNoteSync()
     }
 
-    private func mutateNote(
-        id: String,
-        change: (inout Note) -> Void,
-        request: (Note, Int64, Date, String) -> UpdateNoteRequest
-    ) async {
-        do {
-            guard let current = try await database.note(id: id) else { return }
-            var updated = current
-            change(&updated)
-            guard updated != current else { return }
-            let now = Date()
-            updated.revision = current.revision + 1
-            updated.updatedAt = now
-            try await database.apply(note: updated)
-            if !isDemo, let pendingCreate = try await database.pendingMutations().first(where: {
-                $0.method == "POST" && $0.path == SyncEngine.notesPath && $0.entityID == id
-            }) {
-                // The server has not seen this note yet, so there is nothing to
-                // patch: the queued create is replaced by one with the new text,
-                // or dropped together with the note when it is archived.
-                try await database.removeMutation(id: pendingCreate.id)
-                if updated.archived {
-                    try await database.deleteNote(id: id)
-                } else {
-                    let createRequest = CreateNoteRequest(
-                        title: updated.titleSource == Note.userSource ? updated.title : nil,
-                        document: updated.document,
-                        clientTime: now,
-                        source: "ios",
-                        clientRequestID: UUIDv7.generate().uuidString.lowercased()
-                    )
-                    _ = try await database.enqueue(
-                        method: "POST",
-                        path: SyncEngine.notesPath,
-                        body: StateJSON.encoder.encode(createRequest),
-                        entityID: id
-                    )
-                }
-            } else if !isDemo {
-                let requestID = UUIDv7.generate().uuidString.lowercased()
-                _ = try await database.enqueue(
-                    method: "PATCH",
-                    path: "\(SyncEngine.notesPath)/\(id)",
-                    body: StateJSON.encoder.encode(request(current, current.revision, now, requestID)),
-                    entityID: id
-                )
-            }
-            await reloadCache()
-            if !isDemo {
-                await synchronize()
-            }
-        } catch {
-            presentedError = error.localizedDescription
+    /// Edits come in bursts while typing; one sync after a short pause covers
+    /// them all.
+    private func scheduleNoteSync() {
+        guard !isDemo else { return }
+        pendingNoteSync?.cancel()
+        pendingNoteSync = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            await self?.synchronize()
         }
     }
 

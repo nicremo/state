@@ -102,10 +102,10 @@ struct SplitRootView: View {
             NavigationStack {
                 NoteDetailView(
                     model: model,
-                    noteID: selectedNoteID == NoteRoute.newSelection ? nil : selectedNoteID
-                ) { created in
-                    self.selectedNoteID = created
-                }
+                    noteID: selectedNoteID == NoteRoute.newSelection ? nil : selectedNoteID,
+                    onCreate: { created in self.selectedNoteID = created },
+                    onClose: { self.selectedNoteID = nil }
+                )
             }
             .id(selectedNoteID)
         } else {
@@ -116,6 +116,11 @@ struct SplitRootView: View {
     /// The editor lives inside the reminder list, so the menu command has to
     /// make sure such a list is on screen before the sheet can open.
     private func createReminder() {
+        // In the notes section the same command writes a new note.
+        if section == .notes {
+            selectedNoteID = NoteRoute.newSelection
+            return
+        }
         if section != .today && section != .planned {
             section = .today
         }

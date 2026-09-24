@@ -23,29 +23,43 @@ enum NoteEditing {
         return document
     }
 
-    /// Puts a block marker such as `# ` or `- [ ] ` at the start of the line
-    /// that holds the cursor. Returns the new text and the new cursor.
-    static func insertLinePrefix(_ prefix: String, in text: String, at range: Range<String.Index>) -> (String, String.Index) {
-        let lineStart = text[..<range.lowerBound].lastIndex(of: "\n").map { text.index(after: $0) } ?? text.startIndex
+    /// Puts a block marker such as `## ` or `- [ ] ` at the start of the line
+    /// that holds the cursor, or takes it away when the line already has it.
+    /// Returns the new text and the new cursor.
+    static func toggleLinePrefix(_ prefix: String, in text: String, at range: Range<String.Index>) -> (String, String.Index) {
+        let lineStart = text[..<range.lowerBound].lastIndex(where: \.isNewline).map { text.index(after: $0) } ?? text.startIndex
+        let cursorOffset = text.distance(from: text.startIndex, to: range.lowerBound)
         var result = text
+        if text[lineStart...].hasPrefix(prefix) {
+            let end = text.index(lineStart, offsetBy: prefix.count)
+            result.removeSubrange(lineStart..<end)
+            let offset = max(text.distance(from: text.startIndex, to: lineStart), cursorOffset - prefix.count)
+            return (result, result.index(result.startIndex, offsetBy: offset))
+        }
         result.insert(contentsOf: prefix, at: lineStart)
-        let offset = text.distance(from: text.startIndex, to: range.lowerBound) + prefix.count
-        return (result, result.index(result.startIndex, offsetBy: offset))
+        return (result, result.index(result.startIndex, offsetBy: cursorOffset + prefix.count))
     }
 
-    /// Surrounds the selection with an inline marker such as `**`. An empty
-    /// selection leaves the cursor between the two markers.
+    /// Surrounds the selection with an inline marker such as `**`. The
+    /// selection stays selected-width: the cursor lands after the closing
+    /// marker, or between the markers when nothing was selected.
     static func wrap(_ marker: String, in text: String, range: Range<String.Index>) -> (String, String.Index) {
         let selected = text[range]
         var result = text
         result.replaceSubrange(range, with: marker + selected + marker)
-        let offset = text.distance(from: text.startIndex, to: range.lowerBound) + marker.count + selected.count
+        let start = text.distance(from: text.startIndex, to: range.lowerBound)
+        let offset = selected.isEmpty ? start + marker.count : start + marker.count * 2 + selected.count
         return (result, result.index(result.startIndex, offsetBy: offset))
     }
 
-    /// Inserts a divider on its own line after the cursor's line.
+    /// Inserts a divider on its own line after the cursor's line. In an empty
+    /// note it simply becomes the first line.
     static func insertDivider(in text: String, at range: Range<String.Index>) -> (String, String.Index) {
-        let lineEnd = text[range.upperBound...].firstIndex(of: "\n") ?? text.endIndex
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let result = "---\n"
+            return (result, result.endIndex)
+        }
+        let lineEnd = text[range.upperBound...].firstIndex(where: \.isNewline) ?? text.endIndex
         let insertion = "\n\n---\n"
         var result = text
         result.insert(contentsOf: insertion, at: lineEnd)

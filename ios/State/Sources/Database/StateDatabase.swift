@@ -11,6 +11,20 @@ struct PendingMutation: Identifiable, Sendable {
     let attempts: Int
 }
 
+/// A cached note plus what the sync needs: whether it has unsent edits, the
+/// server version those edits are based on, a counter that tells a push
+/// whether the note changed while the request was in flight, and the request
+/// IDs that keep retries idempotent.
+struct NoteRecord: Sendable, Equatable {
+    var note: Note
+    var dirty: Bool
+    var localVersion: Int64
+    var base: Note?
+    var createRequestID: String?
+    var patchRequestID: String?
+    var syncError: String?
+}
+
 struct StoredConflict: Identifiable, Sendable {
     let id: String
     let entityID: String
@@ -155,7 +169,7 @@ final class StateDatabase: Sendable {
         try await pool.write { database in
             for table in [
                 "reminder_cache", "comment_cache", "occurrence_cache", "audit_cache",
-                "conflicts", "project_cache", "policy_cache", "runner_cache", "run_cache", "note_cache", "metadata",
+                "conflicts", "project_cache", "policy_cache", "runner_cache", "run_cache", "note_cache", "note_alias", "metadata",
             ] {
                 try database.execute(sql: "DELETE FROM \(table)")
             }
@@ -293,46 +307,226 @@ final class StateDatabase: Sendable {
         }
     }
 
-    func apply(note: Note) async throws {
-        let json = try StateJSON.encoder.encode(note)
-        try await pool.write { database in
-            try database.execute(
-                sql: """
-                INSERT INTO note_cache (id, title, archived, updated_at, json) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    title = excluded.title,
-                    archived = excluded.archived,
-                    updated_at = excluded.updated_at,
-                    json = excluded.json
-                """,
-                arguments: [note.id, note.title, note.archived, note.updatedAt, json]
-            )
-        }
-    }
+    // MARK: Notes
 
     /// Newest change first, the order of the Notes list.
     func notes(includeArchived: Bool = false) async throws -> [Note] {
         try await pool.read { database in
-            try Data.fetchAll(
-                database,
-                sql: "SELECT json FROM note_cache WHERE ? OR archived = 0 ORDER BY updated_at DESC, id DESC",
-                arguments: [includeArchived]
-            )
-            .map { try StateJSON.decoder.decode(Note.self, from: $0) }
+            let sql = includeArchived
+                ? "SELECT json FROM note_cache ORDER BY updated_at DESC, id DESC"
+                : "SELECT json FROM note_cache WHERE archived = 0 ORDER BY updated_at DESC, id DESC"
+            return try Data.fetchAll(database, sql: sql).map { try StateJSON.decoder.decode(Note.self, from: $0) }
         }
     }
 
-    func note(id: String) async throws -> Note? {
+    func archivedNotes() async throws -> [Note] {
         try await pool.read { database in
-            try Data.fetchOne(database, sql: "SELECT json FROM note_cache WHERE id = ?", arguments: [id])
+            try Data.fetchAll(database, sql: "SELECT json FROM note_cache WHERE archived = 1 ORDER BY updated_at DESC, id DESC")
                 .map { try StateJSON.decoder.decode(Note.self, from: $0) }
         }
     }
 
-    func deleteNote(id: String) async throws {
+    func note(id: String) async throws -> Note? {
+        try await noteRecord(id: id)?.note
+    }
+
+    /// Follows the alias a provisional identifier left behind, so a screen
+    /// that still holds it finds the note under its server identifier.
+    func noteRecord(id: String) async throws -> NoteRecord? {
+        try await pool.read { database in try Self.noteRecord(id: id, in: database) }
+    }
+
+    func noteAliases() async throws -> [String: String] {
+        try await pool.read { database in
+            Dictionary(uniqueKeysWithValues: try Row.fetchAll(database, sql: "SELECT provisional_id, server_id FROM note_alias")
+                .map { (row: Row) -> (String, String) in (row["provisional_id"], row["server_id"]) })
+        }
+    }
+
+    func noteSyncErrors() async throws -> [String: String] {
+        try await pool.read { database in
+            Dictionary(uniqueKeysWithValues: try Row.fetchAll(database, sql: "SELECT id, sync_error FROM note_cache WHERE sync_error IS NOT NULL")
+                .map { (row: Row) -> (String, String) in (row["id"], row["sync_error"]) })
+        }
+    }
+
+    func dirtyNoteRecords() async throws -> [NoteRecord] {
+        try await pool.read { database in
+            try Row.fetchAll(database, sql: "SELECT * FROM note_cache WHERE dirty = 1 AND sync_error IS NULL ORDER BY updated_at, id")
+                .map(Self.noteRecord(row:))
+        }
+    }
+
+    /// A note that exists only on this device so far.
+    func insertLocalNote(_ note: Note) async throws {
+        try await pool.write { database in
+            try Self.write(
+                NoteRecord(note: note, dirty: true, localVersion: 1, base: nil,
+                           createRequestID: UUIDv7.generate().uuidString.lowercased(), patchRequestID: nil, syncError: nil),
+                in: database
+            )
+        }
+    }
+
+    /// The single writer for local edits: reads the current note inside the
+    /// transaction, so quick successive edits, such as ticking several
+    /// checklist items, never overwrite each other.
+    @discardableResult
+    func editNote(id: String, change: @escaping @Sendable (inout Note) -> Void) async throws -> Note? {
+        try await pool.write { database in
+            guard var record = try Self.noteRecord(id: id, in: database) else { return nil }
+            var edited = record.note
+            change(&edited)
+            guard edited != record.note else { return record.note }
+            edited.updatedAt = Date()
+            record.note = edited
+            record.dirty = true
+            record.localVersion += 1
+            record.syncError = nil
+            try Self.write(record, in: database)
+            return edited
+        }
+    }
+
+    /// Applies a note from the server. A note with unsent local edits keeps
+    /// them; the next push meets the new revision and resolves it.
+    func applyServer(note: Note) async throws {
+        try await pool.write { database in
+            if let existing = try Self.noteRecord(id: note.id, in: database), existing.dirty {
+                return
+            }
+            try Self.write(
+                NoteRecord(note: note, dirty: false, localVersion: 0, base: note,
+                           createRequestID: nil, patchRequestID: nil, syncError: nil),
+                in: database
+            )
+        }
+    }
+
+    /// The request ID a push uses. It stays the same until the push succeeds,
+    /// so a retry after a lost response is answered from the server's
+    /// idempotency record instead of being applied twice.
+    func notePatchRequestID(id: String) async throws -> String {
+        try await pool.write { database in
+            guard var record = try Self.noteRecord(id: id, in: database) else { return UUIDv7.generate().uuidString.lowercased() }
+            if let existing = record.patchRequestID { return existing }
+            let fresh = UUIDv7.generate().uuidString.lowercased()
+            record.patchRequestID = fresh
+            try Self.write(record, in: database)
+            return fresh
+        }
+    }
+
+    /// Records the server's answer to a push. Edits made while the request
+    /// was in flight stay dirty and go out with the next push.
+    func completeNotePush(localID: String, sentVersion: Int64, server: Note) async throws {
+        try await pool.write { database in
+            guard var record = try Self.noteRecord(id: localID, in: database) else { return }
+            if record.note.id != server.id {
+                try database.execute(sql: "DELETE FROM note_cache WHERE id = ?", arguments: [record.note.id])
+                try database.execute(
+                    sql: "INSERT OR REPLACE INTO note_alias (provisional_id, server_id) VALUES (?, ?)",
+                    arguments: [record.note.id, server.id]
+                )
+            }
+            if record.localVersion == sentVersion {
+                record = NoteRecord(note: server, dirty: false, localVersion: record.localVersion, base: server,
+                                    createRequestID: nil, patchRequestID: nil, syncError: nil)
+            } else {
+                var pending = record.note
+                pending = Note(id: server.id, title: pending.title, titleSource: pending.titleSource,
+                               document: pending.document, plainText: pending.plainText, summary: pending.summary,
+                               summarySource: pending.summarySource, archived: pending.archived,
+                               revision: server.revision, createdAt: server.createdAt, updatedAt: pending.updatedAt)
+                record = NoteRecord(note: pending, dirty: true, localVersion: record.localVersion, base: server,
+                                    createRequestID: nil, patchRequestID: nil, syncError: nil)
+            }
+            try Self.write(record, in: database)
+        }
+    }
+
+    /// A push met a newer server version. The server version becomes the
+    /// note; a local document that differs is kept as a new note (the
+    /// conflict copy); title and archive intents are reapplied on top.
+    func resolveNoteConflict(localID: String, server: Note, conflictCopy: Note?) async throws {
+        try await pool.write { database in
+            guard let record = try Self.noteRecord(id: localID, in: database) else { return }
+            if let conflictCopy {
+                try Self.write(
+                    NoteRecord(note: conflictCopy, dirty: true, localVersion: 1, base: nil,
+                               createRequestID: UUIDv7.generate().uuidString.lowercased(), patchRequestID: nil, syncError: nil),
+                    in: database
+                )
+            }
+            var merged = server
+            let base = record.base
+            if let base, record.note.archived != base.archived {
+                merged.archived = record.note.archived
+            }
+            if let base, record.note.title != base.title || record.note.titleSource != base.titleSource {
+                merged.apply(title: record.note.titleSource == Note.userSource ? record.note.title : "", document: merged.document)
+            }
+            let stillDirty = merged != server
+            try Self.write(
+                NoteRecord(note: merged, dirty: stillDirty, localVersion: record.localVersion + 1, base: server,
+                           createRequestID: nil, patchRequestID: nil, syncError: nil),
+                in: database
+            )
+        }
+    }
+
+    /// A push the server rejected for good (invalid input, gone). The note
+    /// keeps its text and waits for the next edit instead of blocking sync.
+    func markNoteSyncError(id: String, message: String) async throws {
+        try await pool.write { database in
+            try database.execute(sql: "UPDATE note_cache SET sync_error = ? WHERE id = ?", arguments: [message, id])
+        }
+    }
+
+    /// Removes a note the server never saw, such as one archived offline.
+    func deleteLocalNote(id: String) async throws {
         try await pool.write { database in
             try database.execute(sql: "DELETE FROM note_cache WHERE id = ?", arguments: [id])
         }
+    }
+
+    private static func noteRecord(id: String, in database: Database) throws -> NoteRecord? {
+        let resolved = try String.fetchOne(database, sql: "SELECT server_id FROM note_alias WHERE provisional_id = ?", arguments: [id]) ?? id
+        return try Row.fetchOne(database, sql: "SELECT * FROM note_cache WHERE id = ?", arguments: [resolved]).map(noteRecord(row:))
+    }
+
+    private static func noteRecord(row: Row) throws -> NoteRecord {
+        let baseData: Data? = row["base_json"]
+        return NoteRecord(
+            note: try StateJSON.decoder.decode(Note.self, from: row["json"] as Data),
+            dirty: row["dirty"],
+            localVersion: row["local_version"],
+            base: try baseData.map { try StateJSON.decoder.decode(Note.self, from: $0) },
+            createRequestID: row["create_request_id"],
+            patchRequestID: row["patch_request_id"],
+            syncError: row["sync_error"]
+        )
+    }
+
+    private static func write(_ record: NoteRecord, in database: Database) throws {
+        let json = try StateJSON.encoder.encode(record.note)
+        let base = try record.base.map { try StateJSON.encoder.encode($0) }
+        try database.execute(
+            sql: """
+            INSERT INTO note_cache (id, title, archived, updated_at, json, dirty, local_version, base_json,
+                                    create_request_id, patch_request_id, sync_error)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title, archived = excluded.archived, updated_at = excluded.updated_at,
+                json = excluded.json, dirty = excluded.dirty, local_version = excluded.local_version,
+                base_json = excluded.base_json, create_request_id = excluded.create_request_id,
+                patch_request_id = excluded.patch_request_id, sync_error = excluded.sync_error
+            """,
+            arguments: [
+                record.note.id, record.note.title, record.note.archived, record.note.updatedAt, json,
+                record.dirty, record.localVersion, base, record.createRequestID, record.patchRequestID, record.syncError,
+            ]
+        )
     }
 
     func projects() async throws -> [Project] {
@@ -553,6 +747,20 @@ final class StateDatabase: Sendable {
                 table.column("json", .blob).notNull()
             }
             try database.create(index: "note_updated_idx", on: "note_cache", columns: ["archived", "updated_at"])
+        }
+        migrator.registerMigration("v4-note-sync") { database in
+            try database.alter(table: "note_cache") { table in
+                table.add(column: "dirty", .boolean).notNull().defaults(to: false)
+                table.add(column: "local_version", .integer).notNull().defaults(to: 0)
+                table.add(column: "base_json", .blob)
+                table.add(column: "create_request_id", .text)
+                table.add(column: "patch_request_id", .text)
+                table.add(column: "sync_error", .text)
+            }
+            try database.create(table: "note_alias") { table in
+                table.column("provisional_id", .text).primaryKey()
+                table.column("server_id", .text).notNull()
+            }
         }
         return migrator
     }
