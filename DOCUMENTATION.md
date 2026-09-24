@@ -10,7 +10,7 @@ after it explains the same steps in depth.
 
 - [What State is](#what-state-is)
 - [How the pieces fit together](#how-the-pieces-fit-together)
-- [AI-managed Notes roadmap](docs/ai-managed-notes.md)
+- [AI-managed Notes roadmap](docs/ai-managed-notes.md), [review](docs/ai-managed-notes-review.md) and [notes core plan](docs/superpowers/plans/2026-09-24-notes-core.md)
 - [Quickstart](#quickstart)
 - [Step 1: run the server](#step-1-run-the-server)
 - [Step 2: connect the iOS app](#step-2-connect-the-ios-app)
