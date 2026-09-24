@@ -217,7 +217,7 @@ struct ReminderCollectionView: View {
                 } label: {
                     Text("New reminder")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.statePill)
             }
         } else {
             ContentUnavailableView.search(text: search)
