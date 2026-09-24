@@ -80,3 +80,36 @@ Diese Punkte kann nur Fabian entscheiden. Ohne sie ist Stufe B nicht umsetzbar.
 
 - Stufe A: [`superpowers/plans/2026-09-24-notes-core.md`](superpowers/plans/2026-09-24-notes-core.md)
 - Stufe B: wird nach den Entscheidungen in Abschnitt 4 geschrieben.
+
+## 6. Code-Review der Umsetzung (24.09.2026)
+
+Drei unabhängige Reviews (Server, App-Daten und Sync, App-Oberfläche) plus ein
+Durchlauf per MobAI auf iOS 26.5 und iOS 18.5. Alle belegten Befunde sind
+behoben und mit Regressionstests abgesichert.
+
+| Bereich | Befund | Lösung |
+| --- | --- | --- |
+| Server | Runner lasen Notiz-Inhalte über `/changes` und `/briefing` | Notiz-Ereignisse werden für Runner aus beiden Antworten entfernt |
+| Server | Wiederholtes Update mit derselben `client_request_id` lieferte 409 | Idempotenz-Nachschlag vor der Revisionsprüfung |
+| Server | Jedes Audit-Ereignis speicherte das Dokument viermal | Snapshot ohne `plain_text`, vorherige Fassung nur als Hash und Länge |
+| Server | Notizen nur aus Markern (`---`) hatten einen leeren Titel | Abgewiesen, ein lesbarer Titel ist Pflicht |
+| Server | Einzelne `*` und `_` wurden überall entfernt, `~~~` nicht erkannt | Hervorhebung nur paarweise, beide Fence-Arten |
+| Server | Steuerzeichen in Titeln, 64-KB-Grenze in `statectl note`, `create_note` verlangte ein Dokument | bereinigt, 256 KB, Dokument optional |
+| App | Zweite Offline-Änderung nach einem Konflikt überschrieb eine fremde Änderung | Sync neu gebaut: Dirty-Markierung, Basis-Revision, Versionszähler statt PATCH-Kette |
+| App | Abgelehnte Notizen blockierten die ganze Warteschlange | Notizen laufen nicht mehr über die Warteschlange; Ablehnungen werden markiert und übersprungen |
+| App | Änderung während eines laufenden Uploads, vorläufige IDs | Stabile Request-IDs, Alias-Tabelle, Änderungen während des Uploads bleiben markiert |
+| App | Schnelles Abhaken verlor Häkchen, Agenten-Änderungen wurden vom Editor überschrieben | Einziger Schreibweg in der Datenbank-Transaktion, Basis-Version im Editor erkennt fremde Änderungen |
+| App | Kein Speichern beim Wechsel in den Hintergrund | Speichern bei Pause, Szenenwechsel und Verlassen |
+| App | Veraltete Textauswahl konnte Zeichen zerteilen | Auswahl wird geprüft und beim Bearbeiten zurückgesetzt |
+| App | Leere Checkliste, CRLF, Suche mit Umlauten, Barrierefreiheit, Tippflächen | behoben, Checklisten mit Label, Zustand und 44 Punkten Höhe |
+
+**Bewusste Abweichung vom Plan:** Ein Konflikt wird nicht als Eintrag in der
+Konfliktliste protokolliert, sondern als **Konfliktkopie** gelöst. Die
+Serverfassung bleibt die Notiz, der lokale Text wird eine neue Notiz mit dem
+Zusatz "(Konfliktkopie)". So geht kein Text verloren und es braucht keinen
+Zusammenführungsdialog. Änderungen nur an Titel oder Archivstatus werden ohne
+Kopie auf die neue Serverfassung übertragen.
+
+**Bekannt und nicht Teil dieser Stufe:** Die Mutations-Warteschlange für
+Erinnerungen blockiert weiterhin bei dauerhaften 4xx-Antworten. Notizen sind
+davon entkoppelt; für Erinnerungen ist das ein eigener Fix.
