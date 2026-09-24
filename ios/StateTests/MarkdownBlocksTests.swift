@@ -47,3 +47,38 @@ final class MarkdownBlocksTests: XCTestCase {
         XCTAssertEqual(MarkdownBlocks.parse("#hashtag"), [.paragraph("#hashtag")])
     }
 }
+
+/// Notes add checklists and dividers, and a tapped checklist item must flip
+/// exactly its own line of the document.
+final class NoteMarkdownTests: XCTestCase {
+    func testChecklistItemsAndDividersAreBlocks() {
+        XCTAssertEqual(MarkdownBlocks.parse("- [ ] offen\n- [x] erledigt\n---\n- normal"), [
+            .task(checked: false, text: "offen", line: 0),
+            .task(checked: true, text: "erledigt", line: 1),
+            .divider,
+            .bullet("normal"),
+        ])
+    }
+
+    func testTogglingATaskFlipsOnlyItsLine() {
+        let document = "# Liste\n- [ ] Milch\n- [x] Brot\n- [ ] Milch"
+        XCTAssertEqual(NoteEditing.toggleTask(atLine: 1, in: document), "# Liste\n- [x] Milch\n- [x] Brot\n- [ ] Milch")
+        XCTAssertEqual(NoteEditing.toggleTask(atLine: 2, in: document), "# Liste\n- [ ] Milch\n- [ ] Brot\n- [ ] Milch")
+        XCTAssertEqual(NoteEditing.toggleTask(atLine: 0, in: document), document)
+        XCTAssertEqual(NoteEditing.toggleTask(atLine: 9, in: document), document)
+    }
+
+    func testLinePrefixGoesToTheStartOfTheCurrentLine() {
+        let text = "Erste\nZweite Zeile"
+        let cursor = text.range(of: "Zeile")!.lowerBound
+        let (result, _) = NoteEditing.insertLinePrefix("- [ ] ", in: text, at: cursor..<cursor)
+        XCTAssertEqual(result, "Erste\n- [ ] Zweite Zeile")
+    }
+
+    func testWrapSurroundsTheSelection() {
+        let text = "ein wichtiges Wort"
+        let range = text.range(of: "wichtiges")!
+        let (result, _) = NoteEditing.wrap("**", in: text, range: range)
+        XCTAssertEqual(result, "ein **wichtiges** Wort")
+    }
+}

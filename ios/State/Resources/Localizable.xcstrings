@@ -381,6 +381,26 @@
         }
       }
     },
+    "Archived" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archiviert"
+          }
+        }
+      }
+    },
+    "Archived notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivierte Notizen"
+          }
+        }
+      }
+    },
     "At due time" : {
       "localizations" : {
         "de" : {
@@ -407,6 +427,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zurück"
+          }
+        }
+      }
+    },
+    "Bold" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fett"
           }
         }
       }
@@ -497,6 +527,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wird geprüft"
+          }
+        }
+      }
+    },
+    "Checklist" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checkliste"
           }
         }
       }
@@ -991,6 +1031,16 @@
         }
       }
     },
+    "Divider" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trennlinie"
+          }
+        }
+      }
+    },
     "Documentation" : {
       "localizations" : {
         "de" : {
@@ -1281,6 +1331,16 @@
         }
       }
     },
+    "Heading" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Überschrift"
+          }
+        }
+      }
+    },
     "Help" : {
       "localizations" : {
         "de" : {
@@ -1351,6 +1411,16 @@
         }
       }
     },
+    "Italic" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kursiv"
+          }
+        }
+      }
+    },
     "Keep my version" : {
       "localizations" : {
         "de" : {
@@ -1407,6 +1477,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lizenz"
+          }
+        }
+      }
+    },
+    "List" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liste"
           }
         }
       }
@@ -1551,6 +1631,16 @@
         }
       }
     },
+    "New note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neue Notiz"
+          }
+        }
+      }
+    },
     "New policy" : {
       "localizations" : {
         "de" : {
@@ -1617,6 +1707,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Noch keine Ereignisse"
+          }
+        }
+      }
+    },
+    "No notes yet" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch keine Notizen"
           }
         }
       }
@@ -1741,6 +1841,36 @@
         }
       }
     },
+    "Notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notizen"
+          }
+        }
+      }
+    },
+    "Notes you or your agents write appear here." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notizen von dir oder deinen Agenten erscheinen hier."
+          }
+        }
+      }
+    },
+    "Nothing archived" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nichts archiviert"
+          }
+        }
+      }
+    },
     "Nothing gets lost" : {
       "localizations" : {
         "de" : {
@@ -1807,6 +1937,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bei Start benachrichtigen"
+          }
+        }
+      }
+    },
+    "Numbered list" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nummerierte Liste"
           }
         }
       }
@@ -2361,6 +2501,16 @@
         }
       }
     },
+    "Restore" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederherstellen"
+          }
+        }
+      }
+    },
     "Result" : {
       "localizations" : {
         "de" : {
@@ -2661,12 +2811,32 @@
         }
       }
     },
+    "Search notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notizen durchsuchen"
+          }
+        }
+      }
+    },
     "Search reminders" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Erinnerungen durchsuchen"
+          }
+        }
+      }
+    },
+    "Select a note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle eine Notiz"
           }
         }
       }
@@ -2771,6 +2941,16 @@
         }
       }
     },
+    "Show notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notizen zeigen"
+          }
+        }
+      }
+    },
     "Skip" : {
       "localizations" : {
         "de" : {
@@ -2867,6 +3047,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "State auf einer Maschine starten, die dir gehört"
+          }
+        }
+      }
+    },
+    "Start writing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schreib los"
           }
         }
       }

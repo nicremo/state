@@ -3,6 +3,7 @@ import SwiftUI
 enum StateTab: Hashable {
     case today
     case planned
+    case notes
     case activity
     case settings
 }
@@ -16,6 +17,7 @@ struct MainTabView: View {
         #if DEBUG
         switch StateLaunch.initialTab {
         case "planned": return .planned
+        case "notes": return .notes
         case "activity": return .activity
         case "settings": return .settings
         default: return .today
@@ -34,6 +36,10 @@ struct MainTabView: View {
             ReminderCollectionView(model: model, mode: .planned)
                 .tabItem { Label(String(localized: "Planned"), systemImage: "calendar") }
                 .tag(StateTab.planned)
+
+            NotesCollectionView(model: model)
+                .tabItem { Label(String(localized: "Notes"), systemImage: "note.text") }
+                .tag(StateTab.notes)
 
             ActivityView(model: model)
                 .tabItem { Label(String(localized: "Activity"), systemImage: "clock.arrow.circlepath") }

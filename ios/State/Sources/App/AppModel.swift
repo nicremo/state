@@ -1289,6 +1289,11 @@ final class AppModel {
         notes.first { $0.id == id }
     }
 
+    /// Also finds archived notes, which the list does not hold.
+    func storedNote(id: String) async -> Note? {
+        try? await database.note(id: id)
+    }
+
     func archivedNotes() async -> [Note] {
         (try? await database.notes(includeArchived: true).filter(\.archived)) ?? []
     }

@@ -95,7 +95,7 @@ enum NoteText {
             if let range = line.range(of: #"^\d{1,3}[.)]\s+"#, options: .regularExpression) {
                 line.removeSubrange(range)
             }
-            for marker in ["**", "__", "~~", "`"] {
+            for marker in ["**", "__", "~~", "`", "*"] {
                 line = line.replacingOccurrences(of: marker, with: "")
             }
             output.append(line.trimmingCharacters(in: .whitespaces))

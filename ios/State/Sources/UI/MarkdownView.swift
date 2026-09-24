@@ -6,13 +6,17 @@ import SwiftUI
 /// outside the text so wrapped lines align.
 struct MarkdownView: View {
     let blocks: [MarkdownBlock]
+    /// When set, checklist items are buttons that report their source line.
+    var onToggleTask: ((Int) -> Void)?
 
-    init(_ source: String) {
+    init(_ source: String, onToggleTask: ((Int) -> Void)? = nil) {
         blocks = MarkdownBlocks.parse(source)
+        self.onToggleTask = onToggleTask
     }
 
-    init(blocks: [MarkdownBlock]) {
+    init(blocks: [MarkdownBlock], onToggleTask: ((Int) -> Void)? = nil) {
         self.blocks = blocks
+        self.onToggleTask = onToggleTask
     }
 
     var body: some View {
@@ -41,6 +45,14 @@ struct MarkdownView: View {
             listItem(marker: "•", text: text)
         case let .numbered(marker, text):
             listItem(marker: marker, text: text)
+        case let .task(checked, text, line):
+            taskItem(checked: checked, text: text, line: line)
+        case .divider:
+            Rectangle()
+                .fill(StateTheme.graphite.opacity(0.12))
+                .frame(height: 1)
+                .padding(.vertical, StateTheme.Space.inner)
+                .accessibilityHidden(true)
         case let .code(text):
             Text(verbatim: text)
                 .font(.footnote.monospaced())
@@ -48,6 +60,33 @@ struct MarkdownView: View {
                 .padding(StateTheme.Space.inner)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(StateTheme.accentSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private func taskItem(checked: Bool, text: String, line: Int) -> some View {
+        let label = HStack(alignment: .firstTextBaseline, spacing: StateTheme.Space.inner) {
+            Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                .font(.body)
+                .foregroundStyle(checked ? StateTheme.accent : Color.secondary.opacity(0.6))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(minWidth: 16)
+            Text(inlineMarkdown: text)
+                .font(.callout)
+                .foregroundStyle(checked ? Color.secondary : StateTheme.graphite.opacity(0.86))
+                .strikethrough(checked, color: .secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        if let onToggleTask {
+            Button {
+                onToggleTask(line)
+            } label: {
+                label.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(checked ? .isSelected : [])
+        } else {
+            label
         }
     }
 
