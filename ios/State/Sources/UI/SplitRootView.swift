@@ -12,6 +12,7 @@ struct SplitRootView: View {
     @State private var opensNotificationSettings = false
     @State private var opensEditor = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var windowWidth: CGFloat = 0
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -61,6 +62,11 @@ struct SplitRootView: View {
         } detail: {
             detail
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.width } action: { width in
+            windowWidth = width
+        }
+        .onChange(of: selectedReminderID) { _, selection in revealDetail(for: selection) }
+        .onChange(of: selectedNoteID) { _, selection in revealDetail(for: selection) }
         .onChange(of: section) { _, _ in
             selectedReminderID = nil
             selectedNoteID = nil
@@ -112,6 +118,18 @@ struct SplitRootView: View {
             ContentUnavailableView(String(localized: "Select a note"), systemImage: "note.text")
         }
     }
+
+    /// Too narrow for three columns, as an iPad in portrait, the sidebar and
+    /// the list float over the detail. After a selection the detail is what
+    /// the owner wants to see, so the floating columns step aside, as in
+    /// Apple Notes. Wide windows keep all three columns.
+    private func revealDetail(for selection: String?) {
+        guard windowWidth > 0, windowWidth < Self.threeColumnWidth else { return }
+        // Nothing selected any more (the note was archived): bring the list back.
+        withAnimation(StateTheme.stateChange) { columnVisibility = selection == nil ? .all : .detailOnly }
+    }
+
+    private static let threeColumnWidth: CGFloat = 1000
 
     /// The editor lives inside the reminder list, so the menu command has to
     /// make sure such a list is on screen before the sheet can open.
