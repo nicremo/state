@@ -22,5 +22,12 @@ enum StateLaunch {
         guard let index = arguments.firstIndex(of: "-stateTab"), arguments.indices.contains(index + 1) else { return nil }
         return arguments[index + 1]
     }
+
+    /// `-stateNote first` opens the newest note, `-stateNote new` the editor.
+    static var initialNote: String? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-stateNote"), arguments.indices.contains(index + 1) else { return nil }
+        return arguments[index + 1]
+    }
     #endif
 }

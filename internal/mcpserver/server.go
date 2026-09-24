@@ -137,7 +137,7 @@ func NewHandler(config Config) http.Handler {
 		Name:    "state",
 		Version: config.Version,
 	}, &mcp.ServerOptions{
-		Instructions: "At session start, call get_briefing with the last known cursor. When the user explicitly asks to be reminded, call create_reminder. Include the relevant original user wording in source_text and use a stable client_request_id. Report success only after the tool confirms storage. Use expected_revision for edits. Fetch get_reminder when full comments, occurrences, or history are needed.",
+		Instructions: "At session start, call get_briefing with the last known cursor. When the user explicitly asks to be reminded, call create_reminder. Include the relevant original user wording in source_text and use a stable client_request_id. Report success only after the tool confirms storage. Use expected_revision for edits. Fetch get_reminder when full comments, occurrences, or history are needed. Notes hold the owner's unstructured knowledge: search_notes and get_note read them when relevant, create_note and update_note only on explicit request.",
 	})
 	instance.registerTools()
 	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
@@ -236,6 +236,7 @@ func (server *server) registerTools() {
 		Description: "Park a running run in needs_approval until the owner grants one capability outside the policy allow-list. Runner only.",
 		Annotations: mutating,
 	}, server.requestAgentApproval)
+	server.registerNoteTools(readOnly, mutating)
 }
 
 func (server *server) getBriefing(ctx context.Context, request *mcp.CallToolRequest, input getBriefingInput) (*mcp.CallToolResult, any, error) {

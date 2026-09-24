@@ -133,10 +133,13 @@ struct AuditEvent: Codable, Hashable, Identifiable, Sendable {
     let previousHash: String?
     let hash: String
     let signature: String
+    /// Set on note events, which carry no reminder.
+    let noteID: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
         case reminderID
+        case noteID
         case action
         case actor
         case serverTime
@@ -167,9 +170,11 @@ struct AuditEvent: Codable, Hashable, Identifiable, Sendable {
         clientRequestID: String,
         previousHash: String?,
         hash: String,
-        signature: String
+        signature: String,
+        noteID: String? = nil
     ) {
         self.id = id
+        self.noteID = noteID
         self.reminderID = reminderID
         self.action = action
         self.actor = actor
@@ -204,6 +209,8 @@ struct AuditEvent: Codable, Hashable, Identifiable, Sendable {
         previousHash = try container.decodeIfPresent(String.self, forKey: .previousHash)
         hash = try container.decode(String.self, forKey: .hash)
         signature = try container.decode(String.self, forKey: .signature)
+        let rawNoteID = try container.decodeIfPresent(String.self, forKey: .noteID)
+        noteID = rawNoteID?.isEmpty == true ? nil : rawNoteID
     }
 }
 

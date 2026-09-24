@@ -1,0 +1,249 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/nicremo/state/internal/statectl"
+)
+
+const noteUsage = "usage: statectl note <list|show|create|update>"
+
+func runNote(args []string, stdout io.Writer, stderr io.Writer) error {
+	if len(args) == 0 {
+		return errors.New(noteUsage)
+	}
+	switch args[0] {
+	case "list":
+		return runNoteList(args[1:], stdout, stderr)
+	case "show":
+		return runNoteShow(args[1:], stdout, stderr)
+	case "create":
+		return runNoteCreate(args[1:], stdout, stderr)
+	case "update":
+		return runNoteUpdate(args[1:], stdout, stderr)
+	default:
+		return errors.New(noteUsage)
+	}
+}
+
+func runNoteList(args []string, stdout io.Writer, stderr io.Writer) error {
+	flags := flag.NewFlagSet("statectl note list", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	profileName := flags.String("profile", "", "statectl profile name")
+	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
+	query := flags.String("query", "", "words to find; empty lists the most recently changed notes")
+	limit := flags.Int("limit", 20, "maximum notes, at most 50")
+	asJSON := flags.Bool("json", false, "print the raw result as JSON")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if err := requireReminderProfile(*profileName); err != nil {
+		return err
+	}
+	return withNoteService(*configPath, *profileName, func(ctx context.Context, service *statectl.NoteService) error {
+		raw, err := service.List(ctx, *query, *limit)
+		if err != nil {
+			return err
+		}
+		if *asJSON {
+			return writeIndentedJSON(stdout, raw)
+		}
+		return writeNoteList(stdout, raw)
+	})
+}
+
+func runNoteShow(args []string, stdout io.Writer, stderr io.Writer) error {
+	flags := flag.NewFlagSet("statectl note show", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	profileName := flags.String("profile", "", "statectl profile name")
+	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
+	noteID := flags.String("id", "", "note UUIDv7")
+	asJSON := flags.Bool("json", false, "print the note and its history as JSON")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if err := requireReminderProfile(*profileName); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*noteID) == "" {
+		return errors.New("statectl note show requires --id")
+	}
+	return withNoteService(*configPath, *profileName, func(ctx context.Context, service *statectl.NoteService) error {
+		raw, err := service.Show(ctx, *noteID)
+		if err != nil {
+			return err
+		}
+		if *asJSON {
+			return writeIndentedJSON(stdout, raw)
+		}
+		return writeNoteDetail(stdout, raw)
+	})
+}
+
+func runNoteCreate(args []string, stdout io.Writer, stderr io.Writer) error {
+	flags := flag.NewFlagSet("statectl note create", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	profileName := flags.String("profile", "", "statectl profile name")
+	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
+	title := flags.String("title", "", "note title, defaults to the first line of the document")
+	documentFile := flags.String("document-file", "", "read the Markdown document from a file, - for stdin")
+	sourceText := flags.String("source-text", "", "original wording that caused the note")
+	requestID := flags.String("request-id", "", "stable UUID for idempotent retries")
+	asJSON := flags.Bool("json", false, "print the stored note as JSON")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if err := requireReminderProfile(*profileName); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*sourceText) == "" {
+		return errors.New("statectl note create requires --source-text")
+	}
+	document := ""
+	if *documentFile != "" {
+		text, err := readReminderText(*documentFile)
+		if err != nil {
+			return err
+		}
+		document = text
+	}
+	if strings.TrimSpace(*title) == "" && strings.TrimSpace(document) == "" {
+		return errors.New("statectl note create requires --title or --document-file")
+	}
+	return withNoteService(*configPath, *profileName, func(ctx context.Context, service *statectl.NoteService) error {
+		stored, raw, err := service.Create(ctx, *title, document, *sourceText, *requestID)
+		if err != nil {
+			return err
+		}
+		return writeStoredNote(stdout, stored, raw, *asJSON)
+	})
+}
+
+func runNoteUpdate(args []string, stdout io.Writer, stderr io.Writer) error {
+	flags := flag.NewFlagSet("statectl note update", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	profileName := flags.String("profile", "", "statectl profile name")
+	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
+	noteID := flags.String("id", "", "note UUIDv7")
+	sourceText := flags.String("source-text", "", "original wording that caused the change")
+	documentFile := flags.String("document-file", "", "replace the document from a file, - for stdin")
+	requestID := flags.String("request-id", "", "stable UUID for idempotent retries")
+	asJSON := flags.Bool("json", false, "print the stored note as JSON")
+	var title, summary optionalString
+	flags.Var(&title, "title", "replacement title; an empty value returns to the derived title")
+	flags.Var(&summary, "summary", "replacement summary; an empty value returns to the derived summary")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if err := requireReminderProfile(*profileName); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*noteID) == "" {
+		return errors.New("statectl note update requires --id")
+	}
+	if strings.TrimSpace(*sourceText) == "" {
+		return errors.New("statectl note update requires --source-text")
+	}
+	options := statectl.UpdateNoteOptions{NoteID: *noteID, SourceText: *sourceText, RequestID: *requestID, Title: title.value, Summary: summary.value}
+	if *documentFile != "" {
+		text, err := readReminderText(*documentFile)
+		if err != nil {
+			return err
+		}
+		options.Document = &text
+	}
+	if options.Title == nil && options.Summary == nil && options.Document == nil {
+		return errors.New("statectl note update requires --title, --summary or --document-file")
+	}
+	return withNoteService(*configPath, *profileName, func(ctx context.Context, service *statectl.NoteService) error {
+		stored, raw, err := service.Update(ctx, options)
+		if err != nil {
+			return err
+		}
+		return writeStoredNote(stdout, stored, raw, *asJSON)
+	})
+}
+
+// optionalString tells "not given" apart from "given as empty", which clears
+// a written title or summary back to the derived one.
+type optionalString struct{ value *string }
+
+func (option *optionalString) String() string {
+	if option.value == nil {
+		return ""
+	}
+	return *option.value
+}
+
+func (option *optionalString) Set(value string) error {
+	option.value = &value
+	return nil
+}
+
+func withNoteService(configPath string, profileName string, action func(context.Context, *statectl.NoteService) error) error {
+	profile, token, err := loadProfileAndCredential(configPath, profileName)
+	if err != nil {
+		return err
+	}
+	session, err := statectl.ConnectRemote(context.Background(), profile, token, version)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = session.Close() }()
+	ctx, cancel := context.WithTimeout(context.Background(), reminderCallTimeout)
+	defer cancel()
+	return action(ctx, statectl.NewNoteService(session, newUUIDv7))
+}
+
+func writeStoredNote(stdout io.Writer, stored statectl.StoredNote, raw json.RawMessage, asJSON bool) error {
+	if asJSON {
+		return writeIndentedJSON(stdout, raw)
+	}
+	_, err := fmt.Fprintf(stdout, "stored note %s %q\n", stored.ID, stored.Title)
+	return err
+}
+
+func writeNoteList(stdout io.Writer, raw json.RawMessage) error {
+	list := struct {
+		Notes []statectl.StoredNote `json:"notes"`
+	}{}
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return fmt.Errorf("decode note list: %w", err)
+	}
+	if len(list.Notes) == 0 {
+		_, err := fmt.Fprintln(stdout, "no notes")
+		return err
+	}
+	for _, note := range list.Notes {
+		line := fmt.Sprintf("%s %q", note.ID, note.Title)
+		if note.Summary != "" {
+			line += "  " + note.Summary
+		}
+		if _, err := fmt.Fprintln(stdout, line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeNoteDetail(stdout io.Writer, raw json.RawMessage) error {
+	detail := struct {
+		Note struct {
+			statectl.StoredNote
+			Document string `json:"document"`
+		} `json:"note"`
+		History []json.RawMessage `json:"history"`
+	}{}
+	if err := json.Unmarshal(raw, &detail); err != nil {
+		return fmt.Errorf("decode note: %w", err)
+	}
+	_, err := fmt.Fprintf(stdout, "note %s %q, revision %d, %d events\n\n%s\n",
+		detail.Note.ID, detail.Note.Title, detail.Note.Revision, len(detail.History), strings.TrimRight(detail.Note.Document, "\n"))
+	return err
+}

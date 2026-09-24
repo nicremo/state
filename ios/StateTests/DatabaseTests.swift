@@ -177,7 +177,7 @@ final class DatabaseTests: XCTestCase {
         XCTAssertNil(cached.executionPolicyID)
     }
 
-    func testFreshDatabaseRunsBothMigrations() async throws {
+    func testFreshDatabaseRunsEveryMigration() async throws {
         let path = temporaryDatabasePath()
         _ = try StateDatabase(path: path)
 
@@ -185,7 +185,7 @@ final class DatabaseTests: XCTestCase {
         let applied = try await pool.read { database in
             try String.fetchAll(database, sql: "SELECT identifier FROM grdb_migrations ORDER BY identifier")
         }
-        XCTAssertEqual(applied, ["v1", "v2"])
+        XCTAssertEqual(applied, ["v1", "v2", "v3-notes"])
     }
 
     func testMigrationFromV1PreservesRemindersAndAddsExecutionCaches() async throws {

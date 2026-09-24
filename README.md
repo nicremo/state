@@ -1,6 +1,6 @@
 # State
 
-State gives coding agents a durable, auditable memory for reminders while keeping the owner in control. It synchronizes reminders, comments, revisions, conflicts and complete history between Codex, Claude Code, OpenCode and a native iOS app. Scheduled reminders can also start a local agent run on the owner's own workstation, with the result reported back to the phone.
+State gives coding agents a durable, auditable memory for reminders while keeping the owner in control. It synchronizes reminders, notes, comments, revisions, conflicts and complete history between Codex, Claude Code, OpenCode and a native iOS app. Scheduled reminders can also start a local agent run on the owner's own workstation, with the result reported back to the phone.
 
 State is built for technical self-hosters. It is not an agent chat app, and execution never runs on the server: a workstation pulls its own work through an outbound-only runner.
 
@@ -120,7 +120,7 @@ statectl reminder create --profile codex \
   --date 2026-10-01 --time 09:00 --tz Europe/Berlin --repeat monthly
 ```
 
-`statectl reminder add-context`, `schedule`, `show` and `search` cover the rest. Every write carries the original wording in `--source-text`, and `--json` prints the raw server response for scripts.
+`statectl reminder add-context`, `schedule`, `show` and `search` cover the rest, and `statectl note list|show|create|update` does the same for notes. Every write carries the original wording in `--source-text`, and `--json` prints the raw server response for scripts.
 
 ## MCP tools
 
@@ -135,6 +135,10 @@ The Streamable HTTP endpoint is `/mcp`. It exposes:
 - `add_comment`
 - `complete_occurrence`
 - `snooze_occurrence`
+- `search_notes`
+- `get_note`
+- `create_note`
+- `update_note`
 
 Runner-scoped tools, available only to paired `state-runner` credentials:
 

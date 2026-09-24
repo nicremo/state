@@ -53,6 +53,13 @@ type Export struct {
 	GeneratedAt time.Time        `json:"generated_at"`
 	Cursor      int64            `json:"cursor"`
 	Reminders   []ReminderDetail `json:"reminders"`
+	Notes       []NoteDetail     `json:"notes"`
+}
+
+// NoteDetail is one note with its complete audit history in an export.
+type NoteDetail struct {
+	Note    state.Note         `json:"note"`
+	History []state.AuditEvent `json:"history"`
 }
 
 func NewHandler(config Config) http.Handler {
@@ -94,6 +101,11 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("POST /api/v1/occurrences/{id}/complete", handler.completeOccurrence)
 	handler.router.HandleFunc("POST /api/v1/occurrences/{id}/snooze", handler.snoozeOccurrence)
 	handler.router.HandleFunc("GET /api/v1/changes", handler.getChanges)
+	handler.router.HandleFunc("POST /api/v1/notes", handler.createNote)
+	handler.router.HandleFunc("GET /api/v1/notes", handler.listNotes)
+	handler.router.HandleFunc("GET /api/v1/notes/{id}", handler.getNote)
+	handler.router.HandleFunc("PATCH /api/v1/notes/{id}", handler.updateNote)
+	handler.router.HandleFunc("GET /api/v1/notes/{id}/history", handler.getNoteHistory)
 	handler.router.HandleFunc("GET /api/v1/briefing", handler.getBriefing)
 	handler.router.HandleFunc("GET /api/v1/export", handler.exportState)
 	handler.router.HandleFunc("POST /api/v1/projects", handler.createProject)
@@ -399,6 +411,7 @@ func (handler *Handler) exportState(writer http.ResponseWriter, request *http.Re
 	const pageSize = 500
 	cursor := int64(0)
 	reminderIDs := make(map[string]struct{})
+	noteIDs := make(map[string]struct{})
 	for {
 		changes, err := handler.state.ListChanges(request.Context(), cursor, pageSize)
 		if err != nil {
@@ -406,7 +419,13 @@ func (handler *Handler) exportState(writer http.ResponseWriter, request *http.Re
 			return
 		}
 		for _, change := range changes {
-			reminderIDs[change.Event.ReminderID] = struct{}{}
+			// Project, policy, runner and note events carry no reminder.
+			if change.Event.ReminderID != "" {
+				reminderIDs[change.Event.ReminderID] = struct{}{}
+			}
+			if change.Event.NoteID != "" {
+				noteIDs[change.Event.NoteID] = struct{}{}
+			}
 			cursor = change.Cursor
 		}
 		if len(changes) < pageSize {
@@ -467,11 +486,32 @@ func (handler *Handler) exportState(writer http.ResponseWriter, request *http.Re
 		})
 	}
 
+	sortedNoteIDs := make([]string, 0, len(noteIDs))
+	for id := range noteIDs {
+		sortedNoteIDs = append(sortedNoteIDs, id)
+	}
+	sort.Strings(sortedNoteIDs)
+	noteDetails := make([]NoteDetail, 0, len(sortedNoteIDs))
+	for _, id := range sortedNoteIDs {
+		note, err := handler.state.GetNote(request.Context(), id)
+		if err != nil {
+			writeError(writer, err, nil)
+			return
+		}
+		history, err := handler.state.ListNoteHistory(request.Context(), id)
+		if err != nil {
+			writeError(writer, err, nil)
+			return
+		}
+		noteDetails = append(noteDetails, NoteDetail{Note: note, History: history})
+	}
+
 	writeJSON(writer, http.StatusOK, Export{
 		APIVersion:  "v1",
 		GeneratedAt: time.Now().UTC(),
 		Cursor:      cursor,
 		Reminders:   details,
+		Notes:       noteDetails,
 	})
 }
 

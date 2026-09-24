@@ -11,6 +11,10 @@ enum MarkdownBlock: Equatable {
     case bullet(String)
     case numbered(marker: String, text: String)
     case code(String)
+    /// A checklist item. `line` is its index in the source, so a tap can flip
+    /// exactly this line of the document.
+    case task(checked: Bool, text: String, line: Int)
+    case divider
 }
 
 enum MarkdownBlocks {
@@ -25,7 +29,7 @@ enum MarkdownBlocks {
             paragraph = []
         }
 
-        for rawLine in source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n") {
+        for (index, rawLine) in source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n").enumerated() {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
 
             if line.hasPrefix("```") {
@@ -48,6 +52,12 @@ enum MarkdownBlocks {
             } else if let heading = heading(line) {
                 flushParagraph()
                 blocks.append(heading)
+            } else if ["---", "***", "___"].contains(line) {
+                flushParagraph()
+                blocks.append(.divider)
+            } else if let item = task(line, index: index) {
+                flushParagraph()
+                blocks.append(item)
             } else if let item = bullet(line) {
                 flushParagraph()
                 blocks.append(.bullet(item))
@@ -72,6 +82,15 @@ enum MarkdownBlocks {
         guard rest.first == " " else { return nil }
         let text = rest.trimmingCharacters(in: .whitespaces)
         return text.isEmpty ? nil : .heading(level: hashes, text: text)
+    }
+
+    private static func task(_ line: String, index: Int) -> MarkdownBlock? {
+        for (marker, checked) in [("- [ ] ", false), ("- [x] ", true), ("- [X] ", true), ("* [ ] ", false), ("* [x] ", true)]
+            where line.hasPrefix(marker) {
+            let text = line.dropFirst(marker.count).trimmingCharacters(in: .whitespaces)
+            return .task(checked: checked, text: text, line: index)
+        }
+        return nil
     }
 
     private static func bullet(_ line: String) -> String? {

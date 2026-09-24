@@ -18,6 +18,7 @@ tags:
   - name: Occurrences
   - name: Sync
   - name: Devices
+  - name: Notes
   - name: Projects
   - name: Policies
   - name: Runners
@@ -475,6 +476,102 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Export" }
         "403": { $ref: "#/components/responses/Error" }
+  /api/v1/notes:
+    post:
+      tags: [Notes]
+      operationId: createNote
+      description: Owner, device and harness. Stores one note. Without a title the first line of the document becomes the title (title_source derived).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNoteRequest"
+      responses:
+        "201":
+          description: Note stored with its audit event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Note" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    get:
+      tags: [Notes]
+      operationId: listNotes
+      description: Owner, device and harness. Newest change first. Runners receive 403.
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Full-text query over title, summary and plain text. }
+        - { name: include_archived, in: query, schema: { type: boolean, default: false } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200":
+          description: Matching notes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notes]
+                properties:
+                  notes:
+                    type: array
+                    items: { $ref: "#/components/schemas/Note" }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/notes/{note_id}:
+    parameters:
+      - $ref: "#/components/parameters/NoteID"
+    get:
+      tags: [Notes]
+      operationId: getNote
+      description: Owner, device and harness read access.
+      responses:
+        "200":
+          description: Note.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Note" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [Notes]
+      operationId: updateNote
+      description: Optimistic revision checking. Archiving and restoring (archived) is limited to the owner and devices; a stale revision answers 409 with details.server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNoteRequest"
+      responses:
+        "200":
+          description: Updated note.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Note" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/notes/{note_id}/history:
+    parameters:
+      - $ref: "#/components/parameters/NoteID"
+    get:
+      tags: [Notes]
+      operationId: getNoteHistory
+      description: Complete audit history of one note.
+      responses:
+        "200":
+          description: Audit events, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: "#/components/schemas/AuditEvent" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/projects:
     post:
       tags: [Projects]
@@ -926,6 +1023,11 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/UUIDv7" }
+    NoteID:
+      name: note_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/UUIDv7" }
     ProjectID:
       name: project_id
       in: path
@@ -1111,6 +1213,9 @@ components:
       properties:
         id: { $ref: "#/components/schemas/UUIDv7" }
         reminder_id: { $ref: "#/components/schemas/UUIDv7" }
+        note_id:
+          $ref: "#/components/schemas/UUIDv7"
+          description: Present on note events (note.created, note.updated, note.archived, note.restored), which carry no reminder.
         action: { type: string }
         actor: { $ref: "#/components/schemas/Actor" }
         server_time: { type: string, format: date-time }
@@ -1250,6 +1355,58 @@ components:
         reminders:
           type: array
           items: { $ref: "#/components/schemas/ReminderDetail" }
+        notes:
+          type: array
+          items:
+            type: object
+            required: [note, history]
+            properties:
+              note: { $ref: "#/components/schemas/Note" }
+              history:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEvent" }
+    NoteFieldSource:
+      type: string
+      enum: [user, derived]
+      description: user values are never overwritten automatically; derived values follow the document.
+    Note:
+      type: object
+      required: [id, title, title_source, document, plain_text, summary, summary_source, archived, revision, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/UUIDv7" }
+        title: { type: string, maxLength: 200 }
+        title_source: { $ref: "#/components/schemas/NoteFieldSource" }
+        document:
+          type: string
+          maxLength: 262144
+          description: Canonical content as Markdown (CommonMark plus - [ ] checklists and --- dividers).
+        plain_text: { type: string, description: Derived text without Markdown markers, used for search. }
+        summary: { type: string, maxLength: 280 }
+        summary_source: { $ref: "#/components/schemas/NoteFieldSource" }
+        archived: { type: boolean }
+        revision: { type: integer, format: int64, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateNoteRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          description: A title or a non-empty document is required.
+          properties:
+            title: { type: string, maxLength: 200 }
+            document: { type: string, maxLength: 262144 }
+            summary: { type: string, maxLength: 280 }
+    UpdateNoteRequest:
+      allOf:
+        - $ref: "#/components/schemas/MutationMetadata"
+        - type: object
+          required: [expected_revision]
+          properties:
+            title: { type: string, maxLength: 200, description: An empty string returns to the derived title. }
+            document: { type: string, maxLength: 262144 }
+            summary: { type: string, maxLength: 280, description: An empty string returns to the derived summary. }
+            archived: { type: boolean, description: Owner and devices only. }
+            expected_revision: { type: integer, format: int64, minimum: 1 }
     ProjectSlug:
       type: string
       pattern: "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$"

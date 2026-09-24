@@ -39,6 +39,7 @@ final class AppModel {
 
     private(set) var session: ServerSession?
     private(set) var reminders: [Reminder] = []
+    private(set) var notes: [Note] = []
     private(set) var activity: [AuditEvent] = []
     private(set) var conflicts: [StoredConflict] = []
     private(set) var agents: [Actor] = []
@@ -773,7 +774,7 @@ final class AppModel {
     func enterDemo() async {
         do {
             isDemo = true
-            demoVisibleIDs = Set(Self.demoReminderIDs)
+            demoVisibleIDs = Set(Self.demoReminderIDs + [Self.demoNoteID])
             session = ServerSession(
                 serverURL: URL(string: "https://demo.state.invalid")!,
                 actor: Actor(
@@ -819,6 +820,8 @@ final class AppModel {
             projects = try await database.projects()
             policies = try await database.policies()
             runners = try await database.runners()
+            let loadedNotes = try await database.notes()
+            notes = isDemo ? loadedNotes.filter { demoVisibleIDs.contains($0.id) } : loadedNotes
             if isDemo {
                 reminders = loadedReminders.filter { demoVisibleIDs.contains($0.id) }
                 activity = loadedActivity.filter { $0.reminderID.map(demoVisibleIDs.contains) ?? false }
@@ -1053,6 +1056,12 @@ final class AppModel {
             ),
             cursor: nil
         )
+        try await database.apply(note: Note.local(
+            id: Self.demoNoteID,
+            title: "",
+            document: String(localized: "demo.note.document"),
+            at: now.addingTimeInterval(-3_600)
+        ))
     }
 
     /// The fields a reminder actually carries. The demo history has to name
@@ -1198,6 +1207,152 @@ final class AppModel {
     ]
 
     private static let demoPolicyID = "01989f00-0000-7000-8000-000000000051"
+
+    private static let demoNoteID = "01989f00-0000-7000-8000-000000000060"
+
+    // MARK: Notes
+
+    /// Writes the note locally first, then queues it for the server. Returns
+    /// the identifier the note has after the attempt to synchronize.
+    @discardableResult
+    func createNote(title: String, document: String) async -> String? {
+        do {
+            let now = Date()
+            let provisionalID = UUIDv7.generate().uuidString.lowercased()
+            let note = Note.local(id: provisionalID, title: title, document: document, at: now)
+            try await database.apply(note: note)
+            if isDemo {
+                demoVisibleIDs.insert(provisionalID)
+                await reloadCache()
+                return provisionalID
+            }
+            let requestID = UUIDv7.generate().uuidString.lowercased()
+            let request = CreateNoteRequest(
+                title: note.titleSource == Note.userSource ? note.title : nil,
+                document: document,
+                clientTime: now,
+                source: "ios",
+                clientRequestID: requestID
+            )
+            _ = try await database.enqueue(
+                method: "POST",
+                path: SyncEngine.notesPath,
+                body: StateJSON.encoder.encode(request),
+                entityID: provisionalID
+            )
+            await reloadCache()
+            await synchronize()
+            return notes.contains { $0.id == provisionalID }
+                ? provisionalID
+                : notes.first { $0.document == document }?.id
+        } catch {
+            presentedError = error.localizedDescription
+            return nil
+        }
+    }
+
+    /// Saves an edit. `title` nil keeps the current title, an empty string
+    /// returns to the title derived from the first line.
+    func updateNote(id: String, title: String?, document: String) async {
+        await mutateNote(id: id) { note in
+            note.apply(title: title, document: document)
+        } request: { current, expectedRevision, now, requestID in
+            UpdateNoteRequest(
+                title: title,
+                document: document == current.document ? nil : document,
+                archived: nil,
+                expectedRevision: expectedRevision,
+                clientTime: now,
+                source: "ios",
+                clientRequestID: requestID
+            )
+        }
+    }
+
+    func setNoteArchived(id: String, archived: Bool) async {
+        await mutateNote(id: id) { note in
+            note.archived = archived
+        } request: { _, expectedRevision, now, requestID in
+            UpdateNoteRequest(
+                title: nil,
+                document: nil,
+                archived: archived,
+                expectedRevision: expectedRevision,
+                clientTime: now,
+                source: "ios",
+                clientRequestID: requestID
+            )
+        }
+    }
+
+    func note(id: String) -> Note? {
+        notes.first { $0.id == id }
+    }
+
+    /// Also finds archived notes, which the list does not hold.
+    func storedNote(id: String) async -> Note? {
+        try? await database.note(id: id)
+    }
+
+    func archivedNotes() async -> [Note] {
+        (try? await database.notes(includeArchived: true).filter(\.archived)) ?? []
+    }
+
+    private func mutateNote(
+        id: String,
+        change: (inout Note) -> Void,
+        request: (Note, Int64, Date, String) -> UpdateNoteRequest
+    ) async {
+        do {
+            guard let current = try await database.note(id: id) else { return }
+            var updated = current
+            change(&updated)
+            guard updated != current else { return }
+            let now = Date()
+            updated.revision = current.revision + 1
+            updated.updatedAt = now
+            try await database.apply(note: updated)
+            if !isDemo, let pendingCreate = try await database.pendingMutations().first(where: {
+                $0.method == "POST" && $0.path == SyncEngine.notesPath && $0.entityID == id
+            }) {
+                // The server has not seen this note yet, so there is nothing to
+                // patch: the queued create is replaced by one with the new text,
+                // or dropped together with the note when it is archived.
+                try await database.removeMutation(id: pendingCreate.id)
+                if updated.archived {
+                    try await database.deleteNote(id: id)
+                } else {
+                    let createRequest = CreateNoteRequest(
+                        title: updated.titleSource == Note.userSource ? updated.title : nil,
+                        document: updated.document,
+                        clientTime: now,
+                        source: "ios",
+                        clientRequestID: UUIDv7.generate().uuidString.lowercased()
+                    )
+                    _ = try await database.enqueue(
+                        method: "POST",
+                        path: SyncEngine.notesPath,
+                        body: StateJSON.encoder.encode(createRequest),
+                        entityID: id
+                    )
+                }
+            } else if !isDemo {
+                let requestID = UUIDv7.generate().uuidString.lowercased()
+                _ = try await database.enqueue(
+                    method: "PATCH",
+                    path: "\(SyncEngine.notesPath)/\(id)",
+                    body: StateJSON.encoder.encode(request(current, current.revision, now, requestID)),
+                    entityID: id
+                )
+            }
+            await reloadCache()
+            if !isDemo {
+                await synchronize()
+            }
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
 
     private func reloadActors() async {
         guard let api, session?.actor.kind == .owner else { return }

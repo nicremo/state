@@ -8,6 +8,7 @@ struct SplitRootView: View {
 
     @State private var section: StateTab? = .today
     @State private var selectedReminderID: String?
+    @State private var selectedNoteID: String?
     @State private var opensNotificationSettings = false
     @State private var opensEditor = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -21,6 +22,9 @@ struct SplitRootView: View {
                 Label(String(localized: "Planned"), systemImage: "calendar")
                     .tag(StateTab.planned)
                     .accessibilityIdentifier("sidebar-planned")
+                Label(String(localized: "Notes"), systemImage: "note.text")
+                    .tag(StateTab.notes)
+                    .accessibilityIdentifier("sidebar-notes")
                 Label(String(localized: "Activity"), systemImage: "clock.arrow.circlepath")
                     .badge(model.conflicts.count)
                     .tag(StateTab.activity)
@@ -47,6 +51,8 @@ struct SplitRootView: View {
                     selection: $selectedReminderID,
                     editorPresentation: $opensEditor
                 )
+            case .notes:
+                NotesCollectionView(model: model, selection: $selectedNoteID)
             case .activity:
                 ActivityView(model: model)
             case .settings:
@@ -55,7 +61,10 @@ struct SplitRootView: View {
         } detail: {
             detail
         }
-        .onChange(of: section) { _, _ in selectedReminderID = nil }
+        .onChange(of: section) { _, _ in
+            selectedReminderID = nil
+            selectedNoteID = nil
+        }
         .onReceive(NotificationCenter.default.publisher(for: .stateOpenNotificationSettings)) { _ in
             section = .settings
             opensNotificationSettings = true
@@ -70,7 +79,9 @@ struct SplitRootView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if let selectedReminderID, section == .today || section == .planned {
+        if section == .notes {
+            noteDetail
+        } else if let selectedReminderID, section == .today || section == .planned {
             NavigationStack {
                 ReminderDetailView(model: model, reminderID: selectedReminderID)
             }
@@ -82,6 +93,23 @@ struct SplitRootView: View {
                 systemImage: "checklist"
             )
             .accessibilityIdentifier("split-detail-placeholder")
+        }
+    }
+
+    @ViewBuilder
+    private var noteDetail: some View {
+        if let selectedNoteID {
+            NavigationStack {
+                NoteDetailView(
+                    model: model,
+                    noteID: selectedNoteID == NoteRoute.newSelection ? nil : selectedNoteID
+                ) { created in
+                    self.selectedNoteID = created
+                }
+            }
+            .id(selectedNoteID)
+        } else {
+            ContentUnavailableView(String(localized: "Select a note"), systemImage: "note.text")
         }
     }
 

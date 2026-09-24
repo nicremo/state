@@ -155,7 +155,7 @@ final class StateDatabase: Sendable {
         try await pool.write { database in
             for table in [
                 "reminder_cache", "comment_cache", "occurrence_cache", "audit_cache",
-                "conflicts", "project_cache", "policy_cache", "runner_cache", "run_cache", "metadata",
+                "conflicts", "project_cache", "policy_cache", "runner_cache", "run_cache", "note_cache", "metadata",
             ] {
                 try database.execute(sql: "DELETE FROM \(table)")
             }
@@ -171,8 +171,11 @@ final class StateDatabase: Sendable {
         try await pool.read { database in
             try Bool.fetchOne(
                 database,
-                sql: "SELECT EXISTS(SELECT 1 FROM reminder_cache WHERE id LIKE ?)",
-                arguments: [Self.demoIdentifierPrefix + "%"]
+                sql: """
+                SELECT EXISTS(SELECT 1 FROM reminder_cache WHERE id LIKE ?)
+                    OR EXISTS(SELECT 1 FROM note_cache WHERE id LIKE ?)
+                """,
+                arguments: [Self.demoIdentifierPrefix + "%", Self.demoIdentifierPrefix + "%"]
             ) ?? false
         }
     }
@@ -287,6 +290,48 @@ final class StateDatabase: Sendable {
                 return nil
             }
             return try StateJSON.decoder.decode(AgentRun.self, from: data)
+        }
+    }
+
+    func apply(note: Note) async throws {
+        let json = try StateJSON.encoder.encode(note)
+        try await pool.write { database in
+            try database.execute(
+                sql: """
+                INSERT INTO note_cache (id, title, archived, updated_at, json) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    title = excluded.title,
+                    archived = excluded.archived,
+                    updated_at = excluded.updated_at,
+                    json = excluded.json
+                """,
+                arguments: [note.id, note.title, note.archived, note.updatedAt, json]
+            )
+        }
+    }
+
+    /// Newest change first, the order of the Notes list.
+    func notes(includeArchived: Bool = false) async throws -> [Note] {
+        try await pool.read { database in
+            try Data.fetchAll(
+                database,
+                sql: "SELECT json FROM note_cache WHERE ? OR archived = 0 ORDER BY updated_at DESC, id DESC",
+                arguments: [includeArchived]
+            )
+            .map { try StateJSON.decoder.decode(Note.self, from: $0) }
+        }
+    }
+
+    func note(id: String) async throws -> Note? {
+        try await pool.read { database in
+            try Data.fetchOne(database, sql: "SELECT json FROM note_cache WHERE id = ?", arguments: [id])
+                .map { try StateJSON.decoder.decode(Note.self, from: $0) }
+        }
+    }
+
+    func deleteNote(id: String) async throws {
+        try await pool.write { database in
+            try database.execute(sql: "DELETE FROM note_cache WHERE id = ?", arguments: [id])
         }
     }
 
@@ -498,6 +543,16 @@ final class StateDatabase: Sendable {
                 table.column("updated_at", .datetime).notNull()
                 table.column("json", .blob).notNull()
             }
+        }
+        migrator.registerMigration("v3-notes") { database in
+            try database.create(table: "note_cache") { table in
+                table.column("id", .text).primaryKey()
+                table.column("title", .text).notNull()
+                table.column("archived", .boolean).notNull()
+                table.column("updated_at", .datetime).notNull()
+                table.column("json", .blob).notNull()
+            }
+            try database.create(index: "note_updated_idx", on: "note_cache", columns: ["archived", "updated_at"])
         }
         return migrator
     }

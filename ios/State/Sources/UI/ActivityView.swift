@@ -118,7 +118,7 @@ struct ConflictResolutionView: View {
                         Button("Keep my version") {
                             Task { await model.resolveConflict(conflict, keepLocal: true) }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.statePill)
                         Button("Use server version") {
                             Task { await model.resolveConflict(conflict, keepLocal: false) }
                         }

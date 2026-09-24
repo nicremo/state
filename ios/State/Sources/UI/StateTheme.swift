@@ -265,6 +265,25 @@ struct StateSecondaryButtonStyle: ButtonStyle {
     }
 }
 
+/// A compact filled action for empty states: the primary style's ink and
+/// onAccent pairing, sized to its label. `.borderedProminent` would keep a
+/// white label on the near-white dark-mode ink and make it unreadable.
+struct StatePillButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(StateTheme.onAccent)
+            .padding(.horizontal, StateTheme.Space.block)
+            .frame(minHeight: 36)
+            .background(StateTheme.accent, in: Capsule())
+            .contentShape(Capsule())
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.25)
+            .animation(.smooth(duration: 0.16), value: configuration.isPressed)
+    }
+}
+
 /// Button geometry per platform: a thumb sized bar on iPhone and iPad, a
 /// pointer sized one on the Mac.
 enum StateControlMetrics {
@@ -283,4 +302,8 @@ extension ButtonStyle where Self == StatePrimaryButtonStyle {
 
 extension ButtonStyle where Self == StateSecondaryButtonStyle {
     static var stateSecondary: StateSecondaryButtonStyle { StateSecondaryButtonStyle() }
+}
+
+extension ButtonStyle where Self == StatePillButtonStyle {
+    static var statePill: StatePillButtonStyle { StatePillButtonStyle() }
 }

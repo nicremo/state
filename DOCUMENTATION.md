@@ -10,7 +10,7 @@ after it explains the same steps in depth.
 
 - [What State is](#what-state-is)
 - [How the pieces fit together](#how-the-pieces-fit-together)
-- [AI-managed Notes roadmap](docs/ai-managed-notes.md), [review](docs/ai-managed-notes-review.md) and [notes core plan](docs/superpowers/plans/2026-09-24-notes-core.md)
+- [Notes](#notes), with the [AI-managed Notes roadmap](docs/ai-managed-notes.md), its [review](docs/ai-managed-notes-review.md) and the [notes core plan](docs/superpowers/plans/2026-09-24-notes-core.md)
 - [Quickstart](#quickstart)
 - [Step 1: run the server](#step-1-run-the-server)
 - [Step 2: connect the iOS app](#step-2-connect-the-ios-app)
@@ -349,7 +349,7 @@ that agent actually uses. The credential is stored either way.
 
 ## What an agent can and cannot do
 
-The MCP endpoint is `/mcp`, Streamable HTTP. It exposes nine tools:
+The MCP endpoint is `/mcp`, Streamable HTTP. It exposes these tools to agents:
 
 | Tool | Purpose |
 | --- | --- |
@@ -362,8 +362,15 @@ The MCP endpoint is `/mcp`, Streamable HTTP. It exposes nine tools:
 | `add_comment` | Append context without replacing anything |
 | `complete_occurrence` | Mark one due date complete |
 | `snooze_occurrence` | Move one due date to an explicit UTC time |
+| `search_notes` | Find notes by words, or list the newest; titles and summaries only |
+| `get_note` | One note with its Markdown document and full history |
+| `create_note` | Store a note the owner explicitly asked for |
+| `update_note` | Change a note with an optimistic revision check |
 
-Agents cannot archive and cannot delete. That is enforced by the server, not by
+Paired runners additionally see the five runner tools described in
+[Scheduled agent execution](README.md#scheduled-agent-execution).
+
+Agents cannot archive and cannot delete, neither reminders nor notes. That is enforced by the server, not by
 the rules file, so an agent that ignores its instructions still cannot do it.
 
 Every write requires a `client_request_id`, so a retried call returns the
@@ -372,6 +379,33 @@ original result instead of creating a duplicate. Every update requires an
 else's change.
 
 The HTTP contract is in [`openapi/state-v1.yaml`](openapi/state-v1.yaml).
+
+## Notes
+
+Notes are the owner's unstructured knowledge next to reminders: one flat list,
+newest change first, no folders, tags or categories. Search is the only way to
+narrow it. The iPhone shows them in the Notes tab, the iPad and the Mac in the
+sidebar.
+
+A note is a Markdown document: headings, lists, `- [ ]` checklists and `---`
+dividers. Without a written title the first line becomes the title, and the
+summary in the list is derived from the text below it. A title or summary that
+someone writes is never overwritten automatically. Tapping a checklist item in
+the app ticks it in the document.
+
+Notes share the audit chain with reminders: every create, edit, archive and
+restore is a signed event with its author and original wording. Agents read and
+write notes through the MCP tools above or `statectl note`; only the owner and
+devices archive them. Photo and audio capture with AI processing are the second
+stage, see [the review](docs/ai-managed-notes-review.md).
+
+```bash
+statectl note list   --profile codex --query "ideen"
+statectl note show   --profile codex --id NOTE_ID
+printf '# Ideen\nNotizen mit Fotos' | \
+  statectl note create --profile codex --document-file - --source-text "Leg eine Notiz an"
+statectl note update --profile codex --id NOTE_ID --title "State Ideen" --source-text "Benenn sie um"
+```
 
 ## Notifications
 

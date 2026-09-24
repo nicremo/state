@@ -1,6 +1,6 @@
 # AI-managed notes
 
-**Status:** Product and architecture specification
+**Status:** Product and architecture specification. Stage A (notes core without media and AI) is implemented; see [the review](ai-managed-notes-review.md) for the binding deviations.
 
 **Source:** [`ai-managed-notes-transcript.md`](ai-managed-notes-transcript.md)
 
