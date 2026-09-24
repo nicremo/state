@@ -176,6 +176,7 @@ const (
 type AuditEvent struct {
 	ID              string          `json:"id"`
 	ReminderID      string          `json:"reminder_id"`
+	NoteID          string          `json:"note_id,omitempty"`
 	Action          AuditAction     `json:"action"`
 	Actor           Actor           `json:"actor"`
 	ServerTime      time.Time       `json:"server_time"`

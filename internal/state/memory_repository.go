@@ -33,6 +33,8 @@ type MemoryRepository struct {
 	requestRunners     map[string]Runner
 	runs               map[string]AgentRun
 	requestRuns        map[string]AgentRun
+	notes              map[string]Note
+	requestNotes       map[string]Note
 	auditChain         []AuditEvent
 	lastAuditHash      string
 	signingKey         ed25519.PrivateKey
@@ -56,6 +58,8 @@ func NewMemoryRepository() *MemoryRepository {
 		requestRunners:     make(map[string]Runner),
 		runs:               make(map[string]AgentRun),
 		requestRuns:        make(map[string]AgentRun),
+		notes:              make(map[string]Note),
+		requestNotes:       make(map[string]Note),
 		signingKey:         ed25519.NewKeyFromSeed(seed[:]),
 	}
 }
@@ -913,4 +917,87 @@ func occurrenceFromSeed(id string, reminderID string, seed OccurrenceSeed, creat
 
 func occurrenceSortKey(occurrence Occurrence) string {
 	return occurrence.LocalDate + "T" + occurrence.LocalTime + occurrence.ID
+}
+
+func (repository *MemoryRepository) CreateNote(_ context.Context, note Note, event AuditEvent, clientRequestID string) (Note, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+
+	if existing, ok := repository.requestNotes[clientRequestID]; ok {
+		return existing, nil
+	}
+	repository.appendAuditEvent(event)
+	repository.notes[note.ID] = note
+	repository.requestNotes[clientRequestID] = note
+	return note, nil
+}
+
+func (repository *MemoryRepository) UpdateNote(_ context.Context, note Note, expectedRevision int64, event AuditEvent, clientRequestID string) (Note, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+
+	if existing, ok := repository.requestNotes[clientRequestID]; ok {
+		return existing, nil
+	}
+	current, ok := repository.notes[note.ID]
+	if !ok {
+		return Note{}, ErrNotFound
+	}
+	if current.Revision != expectedRevision {
+		return Note{}, ErrRevisionConflict
+	}
+	repository.appendAuditEvent(event)
+	repository.notes[note.ID] = note
+	repository.requestNotes[clientRequestID] = note
+	return note, nil
+}
+
+func (repository *MemoryRepository) GetNote(_ context.Context, noteID string) (Note, error) {
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+
+	note, ok := repository.notes[noteID]
+	if !ok {
+		return Note{}, ErrNotFound
+	}
+	return note, nil
+}
+
+func (repository *MemoryRepository) ListNotes(_ context.Context, options NoteListOptions) ([]Note, error) {
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+
+	notes := make([]Note, 0, len(repository.notes))
+	for _, note := range repository.notes {
+		if note.Archived && !options.IncludeArchived {
+			continue
+		}
+		if options.Query != "" && !noteMatchesQuery(note, options.Query) {
+			continue
+		}
+		notes = append(notes, note)
+	}
+	sort.SliceStable(notes, func(left int, right int) bool {
+		if notes[left].UpdatedAt.Equal(notes[right].UpdatedAt) {
+			return notes[left].ID > notes[right].ID
+		}
+		return notes[left].UpdatedAt.After(notes[right].UpdatedAt)
+	})
+	if limit := normalizeLimit(options.Limit); len(notes) > limit {
+		notes = notes[:limit]
+	}
+	return notes, nil
+}
+
+func (repository *MemoryRepository) ListNoteAuditEvents(_ context.Context, noteID string) ([]AuditEvent, error) {
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+
+	events := make([]AuditEvent, 0)
+	for _, event := range repository.auditChain {
+		if event.NoteID == noteID {
+			events = append(events, cloneAuditEvent(event))
+		}
+	}
+	return events, nil
 }

@@ -53,6 +53,12 @@ type Repository interface {
 	ExpireStaleRuns(context.Context, time.Time) ([]AgentRun, error)
 	ListDueOccurrences(context.Context, time.Time) ([]DueOccurrence, error)
 	LatestChangeCursor(context.Context) (int64, error)
+
+	CreateNote(context.Context, Note, AuditEvent, string) (Note, error)
+	UpdateNote(context.Context, Note, int64, AuditEvent, string) (Note, error)
+	GetNote(context.Context, string) (Note, error)
+	ListNotes(context.Context, NoteListOptions) ([]Note, error)
+	ListNoteAuditEvents(context.Context, string) ([]AuditEvent, error)
 }
 
 type Service struct {
