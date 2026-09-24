@@ -388,13 +388,19 @@ func singleLine(text string) string {
 		switch {
 		case character == '\t' || character == '\n' || character == '\r':
 			builder.WriteRune(' ')
-		case character < 0x20 || character == 0x7f:
+		case character < 0x20 || (character >= 0x7f && character < 0xa0) || isBidiControl(character):
 			continue
 		default:
 			builder.WriteRune(character)
 		}
 	}
 	return strings.Join(strings.Fields(builder.String()), " ")
+}
+
+// isBidiControl reports the directional overrides and isolates that can make
+// a title display differently from what it contains.
+func isBidiControl(character rune) bool {
+	return (character >= 0x202a && character <= 0x202e) || (character >= 0x2066 && character <= 0x2069) || character == 0x200e || character == 0x200f
 }
 
 // noteSnapshot is what an audit event keeps of a note: everything except the
@@ -453,10 +459,12 @@ func summarize(lines []string) string {
 	return truncateRunes(singleLine(strings.Join(lines, " ")), derivedSummaryRunes)
 }
 
+// nonEmptyLines returns the lines that still hold text once control
+// characters are gone, so a line of only escape codes never becomes the title.
 func nonEmptyLines(text string) []string {
 	result := make([]string, 0)
 	for _, line := range strings.Split(text, "\n") {
-		if line = strings.TrimSpace(line); line != "" {
+		if line = singleLine(line); line != "" {
 			result = append(result, line)
 		}
 	}

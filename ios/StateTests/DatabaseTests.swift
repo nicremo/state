@@ -185,7 +185,7 @@ final class DatabaseTests: XCTestCase {
         let applied = try await pool.read { database in
             try String.fetchAll(database, sql: "SELECT identifier FROM grdb_migrations ORDER BY identifier")
         }
-        XCTAssertEqual(applied, ["v1", "v2", "v3-notes", "v4-note-sync", "v5-note-inflight"])
+        XCTAssertEqual(applied, ["v1", "v2", "v3-notes", "v4-note-sync", "v5-note-inflight", "v6-note-conflict-origin"])
     }
 
     func testMigrationFromV1PreservesRemindersAndAddsExecutionCaches() async throws {

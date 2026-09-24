@@ -28,6 +28,8 @@ struct NoteRecord: Sendable, Equatable {
     var inflight: NoteInflight? = nil
     /// The newest server version seen while local edits were unsent.
     var latest: Note? = nil
+    /// Set on a conflict copy: the note whose conflicting text it keeps.
+    var conflictOf: String? = nil
 }
 
 struct NoteInflight: Sendable, Equatable {
@@ -410,6 +412,10 @@ final class StateDatabase: Sendable {
     /// them; the next push meets the new revision and resolves it.
     func applyServer(note: Note) async throws {
         try await pool.write { database in
+            if try Self.noteRecord(id: note.id, in: database) == nil,
+               try Self.adoptAsAnsweredCreate(note, in: database) {
+                return
+            }
             if var existing = try Self.noteRecord(id: note.id, in: database), existing.dirty {
                 // Keep it for the push: if the local edit turns out to be
                 // nothing (ticked and unticked), the note moves to this version.
@@ -428,40 +434,62 @@ final class StateDatabase: Sendable {
     }
 
     /// Stores the request a push is about to send, before it is sent.
-    func beginNotePush(id: String, inflight: NoteInflight) async throws {
+    /// Returns the request that is stored now: the given one, or the one that
+    /// was already waiting, which must then be replayed instead.
+    func beginNotePush(id: String, inflight: NoteInflight) async throws -> NoteInflight? {
         try await pool.write { database in
-            guard var record = try Self.noteRecord(id: id, in: database), record.inflight == nil else { return }
+            guard var record = try Self.noteRecord(id: id, in: database) else { return nil }
+            if let existing = record.inflight { return existing }
             record.inflight = inflight
             try Self.write(record, in: database)
+            return inflight
         }
     }
 
     /// Records the server's answer to a push. Edits made while the request
     /// was in flight stay dirty and go out with the next push.
-    func completeNotePush(localID: String, sentVersion: Int64, server: Note) async throws {
+    func completeNotePush(localID: String, sentVersion: Int64, server answered: Note) async throws {
         try await pool.write { database in
-            guard var record = try Self.noteRecord(id: localID, in: database) else { return }
-            if record.note.id != server.id {
-                try database.execute(sql: "DELETE FROM note_cache WHERE id = ?", arguments: [record.note.id])
-                try database.execute(
-                    sql: "INSERT OR REPLACE INTO note_alias (provisional_id, server_id) VALUES (?, ?)",
-                    arguments: [record.note.id, server.id]
-                )
-            }
-            if record.localVersion == sentVersion {
-                record = NoteRecord(note: server, dirty: false, localVersion: record.localVersion, base: server,
-                                    createRequestID: nil, patchRequestID: nil, syncError: nil, inflight: nil, latest: nil)
-            } else {
-                var pending = record.note
-                pending = Note(id: server.id, title: pending.title, titleSource: pending.titleSource,
-                               document: pending.document, plainText: pending.plainText, summary: pending.summary,
-                               summarySource: pending.summarySource, archived: pending.archived,
-                               revision: server.revision, createdAt: server.createdAt, updatedAt: pending.updatedAt)
-                record = NoteRecord(note: pending, dirty: true, localVersion: record.localVersion, base: server,
-                                    createRequestID: nil, patchRequestID: nil, syncError: nil, inflight: nil, latest: nil)
-            }
-            try Self.write(record, in: database)
+            guard let record = try Self.noteRecord(id: localID, in: database) else { return }
+            try Self.completePush(record, sentVersion: sentVersion, server: answered, in: database)
         }
+    }
+
+    private static func completePush(_ original: NoteRecord, sentVersion: Int64, server answered: Note, in database: Database) throws {
+        var record = original
+        // A replayed request is answered from the server's idempotency
+        // record, which can be older than a version the pull already saw.
+        let server: Note
+        if let latest = record.latest, latest.id == answered.id, latest.revision > answered.revision {
+            server = latest
+        } else {
+            server = answered
+        }
+        if record.note.id != server.id {
+            try database.execute(sql: "DELETE FROM note_cache WHERE id = ?", arguments: [record.note.id])
+            try database.execute(
+                sql: "INSERT OR REPLACE INTO note_alias (provisional_id, server_id) VALUES (?, ?)",
+                arguments: [record.note.id, server.id]
+            )
+        }
+        let conflictOf = record.conflictOf
+        if record.localVersion == sentVersion {
+            record = NoteRecord(note: server, dirty: false, localVersion: record.localVersion, base: server,
+                                createRequestID: nil, patchRequestID: nil, syncError: nil, inflight: nil, latest: nil,
+                                conflictOf: conflictOf)
+        } else {
+            let pending = record.note
+            record = NoteRecord(
+                note: Note(id: server.id, title: pending.title, titleSource: pending.titleSource,
+                           document: pending.document, plainText: pending.plainText, summary: pending.summary,
+                           summarySource: pending.summarySource, archived: pending.archived,
+                           revision: server.revision, createdAt: server.createdAt, updatedAt: pending.updatedAt),
+                dirty: true, localVersion: record.localVersion, base: server,
+                createRequestID: nil, patchRequestID: nil, syncError: nil, inflight: nil, latest: nil,
+                conflictOf: conflictOf
+            )
+        }
+        try write(record, in: database)
     }
 
     /// A push met a newer server version. The server version becomes the
@@ -483,7 +511,8 @@ final class StateDatabase: Sendable {
                 )
                 try Self.write(
                     NoteRecord(note: copy, dirty: true, localVersion: 1, base: nil,
-                               createRequestID: UUIDv7.generate().uuidString.lowercased(), patchRequestID: nil, syncError: nil),
+                               createRequestID: UUIDv7.generate().uuidString.lowercased(), patchRequestID: nil, syncError: nil,
+                               conflictOf: record.note.id),
                     in: database
                 )
             }
@@ -497,9 +526,22 @@ final class StateDatabase: Sendable {
             let stillDirty = merged != server
             try Self.write(
                 NoteRecord(note: merged, dirty: stillDirty, localVersion: record.localVersion + 1, base: server,
-                           createRequestID: nil, patchRequestID: nil, syncError: nil, inflight: nil, latest: nil),
+                           createRequestID: nil, patchRequestID: nil, syncError: nil, inflight: nil, latest: nil,
+                           conflictOf: record.conflictOf),
                 in: database
             )
+        }
+    }
+
+    /// The conflict copy the sync made from this note that still holds the
+    /// given text, so an open editor keeps writing into it instead of making
+    /// a second copy.
+    func conflictCopy(of noteID: String, holding document: String) async throws -> Note? {
+        try await pool.read { database in
+            let resolved = try String.fetchOne(database, sql: "SELECT server_id FROM note_alias WHERE provisional_id = ?", arguments: [noteID]) ?? noteID
+            return try Row.fetchAll(database, sql: "SELECT * FROM note_cache WHERE conflict_of = ? ORDER BY updated_at DESC", arguments: [resolved])
+                .map(Self.noteRecord(row:))
+                .first { $0.note.document == document }?.note
         }
     }
 
@@ -507,13 +549,17 @@ final class StateDatabase: Sendable {
     /// keeps its text and waits for the next edit instead of blocking sync.
     func markNoteSyncError(id: String, message: String) async throws {
         try await pool.write { database in
+            // A rejected create may still have been stored by the server. Its
+            // request ID must never carry a different body later, so a later
+            // create uses a new one.
             try database.execute(
                 sql: """
                 UPDATE note_cache SET sync_error = ?, inflight_method = NULL, inflight_path = NULL,
-                    inflight_body = NULL, inflight_version = NULL
+                    inflight_body = NULL, inflight_version = NULL,
+                    create_request_id = CASE WHEN base_json IS NULL THEN ? ELSE create_request_id END
                 WHERE id = ?
                 """,
-                arguments: [message, id]
+                arguments: [message, UUIDv7.generate().uuidString.lowercased(), id]
             )
         }
     }
@@ -523,6 +569,25 @@ final class StateDatabase: Sendable {
         try await pool.write { database in
             try database.execute(sql: "DELETE FROM note_cache WHERE id = ?", arguments: [id])
         }
+    }
+
+    /// A create whose response was lost comes back through the pull under its
+    /// server ID. It belongs to the local note waiting on that create, not
+    /// next to it. The local row takes the server ID, as if the response had
+    /// arrived; the replay of the create is then no longer needed.
+    private static func adoptAsAnsweredCreate(_ note: Note, in database: Database) throws -> Bool {
+        let waiting = try Row.fetchAll(database, sql: "SELECT * FROM note_cache WHERE inflight_method = 'POST'")
+            .map(noteRecord(row:))
+        for record in waiting {
+            guard let inflight = record.inflight,
+                  let body = try? JSONSerialization.jsonObject(with: inflight.body) as? [String: Any],
+                  body["document"] as? String == note.document else { continue }
+            let sentTitle = body["title"] as? String
+            guard sentTitle == nil ? note.titleSource == Note.derivedSource : note.title == sentTitle else { continue }
+            try completePush(record, sentVersion: inflight.version, server: note, in: database)
+            return true
+        }
+        return false
     }
 
     private static func noteRecord(id: String, in database: Database) throws -> NoteRecord? {
@@ -545,7 +610,8 @@ final class StateDatabase: Sendable {
                       let body: Data = row["inflight_body"], let version: Int64 = row["inflight_version"] else { return nil }
                 return NoteInflight(method: method, path: path, body: body, version: version)
             }(),
-            latest: try (row["latest_json"] as Data?).map { try StateJSON.decoder.decode(Note.self, from: $0) }
+            latest: try (row["latest_json"] as Data?).map { try StateJSON.decoder.decode(Note.self, from: $0) },
+            conflictOf: row["conflict_of"]
         )
     }
 
@@ -557,8 +623,8 @@ final class StateDatabase: Sendable {
             sql: """
             INSERT INTO note_cache (id, title, archived, updated_at, json, dirty, local_version, base_json,
                                     create_request_id, patch_request_id, sync_error,
-                                    inflight_method, inflight_path, inflight_body, inflight_version, latest_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    inflight_method, inflight_path, inflight_body, inflight_version, latest_json, conflict_of)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 title = excluded.title, archived = excluded.archived, updated_at = excluded.updated_at,
                 json = excluded.json, dirty = excluded.dirty, local_version = excluded.local_version,
@@ -566,12 +632,13 @@ final class StateDatabase: Sendable {
                 patch_request_id = excluded.patch_request_id, sync_error = excluded.sync_error,
                 inflight_method = excluded.inflight_method, inflight_path = excluded.inflight_path,
                 inflight_body = excluded.inflight_body, inflight_version = excluded.inflight_version,
-                latest_json = excluded.latest_json
+                latest_json = excluded.latest_json, conflict_of = excluded.conflict_of
             """,
             arguments: [
                 record.note.id, record.note.title, record.note.archived, record.note.updatedAt, json,
                 record.dirty, record.localVersion, base, record.createRequestID, record.patchRequestID, record.syncError,
                 record.inflight?.method, record.inflight?.path, record.inflight?.body, record.inflight?.version, latest,
+                record.conflictOf,
             ]
         )
     }
@@ -816,6 +883,11 @@ final class StateDatabase: Sendable {
                 table.add(column: "inflight_body", .blob)
                 table.add(column: "inflight_version", .integer)
                 table.add(column: "latest_json", .blob)
+            }
+        }
+        migrator.registerMigration("v6-note-conflict-origin") { database in
+            try database.alter(table: "note_cache") { table in
+                table.add(column: "conflict_of", .text)
             }
         }
         return migrator

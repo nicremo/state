@@ -1296,13 +1296,25 @@ final class AppModel {
                 await afterNoteEdit()
                 return .archivedEmpty
             }
-            // The editor did not touch the text: keep the stored text, which
-            // may hold an agent's edit made while the editor was open.
+            // What the editor did not touch keeps its stored value, which may
+            // hold an agent's edit made while the editor was open.
             let document = document == base.document ? current.document : document
+            let startTitle = base.titleSource == Note.userSource ? base.title : ""
+            let titleChange: String? = title == startTitle ? nil : title
+            // The sync may already have moved this editor's text into a
+            // conflict copy; keep writing there instead of making another.
+            if current.document != base.document, document != current.document,
+               let copy = try await database.conflictCopy(of: id, holding: base.document) {
+                let saved = try await database.editNote(id: copy.id) { note in
+                    note.apply(title: nil, document: document)
+                }
+                await afterNoteEdit()
+                return saved.map { .savedAsCopy($0.id) } ?? .rejected
+            }
             if current.document != base.document, document != current.document, document != base.document {
                 let copy = Note.local(
                     id: UUIDv7.generate().uuidString.lowercased(),
-                    title: NoteText.conflictCopyTitle(for: title.isEmpty ? current.title : title),
+                    title: NoteText.conflictCopyTitle(for: titleChange ?? current.title),
                     document: document,
                     at: Date()
                 )
@@ -1312,7 +1324,7 @@ final class AppModel {
                 return .savedAsCopy(copy.id)
             }
             let saved = try await database.editNote(id: id) { note in
-                note.apply(title: title, document: document)
+                note.apply(title: titleChange, document: document)
             }
             await afterNoteEdit()
             return saved.map(NoteSaveOutcome.saved) ?? .rejected

@@ -13,7 +13,8 @@ struct SplitRootView: View {
     /// note, not when a note being written gets its first identifier, so the
     /// open editor survives that moment.
     @State private var noteDetailKey = UUID()
-    @State private var revealingCreatedNote = false
+    /// The note an open editor just created; selecting it keeps that editor.
+    @State private var revealedNoteID: String?
     @State private var opensNotificationSettings = false
     @State private var opensEditor = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -72,9 +73,10 @@ struct SplitRootView: View {
         }
         .onChange(of: selectedReminderID) { _, selection in revealDetail(for: selection) }
         .onChange(of: selectedNoteID) { _, selection in
-            if revealingCreatedNote {
-                revealingCreatedNote = false
+            if let revealed = revealedNoteID, selection == revealed {
+                revealedNoteID = nil
             } else {
+                revealedNoteID = nil
                 noteDetailKey = UUID()
                 revealDetail(for: selection)
             }
@@ -122,7 +124,8 @@ struct SplitRootView: View {
                     model: model,
                     noteID: selectedNoteID == NoteRoute.newSelection ? nil : selectedNoteID,
                     onCreate: { created in
-                        revealingCreatedNote = true
+                        guard selectedNoteID != created else { return }
+                        revealedNoteID = created
                         self.selectedNoteID = created
                     },
                     onClose: { self.selectedNoteID = nil }

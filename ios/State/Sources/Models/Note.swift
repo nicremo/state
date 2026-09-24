@@ -143,7 +143,7 @@ enum NoteText {
         for scalar in text.unicodeScalars {
             switch scalar.value {
             case 0x09, 0x0A, 0x0D: cleaned.append(" ")
-            case 0x00..<0x20, 0x7F: continue
+            case 0x00..<0x20, 0x7F..<0xA0, 0x202A...0x202E, 0x2066...0x2069, 0x200E, 0x200F: continue
             default: cleaned.append(scalar)
             }
         }
@@ -160,8 +160,10 @@ enum NoteText {
         return words.joined(separator: " ")
     }
 
+    /// The lines that still hold text once control characters are gone, so a
+    /// line of only escape codes never becomes the title (Go's nonEmptyLines).
     static func lines(_ text: String) -> [String] {
-        text.components(separatedBy: "\n").map(trimSpace).filter { !$0.isEmpty }
+        text.components(separatedBy: "\n").map(singleLine).filter { !$0.isEmpty }
     }
 
     /// The title of the note that keeps a conflicting local text. It must

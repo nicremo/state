@@ -18,6 +18,7 @@ struct NoteDetailView: View {
     @State private var editBase: Note?
     @State private var isSaving = false
     @State private var pendingSave: PendingSave?
+    @State private var isVisible = false
     @State private var selection: TextSelection?
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
@@ -75,9 +76,13 @@ struct NoteDetailView: View {
             let clamped = NoteText.clampTitle(title)
             if clamped != title { titleDraft = clamped }
         }
+        .onAppear { isVisible = true }
         .onDisappear {
+            isVisible = false
+            // Not final: on the iPhone this also runs for a tab switch, and
+            // an emptied note must not be archived just by looking elsewhere.
             if isEditing {
-                Task { await save(reveal: false, isFinal: true) }
+                Task { await save(reveal: false, isFinal: false) }
             }
         }
     }
@@ -343,7 +348,14 @@ struct NoteDetailView: View {
     /// the text as it is then, so nothing typed in between is dropped.
     private func save(reveal: Bool, isFinal: Bool) async {
         pendingSave = PendingSave(reveal: reveal || pendingSave?.reveal == true, isFinal: isFinal || pendingSave?.isFinal == true)
-        guard !isSaving else { return }
+        guard !isSaving else {
+            // Wait for the running save to carry this request out too, so a
+            // caller such as Done sees the result before it goes on.
+            while isSaving || pendingSave != nil {
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            return
+        }
         isSaving = true
         defer { isSaving = false }
         while let request = pendingSave {
@@ -360,7 +372,7 @@ struct NoteDetailView: View {
             guard let created = await model.createNote(title: title, document: document) else { return }
             self.noteID = created
             editBase = model.note(id: created)
-            if reveal { onCreate?(created) }
+            if reveal, isVisible { onCreate?(created) }
             return
         }
         guard let base = editBase else { return }
@@ -378,7 +390,7 @@ struct NoteDetailView: View {
             let copy = model.note(id: copyID)
             editBase = copy
             titleDraft = copy?.title ?? titleDraft
-            if reveal { onCreate?(copyID) }
+            if reveal, isVisible { onCreate?(copyID) }
         case .archivedEmpty:
             editBase = model.note(id: noteID)
         case .skipped, .rejected:

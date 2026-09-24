@@ -133,8 +133,9 @@ actor SyncEngine {
     }
 
     private func begin(_ inflight: NoteInflight, for noteID: String) async throws {
-        try await database.beginNotePush(id: noteID, inflight: inflight)
-        try await send(inflight, for: noteID)
+        // Send what is stored, never a body the database did not keep.
+        guard let stored = try await database.beginNotePush(id: noteID, inflight: inflight) else { return }
+        try await send(stored, for: noteID)
     }
 
     private func send(_ inflight: NoteInflight, for noteID: String) async throws {

@@ -512,3 +512,141 @@ extension NoteSyncTests {
         XCTAssertEqual(local?.document, "Liste\n- [ ] a\n- [ ] vom Agenten", "the device is stuck on an old server version")
     }
 }
+
+// MARK: Regressions from the second verification review
+
+private actor FlakyAPI: StateAPI {
+    let inner: FakeNoteServer
+    private var failAfterApply = false
+    private var afterApply: (@Sendable (Note) async -> Void)?
+    init(_ inner: FakeNoteServer) { self.inner = inner }
+    /// The next send is applied by the server, then answered with a 502.
+    func failNextAfterApply(_ hook: (@Sendable (Note) async -> Void)?) { failAfterApply = true; afterApply = hook }
+    func getChanges(after: Int64, limit: Int) async throws -> ChangesResponse { try await inner.getChanges(after: after, limit: limit) }
+    func getReminder(id: String) async throws -> ReminderDetail { try await inner.getReminder(id: id) }
+    func getNote(id: String) async throws -> Note { try await inner.getNote(id: id) }
+    func confirmOccurrences(_ identifiers: [String]) async throws {}
+    func send(mutation: PendingMutation) async throws -> Data {
+        let data = try await inner.send(mutation: mutation)
+        if failAfterApply {
+            failAfterApply = false
+            let stored = try StateJSON.decoder.decode(Note.self, from: data)
+            if let hook = afterApply { await hook(stored) }
+            throw StateAPIError.server(status: 502, code: "bad_gateway")
+        }
+        return data
+    }
+}
+
+extension NoteSyncTests {
+    private func proofDatabasePath() -> String {
+        FileManager.default.temporaryDirectory.appending(path: "state-proof-\(UUID().uuidString).sqlite").path()
+    }
+
+    /// a PATCH applied by the server but answered with a 5xx is
+    /// replayed and answered from the idempotency record (the old snapshot).
+    /// completeNotePush then throws away `latest`, the agent's newer version
+    /// the pull already saw, and the cursor is past it: the device stays stale.
+    func testAReplayedPatchKeepsTheNewerServerVersion() async throws {
+        let database = try StateDatabase(path: proofDatabasePath())
+        let server = FakeNoteServer()
+        let api = FlakyAPI(server)
+        try await database.insertLocalNote(Note.local(id: "0198a2b9-0000-7000-8000-00000000e001", title: "", document: "Basis", at: Date()))
+        try await SyncEngine(database: database, api: api).sync()
+        let noteID = try await database.notes()[0].id
+
+        _ = try await database.editNote(id: noteID) { $0.apply(title: nil, document: "Basis\nlokal") }
+        await api.failNextAfterApply { stored in
+            // An agent edits right after the device's PATCH landed.
+            var agent = stored
+            agent.apply(title: nil, document: stored.document + "\nvom Agenten")
+            agent.revision += 1
+            await server.seed(agent, cursor: 60)
+        }
+        try await SyncEngine(database: database, api: api).sync() // 502, pull records latest
+        try await SyncEngine(database: database, api: api).sync() // replay answered from record
+        try await SyncEngine(database: database, api: api).sync()
+
+        let local = try await database.note(id: noteID)
+        let onServer = await server.document(of: noteID)
+        XCTAssertEqual(local?.document, onServer, "device stays on the replayed snapshot, the agent's edit never arrives")
+    }
+
+    /// the sync makes a conflict copy while the editor is open; the
+    /// editor's next autosave (base = its last save) makes a second copy.
+    @MainActor
+    func testTheEditorKeepsWritingIntoTheSyncsConflictCopy() async throws {
+        let database = try StateDatabase(path: proofDatabasePath())
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "state-proof-\(UUID().uuidString)"))
+        let model = AppModel(database: database, sessionRepository: SessionRepository(defaults: defaults))
+        let server = FakeNoteServer()
+        try await database.insertLocalNote(Note.local(id: "0198a2b9-0000-7000-8000-00000000e002", title: "", document: "Einkauf", at: Date()))
+        try await SyncEngine(database: database, api: server).sync()
+        let noteID = try await database.notes()[0].id
+        let opened = try await database.note(id: noteID)
+        let editorBase = try XCTUnwrap(opened)
+
+        guard case let .saved(afterFirst) = await model.saveNote(id: noteID, title: "", document: "Einkauf\nL1", base: editorBase, isFinal: false) else {
+            return XCTFail("first autosave")
+        }
+        await server.editElsewhere(id: noteID, document: "Einkauf\nvom Agenten")
+        try await SyncEngine(database: database, api: server).sync() // 409 -> copy #1
+        _ = await model.saveNote(id: noteID, title: "", document: "Einkauf\nL1\nL2", base: afterFirst, isFinal: false)
+
+        let copies = try await database.notes().filter { $0.id != noteID }
+        XCTAssertEqual(copies.count, 1, "one conflict, several copies: \(copies.map(\.document))")
+    }
+
+    /// finding 5 fixed for the document only. A body-only save
+    /// reverts a title the agent set while the editor was open.
+    @MainActor
+    func testABodySaveKeepsAnAgentsTitle() async throws {
+        let database = try StateDatabase(path: proofDatabasePath())
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "state-proof-\(UUID().uuidString)"))
+        let model = AppModel(database: database, sessionRepository: SessionRepository(defaults: defaults))
+        var server = Note.local(id: "0198a2b9-0000-7000-8000-00000000e003", title: "Alt", document: "Plan", at: Date())
+        try await database.applyServer(note: server)
+        let opened = try await database.note(id: server.id)
+        let editorBase = try XCTUnwrap(opened)
+        server.apply(title: "Neu vom Agenten", document: server.document)
+        server.revision += 1
+        try await database.applyServer(note: server)
+
+        _ = await model.saveNote(id: server.id, title: "Alt", document: "Plan\nmehr", base: editorBase)
+        let stored = try await database.note(id: server.id)
+        XCTAssertEqual(stored?.title, "Neu vom Agenten", "a body-only save reverted the agent's title")
+    }
+
+    /// a POST applied but answered with a 5xx; the pull then fetches
+    /// the created note by its server ID and lists it next to the local row.
+    func testALostCreateResponseListsTheNoteOnce() async throws {
+        let database = try StateDatabase(path: proofDatabasePath())
+        let server = FakeNoteServer()
+        let api = FlakyAPI(server)
+        try await database.insertLocalNote(Note.local(id: "0198a2b9-0000-7000-8000-00000000e004", title: "", document: "Neu", at: Date()))
+        await api.failNextAfterApply { stored in await server.seed(stored, cursor: 70) }
+        try await SyncEngine(database: database, api: api).sync()
+        let listed = try await database.notes()
+        XCTAssertEqual(listed.count, 1, "the note shows twice until the replay: \(listed.map(\.id))")
+    }
+}
+
+
+extension NoteSyncTests {
+    /// singleLine regression on iOS. A first line of control characters
+    /// only derives an empty title, so a note with text on line two counts as
+    /// empty: it is never created, and an existing one is archived on close.
+    @MainActor
+    func testAControlOnlyFirstLineIsNotAnEmptyNote() async throws {
+        let database = try StateDatabase(path: FileManager.default.temporaryDirectory.appending(path: "state-proof-\(UUID().uuidString).sqlite").path())
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "state-proof-\(UUID().uuidString)"))
+        let model = AppModel(database: database, sessionRepository: SessionRepository(defaults: defaults))
+        let created = await model.createNote(title: "", document: "\u{1B}\nEinkaufsliste Milch")
+        XCTAssertNotNil(created, "typed text was discarded: the new note is never created")
+
+        let note = Note.local(id: "0198a2b9-0000-7000-8000-00000000e005", title: "", document: "Alt", at: Date())
+        try await database.applyServer(note: note)
+        let outcome = await model.saveNote(id: note.id, title: "", document: "\u{1B}\nEinkaufsliste Milch", base: note, isFinal: true)
+        XCTAssertNotEqual(outcome, .archivedEmpty, "a note with text was archived as empty")
+    }
+}

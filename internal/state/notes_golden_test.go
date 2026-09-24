@@ -3,8 +3,10 @@ package state
 import (
 	"encoding/json"
 	"flag"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -35,11 +37,40 @@ var noteDerivationInputs = []string{
 	"Titel\n" + "Zusammenfassung mit vielen Wörtern die über die Grenze hinausgeht damit abgeschnitten wird und ein Auslassungszeichen am Ende steht, das ist wichtig für die Liste in der App und die CLI Ausgabe gleichermaßen",
 	"- [ ]\n- [x] leer davor",
 	"Titel\x1b[31m mit  Escape\nZeile\x07 zwei\tTab",
+	"\x1b\nEinkaufsliste Milch",
+	"Bidi \u202eoverride\u202c und \u0085 C1",
+}
+
+// fuzzTokens build random documents from the characters where the Go and
+// Swift derivations are most likely to disagree: markers, all whitespace
+// kinds, combining marks, emoji sequences and control characters.
+var fuzzTokens = []string{"#", "## ", "# ", "-", "- ", "* ", "+ ", "> ", "[ ]", "[x]", " ", "  ", "\t", "\n", "\n", "\r\n", "\r",
+	"*", "**", "_", "__", "~~", "~", "`", "```", "~~~", "---", "***", "1. ", "12) ", "\u0661. ", "a", "b", "Wort", "äöü",
+	"e\u0301", "\u00e9", "\u00a0", "\u2003", "\u0085", "\u200b", "\u3000", "👨‍👩‍👧", "🇩🇪", "x_y", "2 * 3", "\x1b", "\u0301",
+	"\ufeff", "\u202e", "\u009b"}
+
+// fuzzDocuments is deterministic, so the golden file only changes when the
+// derivation does.
+func fuzzDocuments(count int) []string {
+	random := rand.New(rand.NewSource(42))
+	documents := make([]string, 0, count)
+	for index := 0; index < count; index++ {
+		var builder strings.Builder
+		for token := 0; token < 1+random.Intn(25); token++ {
+			builder.WriteString(fuzzTokens[random.Intn(len(fuzzTokens))])
+		}
+		if random.Intn(20) == 0 {
+			builder.WriteString(strings.Repeat("ab ", 70+random.Intn(10)) + "👨‍👩‍👧")
+		}
+		documents = append(documents, builder.String())
+	}
+	return documents
 }
 
 func TestNoteDerivationMatchesTheGoldenFile(t *testing.T) {
-	cases := make([]noteDerivationCase, 0, len(noteDerivationInputs))
-	for _, document := range noteDerivationInputs {
+	inputs := append(append([]string{}, noteDerivationInputs...), fuzzDocuments(3000)...)
+	cases := make([]noteDerivationCase, 0, len(inputs))
+	for _, document := range inputs {
 		cases = append(cases, noteDerivationCase{
 			Document:  document,
 			PlainText: NotePlainText(document),
@@ -49,7 +80,7 @@ func TestNoteDerivationMatchesTheGoldenFile(t *testing.T) {
 	}
 	path := filepath.Join("testdata", "note_derivation.json")
 	if *updateGolden {
-		encoded, err := json.MarshalIndent(cases, "", "  ")
+		encoded, err := json.MarshalIndent(cases, "", " ")
 		if err != nil {
 			t.Fatal(err)
 		}
