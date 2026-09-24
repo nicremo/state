@@ -276,8 +276,8 @@ func TestListNotesSearchesTitleAndPlainText(t *testing.T) {
 
 func TestNotePlainTextDropsMarkdownMarkers(t *testing.T) {
 	t.Parallel()
-	got := NotePlainText("## Plan\n1. `go test`\n- [x] erledigt\n---\n> Zitat\n```\n# code\n```")
-	want := "Plan\ngo test\nerledigt\nZitat\n# code"
+	got := NotePlainText("## Plan\n1. `go test` *jetzt*\n- [x] erledigt\n---\n> Zitat\n```\n# code\n```")
+	want := "Plan\ngo test jetzt\nerledigt\nZitat\n# code"
 	if got != want {
 		t.Fatalf("NotePlainText() = %q, want %q", got, want)
 	}

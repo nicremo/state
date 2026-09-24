@@ -267,7 +267,7 @@ func changedNoteFields(before Note, after Note) []string {
 var (
 	noteHeadingMarker     = regexp.MustCompile(`^#{1,6}\s+`)
 	noteOrderedListMarker = regexp.MustCompile(`^\d{1,3}[.)]\s+`)
-	noteInlineMarkers     = strings.NewReplacer("**", "", "__", "", "~~", "", "`", "")
+	noteInlineMarkers     = strings.NewReplacer("**", "", "__", "", "~~", "", "`", "", "*", "")
 	noteLinePrefixes      = []string{"- [ ] ", "- [x] ", "- [X] ", "- ", "* ", "+ ", "> "}
 )
 
