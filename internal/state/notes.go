@@ -134,6 +134,9 @@ func (service *Service) UpdateNote(ctx context.Context, actor Actor, noteID stri
 	if stored, found, err := service.repository.LookupNoteRequest(ctx, input.ClientRequestID, actor.ID); err != nil {
 		return Note{}, err
 	} else if found {
+		if stored.ID != noteID {
+			return Note{}, ErrInvalidInput
+		}
 		return stored, nil
 	}
 	if input.ExpectedRevision <= 0 {
@@ -168,8 +171,13 @@ func (service *Service) UpdateNote(ctx context.Context, actor Actor, noteID stri
 	if input.Archived != nil {
 		updated.Archived = *input.Archived
 	}
-	if err := validateNote(updated); err != nil {
-		return Note{}, err
+	// Archiving alone never fails validation, so a note stored before a rule
+	// was tightened can still be archived.
+	contentChanged := input.Title != nil || input.Document != nil || input.Summary != nil
+	if contentChanged {
+		if err := validateNote(updated); err != nil {
+			return Note{}, err
+		}
 	}
 
 	changed := changedNoteFields(current, updated)
@@ -197,6 +205,23 @@ func (service *Service) UpdateNote(ctx context.Context, actor Actor, noteID stri
 	}
 	event.NoteID = updated.ID
 	return service.repository.UpdateNote(ctx, updated, current.Revision, event, input.ClientRequestID)
+}
+
+// VisibleChanges hides note events from runners. A runner executes reminders
+// and must never read the owner's notes, and note events carry the document.
+// Every surface that hands the change feed to an actor filters through here;
+// the cursor still advances past the hidden events.
+func VisibleChanges(viewer Actor, changes []Change) []Change {
+	if viewer.Kind != ActorKindRunner {
+		return changes
+	}
+	visible := make([]Change, 0, len(changes))
+	for _, change := range changes {
+		if change.Event.NoteID == "" {
+			visible = append(visible, change)
+		}
+	}
+	return visible
 }
 
 func (service *Service) GetNote(ctx context.Context, noteID string) (Note, error) {
@@ -412,7 +437,7 @@ func DeriveNoteTitle(document string) string {
 	if len(lines) == 0 {
 		return ""
 	}
-	return truncateRunes(lines[0], MaxNoteTitleRunes)
+	return truncateRunes(singleLine(lines[0]), MaxNoteTitleRunes)
 }
 
 // DeriveNoteSummary joins the lines after the title line into a short preview.
@@ -425,7 +450,7 @@ func DeriveNoteSummary(document string) string {
 }
 
 func summarize(lines []string) string {
-	return truncateRunes(strings.Join(lines, " "), derivedSummaryRunes)
+	return truncateRunes(singleLine(strings.Join(lines, " ")), derivedSummaryRunes)
 }
 
 func nonEmptyLines(text string) []string {

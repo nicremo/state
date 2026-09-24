@@ -350,6 +350,7 @@ func (service *Service) GetBriefing(ctx context.Context, options BriefingOptions
 	if len(changes) > 0 {
 		cursor = changes[len(changes)-1].Cursor
 	}
+	changes = VisibleChanges(options.Viewer, changes)
 	return Briefing{
 		GeneratedAt: service.clock().UTC(),
 		Cursor:      cursor,

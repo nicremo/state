@@ -1093,7 +1093,7 @@ func (handler *Handler) getChanges(writer http.ResponseWriter, request *http.Req
 		cursor = changes[len(changes)-1].Cursor
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{
-		"changes": visibleChanges(actor, changes),
+		"changes": state.VisibleChanges(actor, changes),
 		"cursor":  cursor,
 	})
 }
@@ -1116,29 +1116,13 @@ func (handler *Handler) getBriefing(writer http.ResponseWriter, request *http.Re
 	briefing, err := handler.state.GetBriefing(request.Context(), state.BriefingOptions{
 		AfterCursor: after,
 		Limit:       limit,
+		Viewer:      actor,
 	})
 	if err != nil {
 		writeError(writer, err, nil)
 		return
 	}
-	briefing.Changes = visibleChanges(actor, briefing.Changes)
 	writeJSON(writer, http.StatusOK, briefing)
-}
-
-// visibleChanges hides note events from runners. A runner executes
-// reminders and must never read the owner's notes; their audit events carry
-// the document. The cursor still advances past them.
-func visibleChanges(actor state.Actor, changes []state.Change) []state.Change {
-	if actor.Kind != state.ActorKindRunner {
-		return changes
-	}
-	visible := make([]state.Change, 0, len(changes))
-	for _, change := range changes {
-		if change.Event.NoteID == "" {
-			visible = append(visible, change)
-		}
-	}
-	return visible
 }
 
 func (handler *Handler) authenticate(writer http.ResponseWriter, request *http.Request) (state.Actor, bool) {

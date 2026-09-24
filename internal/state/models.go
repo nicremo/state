@@ -270,6 +270,8 @@ type Change struct {
 type BriefingOptions struct {
 	AfterCursor int64
 	Limit       int
+	// Viewer decides which changes the briefing may show; see VisibleChanges.
+	Viewer Actor
 }
 
 type Briefing struct {

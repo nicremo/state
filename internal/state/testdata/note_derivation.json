@@ -51,7 +51,7 @@
     "document": "١. arabische Ziffer\n# kein Leerzeichen",
     "plain_text": "١. arabische Ziffer\n# kein Leerzeichen",
     "title": "١. arabische Ziffer",
-    "summary": "# kein Leerzeichen"
+    "summary": "# kein Leerzeichen"
   },
   {
     "document": "Titel\r\nmit CRLF\r\n- [ ] Aufgabe",
@@ -82,5 +82,11 @@
     "plain_text": "leer davor",
     "title": "leer davor",
     "summary": ""
+  },
+  {
+    "document": "Titel\u001b[31m mit  Escape\nZeile\u0007 zwei\tTab",
+    "plain_text": "Titel\u001b[31m mit  Escape\nZeile\u0007 zwei\tTab",
+    "title": "Titel[31m mit Escape",
+    "summary": "Zeile zwei Tab"
   }
 ]

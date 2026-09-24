@@ -34,6 +34,7 @@ var noteDerivationInputs = []string{
 	"Ein sehr langer erster Satz " + string(make([]byte, 0)) + "mit Umlauten äöü und Emoji 👨‍👩‍👧‍👦 der weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht und weiter geht\nkurz",
 	"Titel\n" + "Zusammenfassung mit vielen Wörtern die über die Grenze hinausgeht damit abgeschnitten wird und ein Auslassungszeichen am Ende steht, das ist wichtig für die Liste in der App und die CLI Ausgabe gleichermaßen",
 	"- [ ]\n- [x] leer davor",
+	"Titel\x1b[31m mit  Escape\nZeile\x07 zwei\tTab",
 }
 
 func TestNoteDerivationMatchesTheGoldenFile(t *testing.T) {

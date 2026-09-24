@@ -386,3 +386,55 @@ func TestNotePlainTextKeepsOrdinaryCharacters(t *testing.T) {
 		}
 	}
 }
+
+func TestArchivingALegacyNoteWithoutTitleStillWorks(t *testing.T) {
+	t.Parallel()
+	service, repository, now := newNoteService(t)
+	legacy := Note{ID: "01989d45-3333-7000-8000-000000000001", Document: "---", Revision: 1, CreatedAt: *now, UpdatedAt: *now,
+		TitleSource: NoteFieldSourceDerived, SummarySource: NoteFieldSourceDerived}
+	if _, err := repository.CreateNote(context.Background(), legacy, AuditEvent{ID: "e", NoteID: legacy.ID, Action: AuditActionNoteCreated, Actor: noteOwner}, "01989d45-3333-7000-8000-000000000002"); err != nil {
+		t.Fatal(err)
+	}
+	archive := true
+	if _, err := service.UpdateNote(context.Background(), noteOwner, legacy.ID, UpdateNoteInput{Archived: &archive, ExpectedRevision: 1, ClientRequestID: "01989d45-3333-7000-8000-000000000003"}); err != nil {
+		t.Fatalf("archive legacy note error = %v", err)
+	}
+}
+
+func TestARequestIDBelongsToOneNote(t *testing.T) {
+	t.Parallel()
+	service, _, _ := newNoteService(t)
+	first, _ := service.CreateNote(context.Background(), noteOwner, CreateNoteInput{Document: "A", ClientRequestID: "01989d45-3333-7000-8000-000000000010"})
+	second, _ := service.CreateNote(context.Background(), noteOwner, CreateNoteInput{Document: "B", ClientRequestID: "01989d45-3333-7000-8000-000000000011"})
+	document := "A2"
+	shared := "01989d45-3333-7000-8000-000000000012"
+	if _, err := service.UpdateNote(context.Background(), noteOwner, first.ID, UpdateNoteInput{Document: &document, ExpectedRevision: 1, ClientRequestID: shared}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.UpdateNote(context.Background(), noteOwner, second.ID, UpdateNoteInput{Document: &document, ExpectedRevision: 1, ClientRequestID: shared}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("reusing a request ID on another note error = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestDerivedTitlesCarryNoControlCharacters(t *testing.T) {
+	t.Parallel()
+	if title := DeriveNoteTitle("Titel\x1b[31m rot\x07"); title != "Titel[31m rot" {
+		t.Fatalf("derived title = %q", title)
+	}
+}
+
+func TestBriefingHidesNoteEventsFromRunners(t *testing.T) {
+	t.Parallel()
+	service, _, _ := newNoteService(t)
+	if _, err := service.CreateNote(context.Background(), noteOwner, CreateNoteInput{Document: "Geheim", ClientRequestID: "01989d45-3333-7000-8000-000000000020"}); err != nil {
+		t.Fatal(err)
+	}
+	briefing, err := service.GetBriefing(context.Background(), BriefingOptions{Viewer: noteRunner})
+	if err != nil || len(briefing.Changes) != 0 || strings.Contains(briefing.Summary, "1 changes") {
+		t.Fatalf("runner briefing = %#v, %v", briefing, err)
+	}
+	ownerBriefing, _ := service.GetBriefing(context.Background(), BriefingOptions{Viewer: noteOwner})
+	if len(ownerBriefing.Changes) != 1 {
+		t.Fatalf("owner briefing changes = %d, want 1", len(ownerBriefing.Changes))
+	}
+}
