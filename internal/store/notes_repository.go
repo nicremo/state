@@ -207,17 +207,8 @@ func (repository *PocketBaseRepository) recordNoteChange(txApp core.App, note st
 	if err := insertAuditEvent(txApp, sealed); err != nil {
 		return err
 	}
-	if _, err := txApp.DB().NewQuery(`DELETE FROM state_note_search WHERE note_id = {:note_id}`).
-		Bind(dbx.Params{"note_id": note.ID}).Execute(); err != nil {
-		return fmt.Errorf("remove note search document: %w", err)
-	}
-	if _, err := txApp.DB().NewQuery(`
-		INSERT INTO state_note_search (note_id, content) VALUES ({:note_id}, {:content})
-	`).Bind(dbx.Params{
-		"note_id": note.ID,
-		"content": note.Title + "\n" + note.Summary + "\n" + note.PlainText,
-	}).Execute(); err != nil {
-		return fmt.Errorf("insert note search document: %w", err)
+	if err := refreshNoteSearch(txApp, note); err != nil {
+		return err
 	}
 	return insertIdempotencyValue(txApp, clientRequestID, event.Actor.ID, "note", note.ID, note)
 }

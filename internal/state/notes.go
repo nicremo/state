@@ -46,6 +46,7 @@ type Note struct {
 	PlainText     string          `json:"plain_text"`
 	Summary       string          `json:"summary"`
 	SummarySource NoteFieldSource `json:"summary_source"`
+	Capture       NoteCapture     `json:"capture,omitempty"`
 	Archived      bool            `json:"archived"`
 	Revision      int64           `json:"revision"`
 	CreatedAt     time.Time       `json:"created_at"`
@@ -53,14 +54,15 @@ type Note struct {
 }
 
 type CreateNoteInput struct {
-	Title           string     `json:"title,omitempty"`
-	Document        string     `json:"document,omitempty"`
-	Summary         string     `json:"summary,omitempty"`
-	ClientTime      *time.Time `json:"client_time,omitempty"`
-	Source          string     `json:"source,omitempty"`
-	SourceExcerpt   string     `json:"source_excerpt,omitempty"`
-	ClientRequestID string     `json:"client_request_id"`
-	CorrelationID   string     `json:"correlation_id,omitempty"`
+	Title           string      `json:"title,omitempty"`
+	Document        string      `json:"document,omitempty"`
+	Summary         string      `json:"summary,omitempty"`
+	Capture         NoteCapture `json:"capture,omitempty"`
+	ClientTime      *time.Time  `json:"client_time,omitempty"`
+	Source          string      `json:"source,omitempty"`
+	SourceExcerpt   string      `json:"source_excerpt,omitempty"`
+	ClientRequestID string      `json:"client_request_id"`
+	CorrelationID   string      `json:"correlation_id,omitempty"`
 }
 
 type UpdateNoteInput struct {
@@ -89,7 +91,13 @@ func (service *Service) CreateNote(ctx context.Context, actor Actor, input Creat
 	if actor.Kind == ActorKindRunner {
 		return Note{}, ErrForbidden
 	}
-	note := Note{Document: input.Document}
+	if !validCapture(input.Capture) {
+		return Note{}, ErrInvalidInput
+	}
+	note := Note{Document: input.Document, Capture: input.Capture}
+	if note.Capture == NoteCaptureText {
+		note.Capture = ""
+	}
 	applyNoteTitle(&note, input.Title)
 	applyNoteSummary(&note, input.Summary)
 	if err := validateNote(note); err != nil {
@@ -115,7 +123,11 @@ func (service *Service) CreateNote(ctx context.Context, actor Actor, input Creat
 		return Note{}, err
 	}
 	event.NoteID = note.ID
-	return service.repository.CreateNote(ctx, note, event, input.ClientRequestID)
+	created, err := service.repository.CreateNote(ctx, note, event, input.ClientRequestID)
+	if err == nil && created.ID == note.ID {
+		service.scheduleOrganize(ctx, Note{}, created)
+	}
+	return created, err
 }
 
 func (service *Service) UpdateNote(ctx context.Context, actor Actor, noteID string, input UpdateNoteInput) (Note, error) {
@@ -204,7 +216,11 @@ func (service *Service) UpdateNote(ctx context.Context, actor Actor, noteID stri
 		return Note{}, err
 	}
 	event.NoteID = updated.ID
-	return service.repository.UpdateNote(ctx, updated, current.Revision, event, input.ClientRequestID)
+	stored, err := service.repository.UpdateNote(ctx, updated, current.Revision, event, input.ClientRequestID)
+	if err == nil && actor.ID != NotesAgentActor().ID {
+		service.scheduleOrganize(ctx, current, stored)
+	}
+	return stored, err
 }
 
 // VisibleChanges hides note events from runners. A runner executes reminders
@@ -217,7 +233,7 @@ func VisibleChanges(viewer Actor, changes []Change) []Change {
 	}
 	visible := make([]Change, 0, len(changes))
 	for _, change := range changes {
-		if change.Event.NoteID == "" {
+		if change.Event.NoteID == "" && !strings.HasPrefix(string(change.Event.Action), "notes_ai.") {
 			visible = append(visible, change)
 		}
 	}
@@ -276,7 +292,7 @@ func applyNoteSummary(note *Note, summary string) {
 func validateNote(note Note) error {
 	// A document of markers only ("---", an empty code block) has no text
 	// to name the note after; the list would show a blank row.
-	if note.Title == "" {
+	if note.Title == "" && !(isMediaCapture(note.Capture) && strings.TrimSpace(note.PlainText) == "") {
 		return ErrInvalidInput
 	}
 	if len(note.Document) > MaxNoteDocumentBytes || !utf8.ValidString(note.Document) {
@@ -436,7 +452,7 @@ func isBidiControl(character rune) bool {
 // noteSnapshot is what an audit event keeps of a note: everything except the
 // derived plain text, which the document already contains.
 func noteSnapshot(note Note) map[string]any {
-	return map[string]any{
+	snapshot := map[string]any{
 		"id":             note.ID,
 		"title":          note.Title,
 		"title_source":   note.TitleSource,
@@ -447,6 +463,10 @@ func noteSnapshot(note Note) map[string]any {
 		"revision":       note.Revision,
 		"updated_at":     note.UpdatedAt,
 	}
+	if note.Capture != "" {
+		snapshot["capture"] = note.Capture
+	}
+	return snapshot
 }
 
 // noteDigest stands for the previous version in an update event. The full

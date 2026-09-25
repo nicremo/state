@@ -60,6 +60,8 @@ type Repository interface {
 	ListNotes(context.Context, NoteListOptions) ([]Note, error)
 	ListNoteAuditEvents(context.Context, string) ([]AuditEvent, error)
 	LookupNoteRequest(ctx context.Context, clientRequestID string, actorID string) (Note, bool, error)
+
+	NoteAIRepository
 }
 
 type Service struct {
@@ -67,6 +69,9 @@ type Service struct {
 	clock       func() time.Time
 	newID       func() (string, error)
 	runNotifier RunNotifier
+
+	noteAIAvailable func() bool
+	noteMediaPolicy func() NoteMediaPolicy
 }
 
 // RunNotifier is invoked after a run reaches a terminal state. It is wired to

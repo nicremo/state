@@ -36,6 +36,7 @@ type MemoryRepository struct {
 	notes              map[string]Note
 	requestNotes       map[string]Note
 	requestNoteActors  map[string]string
+	ai                 *memoryNoteAI
 	auditChain         []AuditEvent
 	lastAuditHash      string
 	signingKey         ed25519.PrivateKey
@@ -984,15 +985,15 @@ func (repository *MemoryRepository) GetNote(_ context.Context, noteID string) (N
 }
 
 func (repository *MemoryRepository) ListNotes(_ context.Context, options NoteListOptions) ([]Note, error) {
-	repository.mu.RLock()
-	defer repository.mu.RUnlock()
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
 
 	notes := make([]Note, 0, len(repository.notes))
 	for _, note := range repository.notes {
 		if note.Archived && !options.IncludeArchived {
 			continue
 		}
-		if options.Query != "" && !noteMatchesQuery(note, options.Query) {
+		if options.Query != "" && !noteMatchesQuery(repository.noteSearchText(note), options.Query) {
 			continue
 		}
 		notes = append(notes, note)
