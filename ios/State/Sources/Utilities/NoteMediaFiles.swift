@@ -44,6 +44,18 @@ enum NoteMediaFiles {
         return try? Data(contentsOf: pendingDirectory.appendingPathComponent(fileName))
     }
 
+    /// The bytes of a queued upload: from the queue, or from the cache when
+    /// an earlier run moved the file there before it could mark the upload.
+    static func uploadData(_ upload: NoteUpload) -> Data? {
+        pendingData(upload.fileName) ?? cachedData(sha256: upload.sha256)
+    }
+
+    static func removePending(_ fileNames: [String]) {
+        for name in fileNames where !name.contains("/") {
+            try? FileManager.default.removeItem(at: pendingDirectory.appendingPathComponent(name))
+        }
+    }
+
     /// After a confirmed upload the file moves to the cache under its hash.
     static func keepUploaded(_ upload: NoteUpload) {
         let source = pendingDirectory.appendingPathComponent(upload.fileName)

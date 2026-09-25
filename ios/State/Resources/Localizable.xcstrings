@@ -2041,6 +2041,16 @@
         }
       }
     },
+    "Not available on this server" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf diesem Server nicht verfügbar"
+          }
+        }
+      }
+    },
     "Not checked" : {
       "localizations" : {
         "de" : {
@@ -2447,6 +2457,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pause"
+          }
+        }
+      }
+    },
+    "Paused by a call or another app. What was recorded is kept." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausiert durch einen Anruf oder eine andere App. Das Aufgenommene bleibt erhalten."
           }
         }
       }
@@ -3881,6 +3901,16 @@
         }
       }
     },
+    "The model %@ cannot read photos. Choose a model that reads images in the server settings." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Modell %@ kann keine Fotos lesen. Wähle in den Servereinstellungen ein Modell, das Bilder liest."
+          }
+        }
+      }
+    },
     "The note is kept. It is processed once a key is set up." : {
       "localizations" : {
         "de" : {
@@ -4317,6 +4347,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Anstehende Erinnerungen werden lokal auf diesem iPhone abgesichert."
+          }
+        }
+      }
+    },
+    "Update the State server to use the notes AI. Notes work without it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisiere den State-Server, um die Notiz-KI zu nutzen. Notizen funktionieren auch ohne sie."
           }
         }
       }

@@ -120,7 +120,7 @@ struct NoteDetailView: View {
                         .foregroundStyle(.orange)
                 }
 
-                NoteAIStatusView(model: model, note: note, uploads: uploads)
+                NoteAIStatusView(model: model, note: note, uploads: uploads, syncError: model.noteSyncError(id: note.id))
 
                 if !(note.attachments ?? []).isEmpty {
                     NoteMediaView(model: model, note: note)

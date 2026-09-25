@@ -3,6 +3,9 @@ import Foundation
 import ImageIO
 import Observation
 import UniformTypeIdentifiers
+#if os(iOS)
+import UIKit
+#endif
 
 /// Prepares photos for a note: at most 2560 pixels on the long side, JPEG,
 /// orientation applied. Handwriting stays legible and the upload stays small.
@@ -28,6 +31,18 @@ enum NoteImagePreparation {
     static func media(from data: Data) -> AppModel.CapturedMedia? {
         jpeg(from: data).map { AppModel.CapturedMedia(data: $0, mimeType: "image/jpeg", fileExtension: "jpg") }
     }
+
+    /// A small decoded image for the list of photos, so ten photos do not
+    /// hold ten full-size bitmaps in memory.
+    static func thumbnail(from data: Data, maxPixelSize: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
 }
 
 /// Records a voice note as AAC in segments. The server gives the segment
@@ -39,6 +54,8 @@ final class VoiceRecorder {
     enum Phase: Equatable {
         case idle
         case recording
+        /// A call or another app took the microphone; recorded parts are kept.
+        case paused
         case denied
         case failed(String)
     }
@@ -48,6 +65,8 @@ final class VoiceRecorder {
     private(set) var level: Double = 0
     private(set) var segmentCount = 0
     private(set) var reachedLimit = false
+    /// Whether anything was recorded that Stop could keep.
+    var hasRecording: Bool { !segments.isEmpty || recorder != nil }
 
     private var recorder: AVAudioRecorder?
     private var segments: [(url: URL, duration: TimeInterval)] = []
@@ -56,6 +75,7 @@ final class VoiceRecorder {
     private var ticker: Task<Void, Never>?
     private var segmentSeconds: TimeInterval = 300
     private var maxSegments = 12
+    private var interruptionObserver: NSObjectProtocol?
 
     static let settings: [String: Any] = [
         AVFormatIDKey: kAudioFormatMPEG4AAC,
@@ -86,6 +106,15 @@ final class VoiceRecorder {
             phase = .failed(error.localizedDescription)
             return
         }
+        // The screen stays on while recording, and a call or Siri closes the
+        // current segment instead of silently stopping the recording.
+        UIApplication.shared.isIdleTimerDisabled = true
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            let type = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init(rawValue:))
+            MainActor.assumeIsolated { self?.handleInterruption(type) }
+        }
         #endif
         startSegment()
         ticker = Task { [weak self] in
@@ -95,6 +124,22 @@ final class VoiceRecorder {
             }
         }
     }
+
+    #if os(iOS)
+    private func handleInterruption(_ type: AVAudioSession.InterruptionType?) {
+        switch type {
+        case .began:
+            finishSegment()
+            phase = .paused
+        case .ended:
+            guard phase == .paused, segments.count < maxSegments else { return }
+            try? AVAudioSession.sharedInstance().setActive(true)
+            startSegment()
+        default:
+            break
+        }
+    }
+    #endif
 
     private func startSegment() {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString).m4a")
@@ -153,9 +198,12 @@ final class VoiceRecorder {
         return media
     }
 
-    /// Throws the recording away. Nothing is stored.
+    /// Throws the recording away, the part being recorded included.
     func cancel() {
-        recorder?.stop()
+        if let recorder {
+            recorder.stop()
+            recorder.deleteRecording()
+        }
         recorder = nil
         stopTicking()
         removeFiles()
@@ -164,8 +212,13 @@ final class VoiceRecorder {
     private func stopTicking() {
         ticker?.cancel()
         ticker = nil
-        if phase == .recording { phase = .idle }
+        if phase == .recording || phase == .paused { phase = .idle }
         #if os(iOS)
+        UIApplication.shared.isIdleTimerDisabled = false
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+            self.interruptionObserver = nil
+        }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
     }

@@ -106,11 +106,17 @@ extension StateDatabase {
     }
 
     /// Queues a fresh processing request, for "Try again" after a failure.
+    /// A request still waiting under the note's provisional ID is replaced,
+    /// never sent next to the new one.
     func requestNoteProcessingAgain(noteID: String) async throws {
         try await pool.write { database in
-            try database.execute(sql: "DELETE FROM note_process_request WHERE note_id = ?", arguments: [noteID])
+            let resolved = try Self.noteRecord(id: noteID, in: database)?.note.id ?? noteID
+            let aliases = try String.fetchAll(database, sql: "SELECT provisional_id FROM note_alias WHERE server_id = ?", arguments: [resolved])
+            for identifier in Set([noteID, resolved] + aliases) {
+                try database.execute(sql: "DELETE FROM note_process_request WHERE note_id = ?", arguments: [identifier])
+            }
             try database.execute(sql: "INSERT INTO note_process_request (note_id, request_id, sent) VALUES (?, ?, 0)",
-                                 arguments: [noteID, UUIDv7.generate().uuidString.lowercased()])
+                                 arguments: [resolved, UUIDv7.generate().uuidString.lowercased()])
         }
     }
 

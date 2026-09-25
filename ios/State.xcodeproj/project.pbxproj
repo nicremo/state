@@ -118,6 +118,7 @@
 		C82047D4B74E1AB597C6DDE4 /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E81B32712DEE8711FF7BFA5D /* ConnectView.swift */; };
 		C8CDC421EA8C30A97C57AF18 /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E81B32712DEE8711FF7BFA5D /* ConnectView.swift */; };
 		CBACE8F75917E8D5312631C5 /* StateLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA627FA2180BE836B99F860F /* StateLaunch.swift */; };
+		CDD0F686D3131E28EC4A30EC /* NoteMediaReviewRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3372AC5CD30869AAA83BB99 /* NoteMediaReviewRegressionTests.swift */; };
 		CE4DFBC81281968BF3ABF9E6 /* StateNotificationNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA649C1AC389C3658D2E36D3 /* StateNotificationNames.swift */; };
 		CEC16552BAB58CE1347A6132 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 78A5CF91662D6EEDD28F9B1E /* GRDB */; };
 		D24FA93835016835E00F6E16 /* AdaptiveRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079104A3F695B8A3044C7A01 /* AdaptiveRootView.swift */; };
@@ -240,6 +241,7 @@
 		9DB394739EE7382146C0AE79 /* AdapterPresetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdapterPresetTests.swift; sourceTree = "<group>"; };
 		9E1EDE45CB4D909427D3FA61 /* StateUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StateUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2AEBBEB07BE6383A7241E37 /* StateRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateRootView.swift; sourceTree = "<group>"; };
+		A3372AC5CD30869AAA83BB99 /* NoteMediaReviewRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteMediaReviewRegressionTests.swift; sourceTree = "<group>"; };
 		A53151A5538CF22AA06C2F59 /* UUIDv7Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UUIDv7Tests.swift; sourceTree = "<group>"; };
 		A7761E726011D22475832A98 /* PushRegistrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrationService.swift; sourceTree = "<group>"; };
 		A8CAF0CF63874C62A6478DF1 /* StateMacAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateMacAppDelegate.swift; sourceTree = "<group>"; };
@@ -396,6 +398,7 @@
 				61CFB3F107334818E0CB93AF /* NoteCaptureTests.swift */,
 				45269FF0027A69F872A48309 /* NoteDerivationGoldenTests.swift */,
 				7C43585FBEDF09FDAF90EA72 /* NoteFormattingTests.swift */,
+				A3372AC5CD30869AAA83BB99 /* NoteMediaReviewRegressionTests.swift */,
 				FB1A02B67AE84725D2D16CED /* NoteMediaSyncTests.swift */,
 				B671B5575509907958A07E70 /* NoteSyncTests.swift */,
 				9C0B57D33EA9C96E17EC2644 /* PolicyDraftValidationTests.swift */,
@@ -894,6 +897,7 @@
 				7B2E6E885565D8DAA2393A5C /* NoteCaptureTests.swift in Sources */,
 				6DBADC2B176E73553D235CDD /* NoteDerivationGoldenTests.swift in Sources */,
 				20020BCBF2308BC144523185 /* NoteFormattingTests.swift in Sources */,
+				CDD0F686D3131E28EC4A30EC /* NoteMediaReviewRegressionTests.swift in Sources */,
 				0BBC71143EDF91C7C05171ED /* NoteMediaSyncTests.swift in Sources */,
 				EA53B11852C85875CDE75DA9 /* NoteSyncTests.swift in Sources */,
 				177EE7BD41FDB6650B5856B8 /* PolicyDraftValidationTests.swift in Sources */,

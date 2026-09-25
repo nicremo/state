@@ -8,11 +8,14 @@ struct NoteAIStatusView: View {
     @Bindable var model: AppModel
     let note: Note
     let uploads: [NoteUpload]
+    /// Set when the note itself did not sync; its files cannot go up then,
+    /// and the reader already says why.
+    var syncError: String?
 
     var body: some View {
         if let line = statusLine {
             HStack(alignment: .firstTextBaseline, spacing: StateTheme.Space.inner) {
-                if note.processing?.isWorking == true || !waitingUploads.isEmpty {
+                if note.processing?.isWorking == true || (!waitingUploads.isEmpty && syncError == nil) {
                     ProgressView().controlSize(.small)
                 } else {
                     Image(systemName: line.symbol)
@@ -63,6 +66,7 @@ struct NoteAIStatusView: View {
             return Line(symbol: "exclamationmark.icloud", tint: .orange, text: String(localized: "A file was not uploaded"), detail: failed.error, canRetry: true)
         }
         if !waitingUploads.isEmpty {
+            guard syncError == nil else { return nil }
             return Line(symbol: "icloud.and.arrow.up", tint: .secondary, text: String(localized: "Uploading \(waitingUploads.count) files"))
         }
         guard let processing = note.processing else { return nil }
@@ -174,11 +178,13 @@ struct NoteMediaView: View {
     }
 }
 
-/// One photo, loaded from this device or the server once.
+/// One photo, loaded from this device or the server once, and decoded off
+/// the main thread at the size it is shown.
 struct AttachmentImage: View {
     @Bindable var model: AppModel
     let noteID: String
     let attachment: NoteAttachment
+    var maxPixelSize = 360
     @State private var image: Image?
 
     var body: some View {
@@ -192,16 +198,12 @@ struct AttachmentImage: View {
         }
         .task(id: attachment.sha256) {
             guard image == nil, let data = await model.attachmentData(noteID: noteID, attachment: attachment) else { return }
-            image = Self.image(from: data)
+            let size = maxPixelSize
+            let decoded = await Task.detached(priority: .userInitiated) {
+                NoteImagePreparation.thumbnail(from: data, maxPixelSize: size)
+            }.value
+            image = decoded.map { Image(decorative: $0, scale: 1) }
         }
-    }
-
-    static func image(from data: Data) -> Image? {
-        #if os(iOS)
-        UIImage(data: data).map(Image.init(uiImage:))
-        #else
-        NSImage(data: data).map(Image.init(nsImage:))
-        #endif
     }
 }
 
@@ -217,7 +219,7 @@ private struct PhotoInspector: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: StateTheme.Space.block) {
-                    AttachmentImage(model: model, noteID: noteID, attachment: attachment)
+                    AttachmentImage(model: model, noteID: noteID, attachment: attachment, maxPixelSize: 2048)
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: .infinity, minHeight: 240)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -376,7 +378,13 @@ struct NoteAISettingsView: View {
 
     var body: some View {
         Form {
-            if let settings = model.notesAISettings {
+            if model.serverHasNotesAI == false {
+                ContentUnavailableView(
+                    String(localized: "Not available on this server"),
+                    systemImage: "sparkles",
+                    description: Text("Update the State server to use the notes AI. Notes work without it.")
+                )
+            } else if let settings = model.notesAISettings {
                 Section {
                     Toggle(isOn: Binding(
                         get: { settings.consent },
@@ -390,7 +398,7 @@ struct NoteAISettingsView: View {
                 }
 
                 Section {
-                    Stepper(value: $limit, in: 1...100, step: 1) {
+                    Stepper(value: $limit, in: 1...max(100, settings.monthlyLimitUsd.rounded(.up)), step: 1) {
                         LabeledContent(String(localized: "Monthly limit"), value: limit.formatted(.currency(code: "USD")))
                     } onEditingChanged: { editing in
                         if !editing, limit != settings.monthlyLimitUsd {

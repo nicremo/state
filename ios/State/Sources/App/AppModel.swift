@@ -1395,34 +1395,46 @@ final class AppModel {
         var note = Note.local(id: UUIDv7.generate().uuidString.lowercased(), title: "", document: "", at: Date())
         note.capture = kind
         note.processing = NoteProcessing(status: NoteProcessing.queued)
+        // Writing and hashing files is heavy; it runs off the main thread.
+        let noteID = note.id
+        let stored: [NoteMediaFiles.Stored]
         do {
-            var uploads: [NoteUpload] = []
-            for (ordinal, item) in media.enumerated() {
-                let stored = try NoteMediaFiles.save(item.data, fileExtension: item.fileExtension)
-                uploads.append(NoteUpload(
-                    id: UUIDv7.generate().uuidString.lowercased(),
-                    noteID: note.id,
-                    ordinal: ordinal,
-                    kind: kind,
-                    mimeType: item.mimeType,
-                    fileName: stored.fileName,
-                    sha256: stored.sha256,
-                    byteSize: stored.byteSize,
-                    durationMs: item.durationMs,
-                    requestID: UUIDv7.generate().uuidString.lowercased(),
-                    status: NoteUpload.pending
-                ))
-            }
+            stored = try await Task.detached(priority: .userInitiated) {
+                try media.map { try NoteMediaFiles.save($0.data, fileExtension: $0.fileExtension) }
+            }.value
+        } catch {
+            presentedError = error.localizedDescription
+            return nil
+        }
+        let uploads = zip(media, stored).enumerated().map { ordinal, pair in
+            NoteUpload(
+                id: UUIDv7.generate().uuidString.lowercased(),
+                noteID: noteID,
+                ordinal: ordinal,
+                kind: kind,
+                mimeType: pair.0.mimeType,
+                fileName: pair.1.fileName,
+                sha256: pair.1.sha256,
+                byteSize: pair.1.byteSize,
+                durationMs: pair.0.durationMs,
+                requestID: UUIDv7.generate().uuidString.lowercased(),
+                status: NoteUpload.pending
+            )
+        }
+        do {
             try await database.insertLocalNote(note)
             try await database.enqueueNoteUploads(uploads, processRequestID: UUIDv7.generate().uuidString.lowercased(), noteID: note.id)
             if isDemo { demoVisibleIDs.insert(note.id) }
             await reloadCache()
             scheduleNoteSync()
             return note.id
-        } catch is CancellationError {
-            return nil
         } catch {
-            presentedError = error.localizedDescription
+            // Nothing refers to the files now; they must not linger.
+            NoteMediaFiles.removePending(stored.map(\.fileName))
+            try? await database.deleteLocalNote(id: noteID)
+            if !(error is CancellationError) {
+                presentedError = error.localizedDescription
+            }
             return nil
         }
     }
@@ -1434,13 +1446,14 @@ final class AppModel {
 
     /// The bytes of an attachment, from this device or downloaded once.
     func attachmentData(noteID: String, attachment: NoteAttachment) async -> Data? {
-        if let cached = NoteMediaFiles.cachedData(sha256: attachment.sha256) {
+        let sha = attachment.sha256
+        if let cached = await Task.detached(operation: { NoteMediaFiles.cachedData(sha256: sha) }).value {
             return cached
         }
         guard let api, !isDemo, let data = try? await api.downloadNoteAttachment(noteID: noteAliases[noteID] ?? noteID, attachmentID: attachment.id) else {
             return nil
         }
-        return NoteMediaFiles.cache(data, sha256: attachment.sha256) ? data : nil
+        return await Task.detached(operation: { NoteMediaFiles.cache(data, sha256: sha) }).value ? data : nil
     }
 
     func refreshNoteCapabilities() async {
@@ -1450,13 +1463,22 @@ final class AppModel {
         }
     }
 
+    /// Nil while loading; false once this server turned out to have no
+    /// notes AI (an older version), so the screen can say so.
+    private(set) var serverHasNotesAI: Bool?
+
     func loadNotesAISettings() async {
-        guard let api, !isDemo else { return }
+        guard let api, !isDemo else {
+            serverHasNotesAI = false
+            return
+        }
         do {
             notesAISettings = try await api.notesAISettings()
+            serverHasNotesAI = true
             await refreshNoteCapabilities()
         } catch StateAPIError.notFound {
             notesAISettings = nil
+            serverHasNotesAI = false
         } catch {
             presentedError = error.localizedDescription
         }

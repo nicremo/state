@@ -52,7 +52,14 @@ struct Note: Codable, Hashable, Identifiable, Sendable {
     /// Applies an edit: a written title stays, a derived one follows the text.
     mutating func apply(title: String?, document: String) {
         self.document = document
+        let previousText = plainText
         plainText = NoteText.plainText(document)
+        // An AI title and summary belong to the text they were made from, as
+        // on the server; ticking a checkbox keeps the text and keeps them.
+        if plainText != previousText {
+            if titleSource == Self.aiSource { titleSource = Self.derivedSource }
+            if summarySource == Self.aiSource { summarySource = Self.derivedSource }
+        }
         if let title {
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {

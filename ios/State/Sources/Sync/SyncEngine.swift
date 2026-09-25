@@ -12,8 +12,10 @@ actor SyncEngine {
     func sync() async throws {
         try await pushPendingMutations()
         try await pushDirtyNotes()
-        try await pushNoteMedia()
         try await pullChanges()
+        // Media goes last: a slow or failing upload never holds up the
+        // reminders or the other notes.
+        try await pushNoteMedia()
     }
 
     /// Uploads photos and recordings of notes the server already knows, then
@@ -21,19 +23,26 @@ actor SyncEngine {
     /// refuses for good is marked and skipped, like a rejected note.
     private func pushNoteMedia() async throws {
         for upload in try await database.readyNoteUploads() {
-            guard let data = NoteMediaFiles.pendingData(upload.fileName) else {
+            guard let data = NoteMediaFiles.uploadData(upload) else {
                 try await database.markNoteUploadFailed(id: upload.id, message: String(localized: "The file is missing on this device."))
                 continue
             }
             do {
                 let note = try await api.uploadNoteAttachment(noteID: upload.noteID, upload: upload, data: data)
                 try await database.applyServer(note: note)
-                NoteMediaFiles.keepUploaded(upload)
+                // Marked first, moved second: a stop in between leaves a
+                // finished upload whose file is still found in the queue.
                 try await database.markNoteUploadDone(id: upload.id)
-            } catch let StateAPIError.server(status, code) where (400..<500).contains(status) && status != 408 && status != 429 {
+                NoteMediaFiles.keepUploaded(upload)
+            } catch StateAPIError.unauthorized {
+                throw StateAPIError.unauthorized
+            } catch let error where Self.isTransient(error) {
+                // Offline or a busy server: the rest waits for the next sync.
+                return
+            } catch let StateAPIError.server(_, code) {
                 try await database.markNoteUploadFailed(id: upload.id, message: Self.uploadFailure(code: code))
-            } catch StateAPIError.notFound {
-                try await database.markNoteUploadFailed(id: upload.id, message: StateAPIError.notFound.localizedDescription)
+            } catch {
+                try await database.markNoteUploadFailed(id: upload.id, message: String(localized: "The upload failed."))
             }
         }
         for request in try await database.readyProcessRequests() {
@@ -41,12 +50,25 @@ actor SyncEngine {
                 let note = try await api.requestNoteProcessing(noteID: request.noteID, requestID: request.requestID)
                 try await database.applyServer(note: note)
                 try await database.markProcessRequestSent(noteID: request.noteID, requestID: request.requestID)
-            } catch let StateAPIError.server(status, _) where (400..<500).contains(status) && status != 408 && status != 429 {
-                try await database.markProcessRequestSent(noteID: request.noteID, requestID: request.requestID)
-            } catch StateAPIError.notFound {
+            } catch StateAPIError.unauthorized {
+                throw StateAPIError.unauthorized
+            } catch let error where Self.isTransient(error) {
+                return
+            } catch {
+                // Refused for good: the note shows its state from the server.
                 try await database.markProcessRequestSent(noteID: request.noteID, requestID: request.requestID)
             }
         }
+    }
+
+    /// Worth another try later: no connection, a timeout, rate limiting or
+    /// a server error.
+    private static func isTransient(_ error: Error) -> Bool {
+        if error is URLError { return true }
+        if case let StateAPIError.server(status, _) = error {
+            return status >= 500 || status == 408 || status == 429
+        }
+        return false
     }
 
     private static func uploadFailure(code: String) -> String {

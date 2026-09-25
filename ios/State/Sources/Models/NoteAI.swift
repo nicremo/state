@@ -120,9 +120,16 @@ struct NoteCapabilities: Codable, Hashable, Sendable {
         audio: Audio(available: false, maxSegmentBytes: 20 << 20, maxSegments: 12, segmentSeconds: 300, model: "")
     )
 
+    /// Whether this server takes photos at all. It refuses them when its
+    /// model runs but cannot read images.
+    var acceptsPhotos: Bool { !(agent.available && !vision.available) }
+
     /// How many photos one note may hold: the model's limit, or one photo
-    /// when the server has none to offer, so a photo can still be kept.
-    var photoLimit: Int { max(1, vision.maxImages) }
+    /// while the server has no model to ask, so a photo can still be kept.
+    var photoLimit: Int {
+        guard acceptsPhotos else { return 0 }
+        return vision.available ? max(1, vision.maxImages) : 1
+    }
 }
 
 struct NotesAISettings: Codable, Hashable, Sendable {

@@ -147,3 +147,59 @@ Regressionstests übernommen (`ios/StateTests/NoteSyncTests.swift`,
 Bekannt und nicht Teil dieser Stufe: `TestDesktopLogsAddressAndVersion` in
 `cmd/state-server` scheitert selten beim Aufräumen des Testordners (Race beim
 Beenden des Desktop-Servers, unveränderter Code).
+
+## 8. Stufe B: Medien und Notiz-KI (25.09.2026)
+
+Umgesetzt nach [`superpowers/plans/2026-09-25-notes-ai.md`](superpowers/plans/2026-09-25-notes-ai.md)
+und dem Originalwortlaut in [`ai-managed-notes-transcript.md`](ai-managed-notes-transcript.md).
+Die offenen Entscheidungen aus Abschnitt 4 sind mit Standardwerten belegt, alle in
+der App änderbar: Monatslimit 10 USD, Agent `deepseek/deepseek-v4.1-flash`,
+Transkription `openai/whisper-large-v3-turbo`, Medien unter `<data>/media`,
+Einwilligung in den Einstellungen, Schlüssel nur in `<data>/state_secrets/openrouter.key`.
+
+**Verbindliche Entscheidungen dieser Stufe**
+
+- KI-Ergebnisse (Titel, Zusammenfassung, OCR, Transkript, Verknüpfungen,
+  Vorschläge, Status) liegen neben der Notiz und erhöhen ihre Revision nicht.
+  Die KI kann dadurch keine Konfliktkopie in der App auslösen. Einzige
+  revisionierte KI-Änderung: das leere Dokument einer Foto- oder Sprachnotiz,
+  nur wenn die Revision seit Jobbeginn gleich ist. Sonst wird der Text als
+  Vorschlag angeboten.
+- KI-Titel und -Zusammenfassung gelten nur für den Text, aus dem sie entstanden
+  sind (`source_hash`). Nach einer Textänderung erscheinen die abgeleiteten
+  Werte, bis der nächste Durchlauf 45 Sekunden nach dem Tippen fertig ist. Ein
+  Häkchen ändert den Text nicht und löst keinen bezahlten Durchlauf aus.
+- Die Bildgrenze ist das Minimum aus Server-Regel (10 Bilder, 8 MB, 40 MB) und
+  dem Platz im Kontextfenster des Modells. OpenRouter veröffentlicht keine
+  Bildanzahl pro Modell (geprüft an `/models` und `/models/{id}/endpoints`).
+- Formatierung wie iPhone-Notizen in Markdown: `++unterstrichen++`,
+  `==hervorgehoben==`, `~~durchgestrichen~~`, GFM-Tabellen, `#`/`##`/`###`,
+  einklappbare Abschnitte unter jeder Überschrift. Gedankenstrich-Listen teilen
+  sich die Syntax mit Aufzählungen, weil Markdown sie nicht unterscheidet.
+- Der Agent ist eine eigene, schlanke Go-Schleife über die OpenAI-kompatible
+  API, kein Mastra oder Vercel AI SDK: Der Server ist in Go, und ein
+  Node-Prozess würde die Vertrauensgrenze erweitern, ohne Code zu sparen.
+
+**Reviews und Befunde**
+
+Zwei unabhängige Reviews (Server, App), jeder Befund mit fehlschlagendem Test
+belegt und als Regressionstest übernommen (`internal/notesai/review_regression_test.go`,
+`internal/api/review_regression_test.go`, `ios/StateTests/NoteMediaReviewRegressionTests.swift`).
+
+| Bereich | Befund | Lösung |
+| --- | --- | --- |
+| Server | Ein vom Notizregelwerk abgelehntes KI-Dokument ließ den Job ewig auf "processing" und nach Neustart erneut bezahlen | Unzulässiger Text wird verworfen, ein nicht speicherbares Ergebnis beendet den Job als fehlgeschlagen |
+| Server | Ein Teil des OpenRouter-Schlüssels konnte über das Kürzen der Fehlermeldung in Notiz und Audit gelangen | Erst schwärzen (Schlüssel und jedes `sk-or-`-Muster), dann kürzen |
+| Server | Abgelehnte Uploads blieben auf der Platte | Uploads werden erst übernommen, wenn die Notiz den Anhang angenommen hat |
+| Server | Bezahlte, aber leere oder unlesbare Antworten wurden nicht aufs Budget gezählt | Kosten oder Schätzung werden immer verbucht |
+| Server | Ein verspäteter Retry einer älteren Verarbeitungsanfrage startete einen zweiten bezahlten Job | Die letzten 20 Anfrage-IDs pro Notiz sind idempotent |
+| Server | `source_hash` beschrieb den Text zum Speicherzeitpunkt, nicht den Ausgangstext | Hash vom Ausgangstext, Anzeige nur bei passendem Text |
+| Server | Eine stille Aufnahme wurde bei jeder Anfrage erneut transkribiert | Die Transkriptart markiert erledigte Aufnahmen |
+| App | Tippen während des Anlegens einer Fotonotiz löschte Aufnahmeart, Anhänge und Status | Serverfassung mit den lokalen Textfeldern darüber |
+| App | Ein Upload-Fehler stoppte den ganzen Sync samt Erinnerungen | Medien laufen nach dem Pull, vorübergehende Fehler warten auf den nächsten Sync |
+| App | "Erneut versuchen" konnte zwei Verarbeitungsanfragen senden | Alle Aliasse werden aufgelöst |
+| App | Nach einem Abbruch zwischen Verschieben und Markieren galt ein hochgeladenes Foto als fehlend | Erst markieren, dann verschieben, Cache als Rückfall |
+| App | Abbrechen ließ das laufende Aufnahmesegment liegen, Anrufe und Sperre stoppten die Aufnahme stumm | Segment wird gelöscht, Unterbrechungen schließen das Segment, Bildschirm bleibt an, Hintergrund-Audio |
+| App | Bilder wurden auf dem Main Thread und in voller Größe dekodiert | Vorbereitung, Hashen und Vorschaubilder laufen im Hintergrund in Anzeigegröße |
+| App | Die App bot ein Foto an, wenn das Servermodell keine Bilder liest | Foto-Aufnahme wird dann gesperrt und erklärt |
+| App | Verwaiste Dateien und endloses Laden bei alten Servern | Aufräumen beim Verwerfen, Hinweis "Auf diesem Server nicht verfügbar" |

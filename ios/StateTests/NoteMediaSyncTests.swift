@@ -50,10 +50,8 @@ final class NoteMediaSyncTests: XCTestCase {
         let noteID = try await createCaptureNote(in: database, files: 2)
 
         await server.failNextUpload()
-        do {
-            try await engine.sync()
-            XCTFail("a network failure must surface")
-        } catch {}
+        // A lost connection leaves the upload queued without failing the sync.
+        try await engine.sync()
         let firstAttempt = await server.uploadRequestIDs
         XCTAssertEqual(firstAttempt.count, 1)
         let processingBefore = await server.processingRequests

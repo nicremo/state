@@ -480,12 +480,21 @@ final class StateDatabase: Sendable {
                                 createRequestID: nil, patchRequestID: nil, syncError: nil, inflight: nil, latest: nil,
                                 conflictOf: conflictOf)
         } else {
+            // The server version with the local edits on top: what the
+            // editor can change comes from here, everything else (capture,
+            // attachments, AI data) from the server.
             let pending = record.note
+            var merged = server
+            merged.title = pending.title
+            merged.titleSource = pending.titleSource
+            merged.document = pending.document
+            merged.plainText = pending.plainText
+            merged.summary = pending.summary
+            merged.summarySource = pending.summarySource
+            merged.archived = pending.archived
+            merged.updatedAt = pending.updatedAt
             record = NoteRecord(
-                note: Note(id: server.id, title: pending.title, titleSource: pending.titleSource,
-                           document: pending.document, plainText: pending.plainText, summary: pending.summary,
-                           summarySource: pending.summarySource, archived: pending.archived,
-                           revision: server.revision, createdAt: server.createdAt, updatedAt: pending.updatedAt),
+                note: merged,
                 dirty: true, localVersion: record.localVersion, base: server,
                 createRequestID: nil, patchRequestID: nil, syncError: nil, inflight: nil, latest: nil,
                 conflictOf: conflictOf
@@ -568,9 +577,15 @@ final class StateDatabase: Sendable {
 
     /// Removes a note the server never saw, such as one archived offline.
     func deleteLocalNote(id: String) async throws {
-        try await pool.write { database in
+        let files = try await pool.write { database -> [String] in
             try database.execute(sql: "DELETE FROM note_cache WHERE id = ?", arguments: [id])
+            // Files of a note that never reached the server go with it.
+            let files = try String.fetchAll(database, sql: "SELECT file_name FROM note_upload WHERE note_id = ? AND status != ?", arguments: [id, NoteUpload.done])
+            try database.execute(sql: "DELETE FROM note_upload WHERE note_id = ?", arguments: [id])
+            try database.execute(sql: "DELETE FROM note_process_request WHERE note_id = ?", arguments: [id])
+            return files
         }
+        NoteMediaFiles.removePending(files)
     }
 
     /// A create whose response was lost comes back through the pull under its
@@ -583,7 +598,10 @@ final class StateDatabase: Sendable {
         for record in waiting {
             guard let inflight = record.inflight,
                   let body = try? JSONSerialization.jsonObject(with: inflight.body) as? [String: Any],
-                  body["document"] as? String == note.document else { continue }
+                  body["document"] as? String == note.document,
+                  // An empty photo or voice note looks like any other one;
+                  // its own create replay finds it instead.
+                  !note.document.isEmpty else { continue }
             let sentTitle = body["title"] as? String
             guard sentTitle == nil ? note.titleSource == Note.derivedSource : note.title == sentTitle else { continue }
             try completePush(record, sentVersion: inflight.version, server: note, in: database)

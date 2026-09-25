@@ -41,6 +41,7 @@
 	<string>State fügt Fotos aus deiner Mediathek als Notiz hinzu.</string>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchScreen</key>

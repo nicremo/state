@@ -62,7 +62,7 @@ struct PhotoCaptureSheet: View {
                     .accessibilityIdentifier("photo-limit")
 
                 #if os(iOS)
-                if VNDocumentCameraViewController.isSupported {
+                if VNDocumentCameraViewController.isSupported, capabilities.acceptsPhotos {
                     Button {
                         scans = true
                     } label: {
@@ -83,6 +83,7 @@ struct PhotoCaptureSheet: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.stateSecondary)
+                .disabled(!capabilities.acceptsPhotos)
                 .accessibilityIdentifier("photo-library")
 
                 if isPreparing {
@@ -114,10 +115,17 @@ struct PhotoCaptureSheet: View {
         }
         #if os(iOS)
         .fullScreenCover(isPresented: $scans) {
-            DocumentScanner(limit: capabilities.photoLimit) { images in
+            DocumentScanner(limit: capabilities.photoLimit) { pages in
                 scans = false
-                guard !images.isEmpty else { return }
-                finish(images.compactMap(NoteImagePreparation.media(from:)))
+                guard !pages.isEmpty else { return }
+                isPreparing = true
+                Task {
+                    let media = await Task.detached(priority: .userInitiated) {
+                        pages.compactMap { page in page.jpegData(compressionQuality: 1).flatMap(NoteImagePreparation.media(from:)) }
+                    }.value
+                    isPreparing = false
+                    finish(media)
+                }
             }
             .ignoresSafeArea()
         }
@@ -127,6 +135,9 @@ struct PhotoCaptureSheet: View {
 
     private var limitText: String {
         let limit = capabilities.photoLimit
+        if !capabilities.acceptsPhotos {
+            return String(localized: "The model \(capabilities.agent.model) cannot read photos. Choose a model that reads images in the server settings.")
+        }
         if capabilities.vision.available {
             return String(localized: "Up to \(limit) photos per note, the limit of \(capabilities.vision.model). Handwritten pages become text.")
         }
@@ -138,7 +149,9 @@ struct PhotoCaptureSheet: View {
         failed = false
         var media: [AppModel.CapturedMedia] = []
         for item in selected.prefix(capabilities.photoLimit) {
-            if let data = try? await item.loadTransferable(type: Data.self), let prepared = NoteImagePreparation.media(from: data) {
+            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+            // Decoding a full-size photo is heavy; it stays off the main thread.
+            if let prepared = await Task.detached(priority: .userInitiated, operation: { NoteImagePreparation.media(from: data) }).value {
                 media.append(prepared)
             }
         }
@@ -165,7 +178,7 @@ struct PhotoCaptureSheet: View {
 /// The system document camera: several pages, straightened and cropped.
 private struct DocumentScanner: UIViewControllerRepresentable {
     let limit: Int
-    let onFinish: ([Data]) -> Void
+    let onFinish: ([UIImage]) -> Void
 
     func makeUIViewController(context: Context) -> VNDocumentCameraViewController {
         let controller = VNDocumentCameraViewController()
@@ -181,16 +194,16 @@ private struct DocumentScanner: UIViewControllerRepresentable {
 
     final class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
         let limit: Int
-        let onFinish: ([Data]) -> Void
+        let onFinish: ([UIImage]) -> Void
 
-        init(limit: Int, onFinish: @escaping ([Data]) -> Void) {
+        init(limit: Int, onFinish: @escaping ([UIImage]) -> Void) {
             self.limit = limit
             self.onFinish = onFinish
         }
 
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
-            let pages = (0..<min(scan.pageCount, limit)).compactMap { scan.imageOfPage(at: $0).jpegData(compressionQuality: 0.95) }
-            onFinish(pages)
+            // The pages are encoded off the main thread by the sheet.
+            onFinish((0..<min(scan.pageCount, limit)).map { scan.imageOfPage(at: $0) })
         }
 
         func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
@@ -224,7 +237,7 @@ struct VoiceCaptureSheet: View {
                         systemImage: "mic.slash",
                         description: Text("Allow State to use the microphone in Settings to record voice notes.")
                     )
-                case let .failed(message):
+                case let .failed(message) where !recorder.hasRecording:
                     ContentUnavailableView(String(localized: "Recording failed"), systemImage: "exclamationmark.triangle", description: Text(message))
                 default:
                     recording
@@ -250,6 +263,8 @@ struct VoiceCaptureSheet: View {
         }
         .presentationDetents([.medium])
         .interactiveDismissDisabled(recorder.elapsed > 0)
+        // Leaving without Stop keeps nothing, not even a temporary file.
+        .onDisappear { recorder.cancel() }
     }
 
     private var recording: some View {
@@ -278,6 +293,18 @@ struct VoiceCaptureSheet: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
+            if recorder.phase == .paused {
+                Text("Paused by a call or another app. What was recorded is kept.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+            }
+            if case let .failed(message) = recorder.phase {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+            }
             Button {
                 let media = recorder.finish()
                 if !media.isEmpty { onComplete(media) }
@@ -287,7 +314,7 @@ struct VoiceCaptureSheet: View {
                     .frame(maxWidth: 280)
             }
             .buttonStyle(.statePrimary)
-            .disabled(recorder.phase != .recording && !recorder.reachedLimit)
+            .disabled(!recorder.hasRecording)
             .accessibilityIdentifier("voice-stop")
         }
     }
