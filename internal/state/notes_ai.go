@@ -93,17 +93,17 @@ func NotesAgentActor() Actor {
 }
 
 type NoteAttachment struct {
-	ID           string    `json:"id"`
-	NoteID       string    `json:"note_id"`
-	Ordinal      int       `json:"ordinal"`
-	Kind         string    `json:"kind"`
-	MimeType     string    `json:"mime_type"`
-	ByteSize     int64     `json:"byte_size"`
-	SHA256       string    `json:"sha256"`
-	DurationMS   int64     `json:"duration_ms,omitempty"`
-	DerivedText  string    `json:"derived_text,omitempty"`
-	DerivedKind  string    `json:"derived_kind,omitempty"`
-	DerivedModel string    `json:"derived_model,omitempty"`
+	ID           string `json:"id"`
+	NoteID       string `json:"note_id"`
+	Ordinal      int    `json:"ordinal"`
+	Kind         string `json:"kind"`
+	MimeType     string `json:"mime_type"`
+	ByteSize     int64  `json:"byte_size"`
+	SHA256       string `json:"sha256"`
+	DurationMS   int64  `json:"duration_ms,omitempty"`
+	DerivedText  string `json:"derived_text,omitempty"`
+	DerivedKind  string `json:"derived_kind,omitempty"`
+	DerivedModel string `json:"derived_model,omitempty"`
 	// RawText is the transcript exactly as speech recognition returned it,
 	// before the owner's dictionary corrected it into DerivedText.
 	RawText string `json:"raw_text,omitempty"`
