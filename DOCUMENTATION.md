@@ -444,22 +444,26 @@ the model's context leaves room for. The app never builds in a limit.
 
 ### Setting it up
 
-The OpenRouter key lives only on the server, never in the app or the
-repository. Create a key with a spending limit on openrouter.ai and store it,
-readable only by the server user, as `state_secrets/openrouter.key` in the
-server's data directory:
+1. Create an OpenRouter key with a spending limit on openrouter.ai.
+2. In the app open **Settings, Notes AI, OpenRouter key**, paste the key and tap
+   **Check and save key**. Only the owner and the owner's devices can do this;
+   agents and runners cannot. The server checks the key with OpenRouter, keeps it
+   readable only by the server user in `state_secrets/openrouter.key` and uses
+   it at once, without a restart. The key is never sent back, never logged and
+   not kept on the device. **Replace key** and **Remove key** work the same way.
+3. Turn on **Process notes with AI**. That switch is the owner's consent;
+   without it nothing is sent.
 
-- Mac Server: `~/Library/Application Support/State Server/state_secrets/openrouter.key`
-- VPS or container: `$STATE_DATA_DIR/state_secrets/openrouter.key`, or point
-  `STATE_OPENROUTER_API_KEY_FILE` at a secret file.
+Servers without the app can take the key as a file instead: the same
+`state_secrets/openrouter.key` in the data directory, or a file named by
+`STATE_OPENROUTER_API_KEY_FILE`, read at start. The notes agent resolves
+"tomorrow" or "on Friday" against the server's date and local time zone;
+`STATE_TIME_ZONE` names another zone.
 
-Restart the server afterwards; its log then says `notes_ai_configured=true`.
-Turn on **Settings, Notes AI, Process notes with AI** in the app. That switch
-is the owner's consent; without it nothing is sent. The same screen sets the
-monthly limit (default 10 USD) and shows this month's spending. Every call is
-checked against the limit before it is made and counted with the cost
-OpenRouter reports. Without a key, without consent or over the limit, notes
-stay fully usable and show why they were not processed.
+The same screen sets the monthly limit (default 10 USD) and shows this month's
+spending. Every call is checked against the limit before it is made and counted
+with the cost OpenRouter reports. Without a key, without consent or over the
+limit, notes stay fully usable and show why they were not processed.
 
 ### Notes from agents and the terminal
 

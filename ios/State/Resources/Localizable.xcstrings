@@ -551,6 +551,16 @@
         }
       }
     },
+    "Check and save key" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlüssel prüfen und speichern"
+          }
+        }
+      }
+    },
     "Check the MCP result and add the final notes." : {
       "localizations" : {
         "de" : {
@@ -2131,6 +2141,16 @@
         }
       }
     },
+    "Notes stay usable; nothing is processed until a key is set again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notizen bleiben nutzbar, verarbeitet wird erst wieder mit einem neuen Schlüssel."
+          }
+        }
+      }
+    },
     "Notes you or your agents write appear here." : {
       "localizations" : {
         "de" : {
@@ -2331,12 +2351,52 @@
         }
       }
     },
+    "Only you and your own devices can set the key. The server checks it with OpenRouter and keeps it; this device and your agents never see it again. Set a spending limit for the key on openrouter.ai." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur du und deine eigenen Geräte können den Schlüssel setzen. Der Server prüft ihn bei OpenRouter und bewahrt ihn auf, dieses Gerät und deine Agenten sehen ihn danach nie wieder. Setze auf openrouter.ai ein Ausgabelimit für den Schlüssel."
+          }
+        }
+      }
+    },
     "Open iOS notification settings" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "iOS-Benachrichtigungseinstellungen öffnen"
+          }
+        }
+      }
+    },
+    "OpenRouter did not accept this key." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenRouter hat diesen Schlüssel nicht angenommen."
+          }
+        }
+      }
+    },
+    "OpenRouter key" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenRouter-Schlüssel"
+          }
+        }
+      }
+    },
+    "OpenRouter key (sk-or-...)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenRouter-Schlüssel (sk-or-...)"
           }
         }
       }
@@ -2931,12 +2991,32 @@
         }
       }
     },
+    "Remove key" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlüssel entfernen"
+          }
+        }
+      }
+    },
     "Remove link" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verknüpfung entfernen"
+          }
+        }
+      }
+    },
+    "Remove the OpenRouter key?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenRouter-Schlüssel entfernen?"
           }
         }
       }
@@ -2957,6 +3037,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wiederholen"
+          }
+        }
+      }
+    },
+    "Replace key" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlüssel ersetzen"
           }
         }
       }
@@ -3901,6 +3991,16 @@
         }
       }
     },
+    "The key could not be saved. Check the connection to your server." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Schlüssel konnte nicht gespeichert werden. Prüfe die Verbindung zu deinem Server."
+          }
+        }
+      }
+    },
     "The longest recording is reached." : {
       "localizations" : {
         "de" : {
@@ -4117,6 +4217,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dies ist kein gültiger State-Kopplungscode."
+          }
+        }
+      }
+    },
+    "This is not an OpenRouter key. It starts with sk-or-." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ist kein OpenRouter-Schlüssel. Er beginnt mit sk-or-."
           }
         }
       }

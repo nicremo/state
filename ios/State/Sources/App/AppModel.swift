@@ -1494,6 +1494,39 @@ final class AppModel {
         }
     }
 
+    enum KeyOutcome: Equatable {
+        case saved
+        case invalid
+        case malformed
+        case failed
+    }
+
+    /// Hands the OpenRouter key to the server, which checks it with
+    /// OpenRouter first. Nothing of it stays on this device.
+    func setNotesAIKey(_ key: String) async -> KeyOutcome {
+        guard let api else { return .failed }
+        do {
+            notesAISettings = try await api.setNotesAIKey(key.trimmingCharacters(in: .whitespacesAndNewlines))
+            await refreshNoteCapabilities()
+            return .saved
+        } catch let StateAPIError.server(status, _) where status == 400 {
+            return key.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("sk-or-") ? .invalid : .malformed
+        } catch {
+            present(error)
+            return .failed
+        }
+    }
+
+    func removeNotesAIKey() async {
+        guard let api else { return }
+        do {
+            notesAISettings = try await api.removeNotesAIKey()
+            await refreshNoteCapabilities()
+        } catch {
+            present(error)
+        }
+    }
+
     /// Creates the reminder the AI proposed. Only the owner does this; the
     /// agent itself can never create one.
     func acceptReminderProposal(noteID: String, proposal: ReminderProposal) async {

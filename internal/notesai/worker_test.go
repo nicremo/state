@@ -195,6 +195,9 @@ func TestAudioNoteTranscribedThenOrganized(t *testing.T) {
 	if !strings.Contains(chat, "Erster Teil: Milch kaufen.") || !strings.Contains(chat, "Zweiter Teil") {
 		t.Fatal("transcripts did not reach the agent")
 	}
+	if !strings.Contains(chat, "Today is "+time.Now().Format("2006-01-02")) {
+		t.Fatal("the agent cannot resolve \"am Freitag\" without today's date")
+	}
 	if len(h.fake.Requests("/audio/transcriptions")) != 2 {
 		t.Fatal("each segment must be transcribed once")
 	}

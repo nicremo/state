@@ -84,6 +84,7 @@ const (
 	AuditActionNoteProposalAccepted   AuditAction = "note.proposal_accepted"
 	AuditActionNoteProposalDismissed  AuditAction = "note.proposal_dismissed"
 	AuditActionNotesAISettingsUpdated AuditAction = "notes_ai.settings_updated"
+	AuditActionNotesAIKeyUpdated      AuditAction = "notes_ai.key_updated"
 )
 
 // NotesAgentActor is recorded for everything the notes AI writes.
@@ -1094,6 +1095,35 @@ func (service *Service) UpdateNoteAISettings(ctx context.Context, actor Actor, i
 		return NoteAISettings{}, err
 	}
 	return settings, nil
+}
+
+// CanManageNotesAIKey is who may set the server's OpenRouter key: the owner
+// and the owner's devices, never an agent or a runner.
+func CanManageNotesAIKey(actor Actor) bool {
+	return actor.Kind == ActorKindOwner || actor.Kind == ActorKindDevice
+}
+
+// RecordNotesAIKeyChange audits that the key was set or removed. The event
+// says only whether a key is configured, never the key.
+func (service *Service) RecordNotesAIKeyChange(ctx context.Context, actor Actor, configured bool) error {
+	if !CanManageNotesAIKey(actor) {
+		return ErrForbidden
+	}
+	eventID, err := service.newID()
+	if err != nil {
+		return fmt.Errorf("generate audit event ID: %w", err)
+	}
+	now := service.clock().UTC()
+	event, err := service.buildAuditEvent(eventID, "", AuditActionNotesAIKeyUpdated, actor, now, nil, "rest", "", nil, map[string]any{"configured": configured}, []string{"key"}, 0, "", eventID)
+	if err != nil {
+		return err
+	}
+	settings, err := service.GetNoteAISettings(ctx)
+	if err != nil {
+		return err
+	}
+	settings.Month, settings.SpentThisMonthUSD = "", 0
+	return service.repository.SaveNoteAISettings(ctx, settings, event)
 }
 
 func (service *Service) AddNoteAIUsage(ctx context.Context, costUSD float64) error {

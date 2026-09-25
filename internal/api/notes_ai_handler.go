@@ -19,6 +19,75 @@ type NotesAI interface {
 	Media() *notesai.MediaStore
 	Capabilities(ctx context.Context, settings state.NoteAISettings) notesai.Capabilities
 	Kick()
+	SetKey(ctx context.Context, key string) error
+	RemoveKey() error
+}
+
+// setNotesAIKey takes the owner's OpenRouter key from the app. The server
+// checks it with OpenRouter, keeps it in its own secret store and never
+// sends it back; the app does not keep it either.
+func (handler *Handler) setNotesAIKey(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, noteActorKinds...)
+	if !ok {
+		return
+	}
+	if !state.CanManageNotesAIKey(actor) {
+		writeError(writer, state.ErrForbidden, nil)
+		return
+	}
+	var input struct {
+		Key string `json:"key"`
+	}
+	if err := decodeJSON(request, &input); err != nil || handler.notesAI == nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if err := handler.notesAI.SetKey(request.Context(), input.Key); err != nil {
+		reason := "key_unverified"
+		switch {
+		case errors.Is(err, notesai.ErrMalformedKey):
+			reason = "malformed_key"
+		case errors.Is(err, notesai.ErrInvalidKey):
+			reason = "invalid_key"
+		}
+		writeError(writer, state.ErrInvalidInput, map[string]string{"reason": reason})
+		return
+	}
+	handler.finishKeyChange(writer, request, actor, true)
+}
+
+func (handler *Handler) removeNotesAIKey(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, noteActorKinds...)
+	if !ok {
+		return
+	}
+	if !state.CanManageNotesAIKey(actor) {
+		writeError(writer, state.ErrForbidden, nil)
+		return
+	}
+	if handler.notesAI == nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	if err := handler.notesAI.RemoveKey(); err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.finishKeyChange(writer, request, actor, false)
+}
+
+func (handler *Handler) finishKeyChange(writer http.ResponseWriter, request *http.Request, actor state.Actor, configured bool) {
+	if err := handler.state.RecordNotesAIKeyChange(request.Context(), actor, configured); err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	settings, err := handler.state.GetNoteAISettings(request.Context())
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, handler.settingsResponse(settings))
 }
 
 // uploadNoteAttachment stores one photo or recording. The body is the raw

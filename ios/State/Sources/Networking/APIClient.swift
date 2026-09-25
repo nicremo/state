@@ -134,6 +134,17 @@ actor APIClient: StateAPI {
         return try StateJSON.decoder.decode(NotesAISettings.self, from: try await request(path: "/api/v1/notes-ai/settings", method: "PATCH", body: body))
     }
 
+    /// Sends the owner's OpenRouter key to the server once. The server checks
+    /// and keeps it; the app never stores it.
+    func setNotesAIKey(_ key: String) async throws -> NotesAISettings {
+        let body = try JSONSerialization.data(withJSONObject: ["key": key], options: [.sortedKeys])
+        return try StateJSON.decoder.decode(NotesAISettings.self, from: try await request(path: "/api/v1/notes-ai/key", method: "PUT", body: body, timeout: 40))
+    }
+
+    func removeNotesAIKey() async throws -> NotesAISettings {
+        try StateJSON.decoder.decode(NotesAISettings.self, from: try await request(path: "/api/v1/notes-ai/key", method: "DELETE"))
+    }
+
     func acceptReminderProposal(noteID: String, proposalID: String, timeZone: String, requestID: String) async throws -> Reminder {
         let body = try JSONSerialization.data(withJSONObject: ["time_zone": timeZone, "client_request_id": requestID], options: [.sortedKeys])
         let data = try await request(path: "/api/v1/notes/\(noteID)/reminder-proposals/\(proposalID)/accept", method: "POST", body: body)

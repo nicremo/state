@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/nicremo/state/internal/state"
@@ -56,15 +58,25 @@ type AgentInput struct {
 }
 
 type Agent struct {
-	client  *Client
-	model   string
-	service *state.Service
-	budget  Budget
-	pricing Model
+	client   *Client
+	model    string
+	service  *state.Service
+	budget   Budget
+	pricing  Model
+	now      func() time.Time
+	location *time.Location
 }
 
+// NewAgent uses the server's clock and local time zone, which is the
+// owner's on the Mac Server; STATE_TIME_ZONE can name another.
 func NewAgent(client *Client, model string, service *state.Service, budget Budget, pricing Model) *Agent {
-	return &Agent{client: client, model: model, service: service, budget: budget, pricing: pricing}
+	location := time.Local
+	if name := os.Getenv("STATE_TIME_ZONE"); name != "" {
+		if loaded, err := time.LoadLocation(name); err == nil {
+			location = loaded
+		}
+	}
+	return &Agent{client: client, model: model, service: service, budget: budget, pricing: pricing, now: time.Now, location: location}
 }
 
 // agentRun is the state of one run: what the model has read and proposed.
@@ -178,6 +190,10 @@ func (run *agentRun) userContent(ctx context.Context) []ContentPart {
 	note := run.input.Note
 	var builder strings.Builder
 	builder.WriteString("Process this State note.\n\n")
+	// Relative dates such as "on Friday" can only become a reminder date
+	// when the model knows today's date in the owner's time zone.
+	now := run.agent.now().In(run.agent.location)
+	fmt.Fprintf(&builder, "Today is %s, %s, time zone %s. Resolve relative dates (\"tomorrow\", \"on Friday\") against this date.\n", now.Format("2006-01-02"), now.Weekday(), run.agent.location.String())
 	fmt.Fprintf(&builder, "Note ID: %s\nKind: %s\n", note.ID, captureName(note.Capture))
 	if note.TitleSource == state.NoteFieldSourceUser {
 		fmt.Fprintf(&builder, "The owner wrote the title %q. Keep it; your title is only stored as provenance.\n", note.Title)

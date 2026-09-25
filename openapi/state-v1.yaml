@@ -782,6 +782,39 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/NotesAISettings" }
         "403": { $ref: "#/components/responses/Error" }
+  /api/v1/notes-ai/key:
+    put:
+      tags: [Notes]
+      operationId: setNotesAIKey
+      description: Owner and devices only. Checks the OpenRouter key with OpenRouter, stores it on the server (mode 0600) and uses it at once. The key is never returned; the app does not keep it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key: { type: string, pattern: "^sk-or-" }
+      responses:
+        "200":
+          description: Settings with key_configured true.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotesAISettings" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [Notes]
+      operationId: removeNotesAIKey
+      description: Owner and devices only. Deletes the stored key and switches the notes AI off.
+      responses:
+        "200":
+          description: Settings with key_configured false.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotesAISettings" }
+        "403": { $ref: "#/components/responses/Error" }
   /api/v1/projects:
     post:
       tags: [Projects]
