@@ -70,9 +70,9 @@ func reply(body map[string]any) fakeopenrouter.Reply {
 		}, 0.0005)
 	case strings.Contains(content, "Transcript of recording"):
 		return fakeopenrouter.ToolCall("submit", "submit_result", map[string]any{
-			"title":    "Sprachnotiz Einkauf",
-			"summary":  "Einkauf und ein Anruf bei Karla.",
-			"document": "- [ ] Milch kaufen\n- [ ] Karla anrufen",
+			"title":    "CLAUDE.md angepasst, Rechnung offen",
+			"summary":  "Nerviger Tag, CLAUDE.md verbessert, Rechnung in sevDesk.",
+			"document": "- Nerviger Tag\n- CLAUDE.md angepasst\n- [ ] Rechnung in sevDesk prüfen\n- [ ] Karla anrufen",
 		}, 0.0012)
 	default:
 		return fakeopenrouter.ToolCall("submit", "submit_result", map[string]any{
