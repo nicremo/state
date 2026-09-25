@@ -330,6 +330,51 @@ actor APIClient: StateAPI {
         return try StateJSON.decoder.decode(AgentRun.self, from: data)
     }
 
+    func listAgentSessions() async throws -> [AgentSession] {
+        let data = try await request(path: "/api/v1/agent-sessions", query: [URLQueryItem(name: "limit", value: "100")])
+        return try StateJSON.decoder.decode(AgentSessionListResponse.self, from: data).sessions
+    }
+
+    func agentSession(id: String) async throws -> AgentSession {
+        try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions/\(id)"))
+    }
+
+    /// Starts an agent on the reminder's task with the policy's project,
+    /// agent and rights.
+    func startAgentSession(reminderID: String, policyID: String, instruction: String) async throws -> AgentSession {
+        let body = try sessionBody(["reminder_id": reminderID, "policy_id": policyID, "instruction": instruction])
+        return try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions", method: "POST", body: body))
+    }
+
+    func sendAgentMessage(sessionID: String, text: String) async throws -> AgentSession {
+        let body = try sessionBody(["text": text])
+        return try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions/\(sessionID)/messages", method: "POST", body: body))
+    }
+
+    func openAgentSessionOnMac(sessionID: String) async throws -> AgentSession {
+        let body = try sessionBody([:])
+        return try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions/\(sessionID)/open", method: "POST", body: body))
+    }
+
+    func cancelAgentTurn(sessionID: String) async throws -> AgentSession {
+        let body = try sessionBody([:])
+        return try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions/\(sessionID)/cancel", method: "POST", body: body))
+    }
+
+    func closeAgentSession(sessionID: String) async throws -> AgentSession {
+        let body = try sessionBody([:])
+        return try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions/\(sessionID)/close", method: "POST", body: body))
+    }
+
+    private func sessionBody(_ fields: [String: Any]) throws -> Data {
+        let requestID = UUIDv7.generate().uuidString.lowercased()
+        var payload = fields
+        payload["client_request_id"] = requestID
+        payload["correlation_id"] = requestID
+        payload["source"] = "ios"
+        return try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+    }
+
     func approveRun(id: String, approved: Bool, expectedRevision: Int64) async throws -> AgentRun {
         let requestID = UUIDv7.generate().uuidString.lowercased()
         let body = try JSONSerialization.data(withJSONObject: [

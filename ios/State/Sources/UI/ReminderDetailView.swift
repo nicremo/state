@@ -8,6 +8,7 @@ struct ReminderDetailView: View {
     @State private var showsEditor = false
     @State private var confirmsArchive = false
     @State private var completionFeedback = 0
+    @State private var startsAgent = false
 
     var body: some View {
         Group {
@@ -61,19 +62,10 @@ struct ReminderDetailView: View {
                                     AgentRunRow(run: run)
                                 }
                             }
-                            if model.session?.actor.kind == .owner, let policyID = detail.reminder.executionPolicyID {
-                                Button {
-                                    Task {
-                                        await model.triggerManualRun(reminderID: reminderID, policyID: policyID)
-                                        await reload()
-                                    }
-                                } label: {
-                                    Label("Run now", systemImage: "play.fill")
-                                }
-                                .disabled(model.isDemo)
-                            }
                         }
                     }
+
+                    agentSection(detail.reminder)
 
                     commentSection(detail)
 
@@ -123,6 +115,7 @@ struct ReminderDetailView: View {
             }
         }
         .task(id: model.activity.count) { await reload() }
+        .task { await model.loadAgentSessions() }
         .sheet(isPresented: $showsEditor) {
             if let reminder = detail?.reminder {
                 ReminderEditorView(model: model, reminder: reminder) { draft in
@@ -177,6 +170,40 @@ struct ReminderDetailView: View {
                 }
             }
             .padding(.vertical, StateTheme.Space.snug)
+        }
+    }
+
+    /// Sessions of this reminder and the button that lets an agent work on
+    /// it now. Only the owner starts agents.
+    @ViewBuilder
+    private func agentSection(_ reminder: Reminder) -> some View {
+        let sessions = model.agentSessions.filter { $0.reminderID == reminder.id }
+        if model.canDriveAgents, !model.sessionPolicies.isEmpty || !sessions.isEmpty {
+            Section(String(localized: "Agent")) {
+                ForEach(sessions) { session in
+                    Button {
+                        model.openAgentSession(session.id)
+                    } label: {
+                        AgentSessionRow(session: session)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if !model.sessionPolicies.isEmpty {
+                    Button {
+                        startsAgent = true
+                    } label: {
+                        Label(String(localized: "Let an agent work on it"), systemImage: "play.circle.fill")
+                            .font(.body.weight(.semibold))
+                    }
+                    .accessibilityIdentifier("reminder-start-agent")
+                }
+            }
+            .sheet(isPresented: $startsAgent) {
+                StartAgentSessionSheet(model: model, reminder: reminder)
+                    #if os(macOS)
+                    .frame(minWidth: 460, minHeight: 480)
+                    #endif
+            }
         }
     }
 

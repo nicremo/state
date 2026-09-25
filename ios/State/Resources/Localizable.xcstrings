@@ -11,6 +11,16 @@
         }
       }
     },
+    "%@ is working" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ arbeitet"
+          }
+        }
+      }
+    },
     "%@ of %@" : {
       "localizations" : {
         "de" : {
@@ -181,6 +191,16 @@
         }
       }
     },
+    "Active" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktiv"
+          }
+        }
+      }
+    },
     "Activity" : {
       "localizations" : {
         "de" : {
@@ -287,6 +307,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vorwarnzeit"
+          }
+        }
+      }
+    },
+    "Agenda" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agenda"
           }
         }
       }
@@ -401,6 +431,16 @@
         }
       }
     },
+    "Allow" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erlauben"
+          }
+        }
+      }
+    },
     "Allow State to use the microphone in Settings to record voice notes." : {
       "localizations" : {
         "de" : {
@@ -467,6 +507,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ein anderes Gerät hat das Wörterbuch geändert. Speichere erneut, um diese Fassung zu behalten."
+          }
+        }
+      }
+    },
+    "Answer the agent" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dem Agenten antworten"
           }
         }
       }
@@ -617,6 +667,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Abbrechen"
+          }
+        }
+      }
+    },
+    "Cancel round" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Runde abbrechen"
           }
         }
       }
@@ -1021,6 +1081,16 @@
         }
       }
     },
+    "Copy command" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Befehl kopieren"
+          }
+        }
+      }
+    },
     "Copy state-runner command" : {
       "localizations" : {
         "de" : {
@@ -1037,6 +1107,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "statectl-Befehl kopieren"
+          }
+        }
+      }
+    },
+    "Could not open the terminal" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Terminal ließ sich nicht öffnen"
           }
         }
       }
@@ -1371,6 +1451,36 @@
         }
       }
     },
+    "End session" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session beenden"
+          }
+        }
+      }
+    },
+    "End this session?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session beenden?"
+          }
+        }
+      }
+    },
+    "Ended" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beendet"
+          }
+        }
+      }
+    },
     "Enter a complete https:// address." : {
       "localizations" : {
         "de" : {
@@ -1487,6 +1597,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Demo ansehen"
+          }
+        }
+      }
+    },
+    "Extra instruction (optional)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zusätzliche Anweisung (optional)"
           }
         }
       }
@@ -1781,6 +1901,16 @@
         }
       }
     },
+    "Let an agent work on it" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jetzt arbeiten lassen"
+          }
+        }
+      }
+    },
     "License" : {
       "localizations" : {
         "de" : {
@@ -1847,6 +1977,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vorkommnis bei Erfolg als erledigt markieren"
+          }
+        }
+      }
+    },
+    "May edit files and run commands without asking." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darf Dateien ändern und Befehle ausführen, ohne zu fragen."
+          }
+        }
+      }
+    },
+    "May edit files in the project, no commands." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darf Dateien im Projekt ändern, keine Befehle."
+          }
+        }
+      }
+    },
+    "May only read the project." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darf das Projekt nur lesen."
           }
         }
       }
@@ -2061,6 +2221,16 @@
         }
       }
     },
+    "No Mac picked up this round in time." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Mac hat diese Runde rechtzeitig übernommen."
+          }
+        }
+      }
+    },
     "No OpenRouter key on your server" : {
       "localizations" : {
         "de" : {
@@ -2077,6 +2247,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Noch keine Aktivität"
+          }
+        }
+      }
+    },
+    "No agent is set up yet. The owner sets one up on the Mac with state-server agent-project: it names the project folder, the agent and what it may do." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch kein Agent eingerichtet. Der Owner richtet ihn auf dem Mac mit state-server agent-project ein: Projektordner, Agent und was er darf."
+          }
+        }
+      }
+    },
+    "No agent sessions yet" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch keine Agent-Sessions"
           }
         }
       }
@@ -2561,6 +2751,16 @@
         }
       }
     },
+    "Only the owner account can allow this. You can cancel the round." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das kann nur das Owner-Konto erlauben. Du kannst die Runde abbrechen."
+          }
+        }
+      }
+    },
     "Only you and your own devices can set the key. The server checks it with OpenRouter and keeps it; this device and your agents never see it again. Set a spending limit for the key on openrouter.ai." : {
       "localizations" : {
         "de" : {
@@ -2571,12 +2771,32 @@
         }
       }
     },
+    "Open a reminder and tap Let an agent work on it. The agent works on your Mac; its answer appears here and you can reply." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffne eine Erinnerung und tippe auf „Jetzt arbeiten lassen“. Der Agent arbeitet auf deinem Mac, seine Antwort erscheint hier und du kannst antworten."
+          }
+        }
+      }
+    },
     "Open iOS notification settings" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "iOS-Benachrichtigungseinstellungen öffnen"
+          }
+        }
+      }
+    },
+    "Open on the Mac" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Am Mac öffnen"
           }
         }
       }
@@ -2617,6 +2837,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenRouter-Schlüssel auf dem Server"
+          }
+        }
+      }
+    },
+    "Opened in a terminal on the Mac" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Terminal auf dem Mac geöffnet"
+          }
+        }
+      }
+    },
+    "Opening on the Mac" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird auf dem Mac geöffnet"
           }
         }
       }
@@ -3391,6 +3631,16 @@
         }
       }
     },
+    "Round cancelled" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Runde abgebrochen"
+          }
+        }
+      }
+    },
     "Run approved" : {
       "localizations" : {
         "de" : {
@@ -3701,6 +3951,26 @@
         }
       }
     },
+    "Select a session" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session auswählen"
+          }
+        }
+      }
+    },
+    "Send" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Senden"
+          }
+        }
+      }
+    },
     "Server" : {
       "localizations" : {
         "de" : {
@@ -3737,6 +4007,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Server gefunden"
+          }
+        }
+      }
+    },
+    "Session actions" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session-Aktionen"
           }
         }
       }
@@ -3941,6 +4221,16 @@
         }
       }
     },
+    "Start" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starten"
+          }
+        }
+      }
+    },
     "Start State on a machine you control" : {
       "localizations" : {
         "de" : {
@@ -3967,6 +4257,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gestartet"
+          }
+        }
+      }
+    },
+    "Started on the reminder's task" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit der Aufgabe der Erinnerung gestartet"
           }
         }
       }
@@ -4201,6 +4501,16 @@
         }
       }
     },
+    "Task" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufgabe"
+          }
+        }
+      }
+    },
     "Text" : {
       "localizations" : {
         "de" : {
@@ -4237,6 +4547,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der QR-Code ist eine Abkürzung für dieselben zwei Werte. Alles, was einen State-Kopplungscode als QR ausgibt, etwa die Einrichtungsausgabe deines Servers, kann gescannt statt getippt werden."
+          }
+        }
+      }
+    },
+    "The agent asks for a permission" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Agent bittet um eine Freigabe"
+          }
+        }
+      }
+    },
+    "The agent could not start on the Mac. Check that it is installed and the project is set up for the runner." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Agent konnte auf dem Mac nicht starten. Prüfe, ob er installiert ist und das Projekt für den Runner eingerichtet ist."
+          }
+        }
+      }
+    },
+    "The agent keeps its work. You can open the session on the Mac later, but not answer here any more." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Arbeit des Agenten bleibt erhalten. Am Mac kannst du die Session später öffnen, hier aber nicht mehr antworten."
+          }
+        }
+      }
+    },
+    "The agent starts on your Mac in the project folder. Its answer appears in the Agent tab, where you can keep writing with it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Agent startet auf deinem Mac im Projektordner. Seine Antwort erscheint im Agent-Tab, dort kannst du mit ihm weiterschreiben."
           }
         }
       }
@@ -4377,6 +4727,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der Relay empfängt nur verschlüsselte Erinnerungspakete und eine opake Route."
+          }
+        }
+      }
+    },
+    "The round ended with an error." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Runde endete mit einem Fehler."
           }
         }
       }
@@ -4537,6 +4897,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Diese Notiz ist zu lang zum Synchronisieren."
+          }
+        }
+      }
+    },
+    "This session has ended." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Session ist beendet."
           }
         }
       }
@@ -4901,6 +5271,26 @@
         }
       }
     },
+    "Waiting for you" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet auf dich"
+          }
+        }
+      }
+    },
+    "Waiting for your Mac to pick up this round" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet, bis dein Mac die Runde übernimmt"
+          }
+        }
+      }
+    },
     "Waits for approval: %@" : {
       "localizations" : {
         "de" : {
@@ -4971,6 +5361,16 @@
         }
       }
     },
+    "Working" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arbeitet"
+          }
+        }
+      }
+    },
     "Write State data" : {
       "localizations" : {
         "de" : {
@@ -4997,6 +5397,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gestern"
+          }
+        }
+      }
+    },
+    "You can answer as soon as the agent has finished its round." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du kannst antworten, sobald der Agent seine Runde beendet hat."
           }
         }
       }

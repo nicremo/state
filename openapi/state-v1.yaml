@@ -1149,6 +1149,104 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-sessions:
+    get:
+      tags: [Agent sessions]
+      operationId: listAgentSessions
+      description: Owner and devices. Sessions with the most recent activity first, each with its rounds.
+      responses:
+        "200":
+          description: Sessions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions: { type: array, items: { $ref: "#/components/schemas/AgentSession" } }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Agent sessions]
+      operationId: startAgentSession
+      description: Owner and devices. Starts an agent on the reminder's task with the policy's project, agent and rights; the first round becomes eligible for a runner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/MutationMetadata"
+                - type: object
+                  required: [reminder_id, policy_id]
+                  properties:
+                    reminder_id: { $ref: "#/components/schemas/UUIDv7" }
+                    policy_id: { $ref: "#/components/schemas/UUIDv7" }
+                    instruction: { type: string, maxLength: 8000 }
+      responses:
+        "201": { description: The session., content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-sessions/{session_id}:
+    get:
+      tags: [Agent sessions]
+      operationId: getAgentSession
+      parameters: [{ name: session_id, in: path, required: true, schema: { $ref: "#/components/schemas/UUIDv7" } }]
+      responses:
+        "200": { description: The session with its rounds., content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-sessions/{session_id}/messages:
+    post:
+      tags: [Agent sessions]
+      operationId: sendAgentSessionMessage
+      description: Starts the next round with the owner's message. 409 while a round is in progress or when the session is closed.
+      parameters: [{ name: session_id, in: path, required: true, schema: { $ref: "#/components/schemas/UUIDv7" } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/MutationMetadata"
+                - type: object
+                  required: [text]
+                  properties:
+                    text: { type: string, minLength: 1, maxLength: 8000 }
+      responses:
+        "200": { description: The session., content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-sessions/{session_id}/open:
+    post:
+      tags: [Agent sessions]
+      operationId: openAgentSessionOnMac
+      description: Asks the runner to open the agent's session in a terminal on the Mac. Needs a known agent CLI session; 409 while a round is in progress.
+      parameters: [{ name: session_id, in: path, required: true, schema: { $ref: "#/components/schemas/UUIDv7" } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MutationMetadata" } } } }
+      responses:
+        "200": { description: The session., content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-sessions/{session_id}/cancel:
+    post:
+      tags: [Agent sessions]
+      operationId: cancelAgentSessionTurn
+      description: Owner and devices. Cancels the round in progress; the session stays open. 409 when no round is in progress.
+      parameters: [{ name: session_id, in: path, required: true, schema: { $ref: "#/components/schemas/UUIDv7" } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MutationMetadata" } } } }
+      responses:
+        "200": { description: The session., content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-sessions/{session_id}/close:
+    post:
+      tags: [Agent sessions]
+      operationId: closeAgentSession
+      description: Ends the session. 409 while a round is in progress; cancel it first with the session's cancel endpoint.
+      parameters: [{ name: session_id, in: path, required: true, schema: { $ref: "#/components/schemas/UUIDv7" } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MutationMetadata" } } } }
+      responses:
+        "200": { description: The closed session., content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/runs:
     get:
       tags: [Runs]
@@ -2000,6 +2098,26 @@ components:
           items: { $ref: "#/components/schemas/Capability" }
         timeout_minutes: { type: integer, minimum: 1, maximum: 240 }
         completion_rule: { type: [string, "null"], enum: [mark_occurrence_done_on_success, null] }
+        session_id: { type: string, description: Set on rounds of an agent session. }
+        turn_kind: { type: string, enum: [message, open_terminal] }
+        resume_session_id: { type: string, description: The agent CLI session to resume; empty on the first round. }
+    AgentSession:
+      type: object
+      required: [id, reminder_id, policy_id, project_id, adapter, title, closed, status, turns]
+      properties:
+        id: { $ref: "#/components/schemas/UUIDv7" }
+        reminder_id: { $ref: "#/components/schemas/UUIDv7" }
+        policy_id: { $ref: "#/components/schemas/UUIDv7" }
+        project_id: { $ref: "#/components/schemas/UUIDv7" }
+        project_name: { type: string }
+        adapter: { type: string }
+        title: { type: string }
+        closed: { type: boolean }
+        closed_at: { type: string, format: date-time }
+        status: { type: string, enum: [working, needs_approval, waiting, failed, closed] }
+        harness_session_id: { type: string }
+        last_activity_at: { type: string, format: date-time }
+        turns: { type: array, items: { $ref: "#/components/schemas/AgentRun" }, description: Rounds in order. }
     AgentRun:
       type: object
       required: [id, reminder_id, policy_id, policy_revision, project_id, adapter, status, idempotency_key, task_contract, context_cursor, created_by_actor, revision, created_at, updated_at]
@@ -2035,6 +2153,11 @@ components:
         result_artifact_ref:
           type: [string, "null"]
           description: Opaque local path label; artifact content never leaves the workstation.
+        session_id: { type: string, description: The agent session this run is a round of. }
+        turn_kind: { type: string, enum: [message, open_terminal] }
+        prompt: { type: string, description: The owner's message for this round. }
+        result_text: { type: string, maxLength: 20000, description: The agent's final message, redacted. }
+        harness_session_id: { type: string, description: The agent CLI's own session ID. }
         failure_code: { type: [string, "null"], enum: [evidence_mismatch, approval_declined, null] }
         approval_capability:
           oneOf:
@@ -2076,6 +2199,8 @@ components:
             result_summary: { type: [string, "null"], maxLength: 2000 }
             result_artifact_ref: { type: [string, "null"], maxLength: 1000 }
             failure_code: { type: [string, "null"], enum: [adapter_unavailable, null], description: "Optional caller failure code. Server-owned codes (evidence_mismatch, approval_declined) cannot be supplied." }
+            result_text: { type: string, maxLength: 20000, description: The agent's final message; redacted and bounded again by the server. }
+            harness_session_id: { type: string, pattern: "^[A-Za-z0-9_.:-]{1,128}$" }
             exit_code: { type: integer }
             expected_revision: { type: integer, format: int64, minimum: 1 }
     RequestApprovalRequest:

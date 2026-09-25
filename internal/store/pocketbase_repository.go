@@ -766,7 +766,10 @@ func (repository *PocketBaseRepository) ensureSchema() error {
 	if err := repository.ensureNotesSchema(); err != nil {
 		return err
 	}
-	return repository.ensureNotesAISchema()
+	if err := repository.ensureNotesAISchema(); err != nil {
+		return err
+	}
+	return repository.ensureAgentSessionSchema()
 }
 
 // migrateAuditReminderNullable rebuilds legacy state_audit_events tables whose

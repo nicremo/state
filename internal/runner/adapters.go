@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -26,10 +27,15 @@ type StartRequest struct {
 	Prompt   string
 }
 
-// Result is the terminal evidence of an adapter process.
+// Result is the terminal evidence of an adapter process. Text and
+// HarnessSessionID come from CLIs with structured output; AgentFailed is set
+// when the CLI reported the round as failed although it exited cleanly.
 type Result struct {
-	ExitCode int
-	Tail     string
+	ExitCode         int
+	Tail             string
+	Text             string
+	HarnessSessionID string
+	AgentFailed      bool
 }
 
 // Session is one launched adapter process.
@@ -48,7 +54,8 @@ type Adapter interface {
 }
 
 // DefaultAdapters returns the shipped adapter registry: codex, claude-code,
-// opencode, pi-agent (Pi Agent) and deepseek-harness (DeepSeek Harness). The
+// kimi-code, opencode, pi-agent (Pi Agent) and deepseek-harness (DeepSeek
+// Harness). The
 // test-only script adapter is registered only when
 // STATE_RUNNER_TEST_ADAPTER=1, so integration tests never need real agent CLIs
 // and production processes never get it.
@@ -57,27 +64,32 @@ func DefaultAdapters() map[string]Adapter {
 		"codex": &cliAdapter{
 			slug:   "codex",
 			binary: "codex",
-			args:   func(prompt string) []string { return []string{"exec", "--skip-git-repo-check", prompt} },
+			args:   codexArguments,
 		},
 		"claude-code": &cliAdapter{
 			slug:   "claude-code",
 			binary: "claude",
-			args:   func(prompt string) []string { return []string{"-p", prompt} },
+			args:   claudeArguments,
+		},
+		"kimi-code": &cliAdapter{
+			slug:   "kimi-code",
+			binary: "kimi",
+			args:   kimiArguments,
 		},
 		"opencode": &cliAdapter{
 			slug:   "opencode",
 			binary: "opencode",
-			args:   func(prompt string) []string { return []string{"run", prompt} },
+			args:   func(_ state.TaskContract, prompt string) []string { return []string{"run", prompt} },
 		},
 		"pi-agent": &cliAdapter{
 			slug:   "pi-agent",
 			binary: "pi",
-			args:   func(prompt string) []string { return []string{"-p", prompt} },
+			args:   func(_ state.TaskContract, prompt string) []string { return []string{"-p", prompt} },
 		},
 		"deepseek-harness": &cliAdapter{
 			slug:   "deepseek-harness",
 			binary: "dsh",
-			args:   func(prompt string) []string { return []string{"--profile", "headless", prompt} },
+			args:   func(_ state.TaskContract, prompt string) []string { return []string{"--profile", "headless", prompt} },
 		},
 	}
 	if os.Getenv("STATE_RUNNER_TEST_ADAPTER") == "1" {
@@ -93,6 +105,11 @@ func DefaultAdapters() map[string]Adapter {
 // BuildPrompt renders the single prompt argv element for a run. The prompt
 // points at the local context and contract files instead of embedding them.
 func BuildPrompt(contract state.TaskContract) string {
+	// A later round of a session continues a conversation the agent already
+	// knows; it gets the owner's message only.
+	if contract.ResumeSessionID != "" {
+		return contract.Objective
+	}
 	var builder strings.Builder
 	builder.WriteString(contract.Objective)
 	if len(contract.AcceptanceCriteria) > 0 {
@@ -110,7 +127,7 @@ func BuildPrompt(contract state.TaskContract) string {
 type cliAdapter struct {
 	slug   string
 	binary string
-	args   func(prompt string) []string
+	args   func(contract state.TaskContract, prompt string) []string
 }
 
 func (adapter *cliAdapter) Name() string {
@@ -128,16 +145,17 @@ func (adapter *cliAdapter) Start(ctx context.Context, request StartRequest) (Ses
 	if err := adapter.Validate(request.Contract); err != nil {
 		return nil, err
 	}
-	command := exec.CommandContext(ctx, adapter.binary, adapter.args(request.Prompt)...)
+	command := exec.CommandContext(ctx, adapter.binary, adapter.args(request.Contract, request.Prompt)...)
 	command.Dir = request.Dir
 	tail := &tailBuffer{limit: OutputTailLimit}
-	command.Stdout = tail
+	output := newOutputCollector(adapter.slug)
+	command.Stdout = io.MultiWriter(tail, output)
 	command.Stderr = tail
 	prepareProcessGroup(command)
 	if err := command.Start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", adapter.binary, err)
 	}
-	return &processSession{command: command, tail: tail}, nil
+	return &processSession{command: command, tail: tail, output: output}, nil
 }
 
 // scriptAdapter is the test-only adapter: it runs one fixed local script
@@ -178,11 +196,18 @@ func (adapter *scriptAdapter) Start(ctx context.Context, request StartRequest) (
 type processSession struct {
 	command *exec.Cmd
 	tail    *tailBuffer
+	// output reads the standard output alone; nil for the test script
+	// adapter.
+	output *outputCollector
 }
 
 func (session *processSession) Wait(_ context.Context) (Result, error) {
 	err := session.command.Wait()
 	result := Result{ExitCode: 0, Tail: session.tail.String()}
+	if session.output != nil {
+		parsed := session.output.Finish()
+		result.Text, result.HarnessSessionID, result.AgentFailed = parsed.Text, parsed.SessionID, parsed.Failed
+	}
 	if err == nil {
 		return result, nil
 	}
@@ -222,4 +247,84 @@ func (buffer *tailBuffer) String() string {
 	buffer.mutex.Lock()
 	defer buffer.mutex.Unlock()
 	return string(buffer.data)
+}
+
+// rights is how much an agent may do without asking, from the policy's
+// capabilities. A CLI started without a terminal cannot ask, so anything
+// the policy does not allow is refused by the CLI itself.
+type rights int
+
+const (
+	rightsRead rights = iota
+	rightsEdit
+	rightsFull
+)
+
+func rightsFor(capabilities []string) rights {
+	level := rightsRead
+	for _, capability := range capabilities {
+		switch capability {
+		case state.CapabilityRunTests, state.CapabilityNetworkAccess, state.CapabilityWriteState,
+			state.CapabilityDeploy, state.CapabilityMessageExternal, state.CapabilityDestructive:
+			return rightsFull
+		case state.CapabilityEditRepository:
+			level = rightsEdit
+		}
+	}
+	return level
+}
+
+// claudeArguments: JSON output for the final message and the session ID,
+// the permission mode from the rights, --resume for a later round.
+func claudeArguments(contract state.TaskContract, prompt string) []string {
+	args := []string{"-p", "--output-format", "json"}
+	switch rightsFor(contract.AllowedCapabilities) {
+	case rightsEdit:
+		args = append(args, "--permission-mode", "acceptEdits")
+	case rightsFull:
+		args = append(args, "--dangerously-skip-permissions")
+	}
+	if contract.ResumeSessionID != "" {
+		args = append(args, "--resume", contract.ResumeSessionID)
+	}
+	return append(args, prompt)
+}
+
+// codexArguments: JSON events, the sandbox from the rights, `exec resume`
+// for a later round. The sandbox is set through -c because `exec resume`
+// has no --sandbox flag.
+func codexArguments(contract state.TaskContract, prompt string) []string {
+	args := []string{"exec"}
+	if contract.ResumeSessionID != "" {
+		args = append(args, "resume")
+	}
+	args = append(args, "--json", "--skip-git-repo-check")
+	switch rightsFor(contract.AllowedCapabilities) {
+	case rightsRead:
+		args = append(args, "-c", `sandbox_mode="read-only"`)
+	case rightsEdit:
+		args = append(args, "-c", `sandbox_mode="workspace-write"`)
+	case rightsFull:
+		args = append(args, "--dangerously-bypass-approvals-and-sandbox")
+	}
+	if contract.ResumeSessionID != "" {
+		args = append(args, contract.ResumeSessionID)
+	}
+	return append(args, prompt)
+}
+
+// kimiArguments: stream JSON, -S for a later round, -y (routine edits and
+// commands) or --auto (everything) from the rights.
+func kimiArguments(contract state.TaskContract, prompt string) []string {
+	args := []string{}
+	if contract.ResumeSessionID != "" {
+		args = append(args, "-S", contract.ResumeSessionID)
+	}
+	switch rightsFor(contract.AllowedCapabilities) {
+	case rightsEdit:
+		args = append(args, "-y")
+	case rightsFull:
+		args = append(args, "--auto")
+	}
+	return append(args, "-p", prompt, "--output-format", "stream-json")
 }

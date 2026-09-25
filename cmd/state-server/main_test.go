@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	stateauth "github.com/nicremo/state/internal/auth"
 	"github.com/nicremo/state/internal/state"
 )
 
@@ -248,5 +249,88 @@ func TestNewApplicationStartsWithABrokenSeed(t *testing.T) {
 	dictionary, _ := application.state.GetNotesDictionary(context.Background())
 	if dictionary.Revision != 0 {
 		t.Fatalf("broken seed was stored: %#v", dictionary)
+	}
+}
+
+// agent-project is how the owner sets up an agent on the Mac: a project for
+// a folder, a policy with the agent and its rights, and the runner that
+// serves it. Running it twice changes nothing.
+func TestAgentProjectSetsUpProjectPolicyAndRunner(t *testing.T) {
+	t.Parallel()
+
+	dataDirectory := t.TempDir()
+	app, err := newApplication(applicationConfig{dataDirectory: dataDirectory, version: "test-version"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	owner, err := app.auth.DesktopOwner(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pairing, err := app.auth.CreatePairingCode(ctx, owner, stateauthPairingForRunner())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runnerCredential, err := app.auth.ExchangePairingCode(ctx, pairing.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.state.RegisterRunner(ctx, runnerCredential.Actor, state.RegisterRunnerInput{DisplayName: "MacBook Pro", Adapters: []string{"claude-code"}, ClientRequestID: "register-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	args := []string{"--data", dataDirectory, "--name", "karla-report", "--adapter", "claude-code", "--rights", "full", "--runner", "MacBook Pro"}
+	var first bytes.Buffer
+	if err := runAgentProject(args, &first, io.Discard); err != nil {
+		t.Fatalf("agent-project error = %v", err)
+	}
+	var result struct {
+		ProjectID string `json:"project_id"`
+		PolicyID  string `json:"policy_id"`
+		RunnerID  string `json:"runner_id"`
+	}
+	if err := json.Unmarshal(first.Bytes(), &result); err != nil || result.ProjectID == "" || result.PolicyID == "" || result.RunnerID != runnerCredential.Actor.ID {
+		t.Fatalf("output = %s, %v", first.String(), err)
+	}
+	var second bytes.Buffer
+	if err := runAgentProject(args, &second, io.Discard); err != nil {
+		t.Fatalf("second run error = %v", err)
+	}
+	if second.String() != first.String() {
+		t.Fatalf("second run changed the setup: %s vs %s", second.String(), first.String())
+	}
+
+	reopened, err := newApplication(applicationConfig{dataDirectory: dataDirectory, version: "test-version"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.close()
+	policy, err := reopened.state.GetPolicy(ctx, result.PolicyID)
+	if err != nil || policy.Adapter != "claude-code" || !policy.Enabled || len(policy.AllowedCapabilities) < 3 {
+		t.Fatalf("policy = %+v, %v", policy, err)
+	}
+	runner, err := reopened.state.GetRunner(ctx, result.RunnerID)
+	if err != nil || len(runner.Projects) != 1 || runner.Projects[0] != result.ProjectID {
+		t.Fatalf("runner = %+v, %v", runner, err)
+	}
+	if err := runAgentProject([]string{"--data", dataDirectory, "--name", "x", "--adapter", "claude-code", "--rights", "everything"}, io.Discard, io.Discard); err == nil {
+		t.Fatal("unknown rights accepted")
+	}
+}
+
+func stateauthPairingForRunner() stateauth.PairingCodeRequest {
+	return stateauth.PairingCodeRequest{Kind: state.ActorKindRunner, DisplayName: "MacBook Pro"}
+}
+
+func TestAgentProjectCommandIsRouted(t *testing.T) {
+	t.Parallel()
+	var stderr bytes.Buffer
+	err := run([]string{"agent-project", "--data", t.TempDir(), "--name", "karla-report", "--rights", "full"}, io.Discard, &stderr, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err == nil || err.Error() != "this server has no owner yet; pair the owner first" {
+		t.Fatalf("run(agent-project) = %v, stderr %s", err, stderr.String())
 	}
 }

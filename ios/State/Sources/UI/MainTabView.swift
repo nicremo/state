@@ -1,50 +1,63 @@
 import SwiftUI
 
+/// The four sections of State. Agenda holds today's and the planned
+/// reminders with a switch between them; Activity sits behind a button in
+/// Agenda's toolbar.
 enum StateTab: Hashable {
-    case today
-    case planned
+    case agenda
     case notes
-    case activity
+    case agent
     case settings
+
+    /// The DEBUG launch argument `-stateInitialTab` still names the old
+    /// sections; they land in the section that holds them now.
+    static func launch(from name: String?) -> StateTab {
+        switch name {
+        case "notes": .notes
+        case "agent": .agent
+        case "settings": .settings
+        default: .agenda
+        }
+    }
 }
 
 struct MainTabView: View {
     @Bindable var model: AppModel
     @State private var selection: StateTab = MainTabView.launchTab
+    @State private var agendaMode: ReminderCollectionMode = MainTabView.launchMode
     @State private var opensNotificationSettings = false
 
     private static var launchTab: StateTab {
         #if DEBUG
-        switch StateLaunch.initialTab {
-        case "planned": return .planned
-        case "notes": return .notes
-        case "activity": return .activity
-        case "settings": return .settings
-        default: return .today
-        }
+        StateTab.launch(from: StateLaunch.initialTab)
         #else
-        return .today
+        .agenda
+        #endif
+    }
+
+    private static var launchMode: ReminderCollectionMode {
+        #if DEBUG
+        ReminderCollectionMode.launch(from: StateLaunch.initialTab)
+        #else
+        .today
         #endif
     }
 
     var body: some View {
         TabView(selection: $selection) {
-            ReminderCollectionView(model: model, mode: .today)
-                .tabItem { Label(String(localized: "Today"), systemImage: "sun.max.fill") }
-                .tag(StateTab.today)
-
-            ReminderCollectionView(model: model, mode: .planned)
-                .tabItem { Label(String(localized: "Planned"), systemImage: "calendar") }
-                .tag(StateTab.planned)
+            ReminderCollectionView(model: model, mode: .today, modeSelection: $agendaMode)
+                .tabItem { Label(String(localized: "Agenda"), systemImage: "calendar.day.timeline.left") }
+                .badge(model.conflicts.count)
+                .tag(StateTab.agenda)
 
             NotesCollectionView(model: model)
                 .tabItem { Label(String(localized: "Notes"), systemImage: "note.text") }
                 .tag(StateTab.notes)
 
-            ActivityView(model: model)
-                .tabItem { Label(String(localized: "Activity"), systemImage: "clock.arrow.circlepath") }
-                .badge(model.conflicts.count)
-                .tag(StateTab.activity)
+            AgentSessionsView(model: model)
+                .tabItem { Label(String(localized: "Agent"), systemImage: "terminal") }
+                .badge(model.agentSessions.filter { $0.status == .needsApproval }.count)
+                .tag(StateTab.agent)
 
             SettingsView(model: model, opensNotificationSettings: $opensNotificationSettings)
                 .tabItem { Label(String(localized: "Settings"), systemImage: "gearshape") }
@@ -54,12 +67,21 @@ struct MainTabView: View {
             selection = .settings
             opensNotificationSettings = true
         }
+        .onChange(of: model.requestedTab) { _, tab in
+            guard let tab else { return }
+            selection = tab
+            model.requestedTab = nil
+        }
     }
 }
 
-enum ReminderCollectionMode {
+enum ReminderCollectionMode: Hashable {
     case today
     case planned
+
+    static func launch(from name: String?) -> ReminderCollectionMode {
+        name == "planned" ? .planned : .today
+    }
 
     var title: LocalizedStringKey {
         switch self {
@@ -79,6 +101,13 @@ struct ReminderCollectionView: View {
     /// The split layout owns one editor sheet for the whole window, so the Mac
     /// menu command and the toolbar button open the same sheet.
     var editorPresentation: Binding<Bool>?
+    /// When set, the list shows a switch between Today and Planned and an
+    /// Activity button; the Agenda tab and the split layout pass it.
+    var modeSelection: Binding<ReminderCollectionMode>?
+
+    @State private var showsActivity = false
+
+    private var currentMode: ReminderCollectionMode { modeSelection?.wrappedValue ?? mode }
 
     @State private var search = ""
     @State private var ownEditorPresentation = false
@@ -119,7 +148,20 @@ struct ReminderCollectionView: View {
                 .refreshable { await model.synchronize() }
             }
         }
-        .navigationTitle(mode.title)
+        .navigationTitle(currentMode.title)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let modeSelection {
+                Picker(String(localized: "Agenda"), selection: modeSelection) {
+                    Text("Today").tag(ReminderCollectionMode.today)
+                    Text("Planned").tag(ReminderCollectionMode.planned)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, StateTheme.Space.block)
+                .padding(.bottom, StateTheme.Space.inner)
+                .background(.bar)
+                .accessibilityIdentifier("agenda-mode")
+            }
+        }
         .searchable(text: $search, prompt: String(localized: "Search reminders"))
         .toolbar {
             ToolbarItem(placement: .stateLeading) {
@@ -130,7 +172,15 @@ struct ReminderCollectionView: View {
                         .accessibilityLabel(String(localized: "Synchronizing"))
                 }
             }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                if modeSelection != nil {
+                    Button {
+                        showsActivity = true
+                    } label: {
+                        Label(String(localized: "Activity"), systemImage: model.conflicts.isEmpty ? "clock.arrow.circlepath" : "exclamationmark.arrow.circlepath")
+                    }
+                    .accessibilityIdentifier("agenda-activity")
+                }
                 Button {
                     editorIsPresented.wrappedValue = true
                 } label: {
@@ -139,6 +189,12 @@ struct ReminderCollectionView: View {
             }
         }
         .animation(StateTheme.stateChange, value: model.isSyncing)
+        .sheet(isPresented: $showsActivity) {
+            ActivityView(model: model, onDone: { showsActivity = false })
+                #if os(macOS)
+                .frame(minWidth: 520, minHeight: 560)
+                #endif
+        }
         .sheet(
             isPresented: editorIsPresented,
             onDismiss: revealCreatedReminder,
@@ -245,7 +301,7 @@ struct ReminderCollectionView: View {
 
     private var filteredReminders: [Reminder] {
         let today = Date().formatted(.iso8601.year().month().day())
-        let wanted: ReminderBucket = mode == .today ? .today : .planned
+        let wanted: ReminderBucket = currentMode == .today ? .today : .planned
         return model.reminders.filter { reminder in
             let belongs = ReminderListing.bucket(
                 for: reminder,

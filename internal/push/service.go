@@ -71,7 +71,7 @@ func (service *Service) NotifySync(ctx context.Context, excludedActorID string) 
 
 // NotifyRunFinished pushes an encrypted run-lifecycle notification to every
 // registered device route. It fires for succeeded, failed, and
-// needs_approval only; cancelled and expired are skipped — cancellation is
+// needs_approval only; cancelled and expired are skipped: cancellation is
 // owner-initiated and expiry is a quiet housekeeping sweep, which keeps one
 // uniform rule: notify only when a run produced an outcome or awaits a
 // decision. Notification preferences (NotifyOnCompletion/NotifyOnFailure)
@@ -83,6 +83,12 @@ func (service *Service) NotifyRunFinished(ctx context.Context, run state.AgentRu
 	}
 	switch run.Status {
 	case state.AgentRunStatusSucceeded, state.AgentRunStatusFailed, state.AgentRunStatusNeedsApproval:
+	case state.AgentRunStatusCancelled:
+		// A cancelled round of a session is news for the owner's other
+		// devices; other cancellations were the owner's own action.
+		if run.SessionID == "" {
+			return nil
+		}
 	default:
 		return nil
 	}
@@ -105,6 +111,9 @@ func (service *Service) NotifyRunFinished(ctx context.Context, run state.AgentRu
 	}
 	if run.OccurrenceID != nil {
 		payload["occurrence_id"] = *run.OccurrenceID
+	}
+	if run.SessionID != "" {
+		payload["session_id"] = run.SessionID
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {

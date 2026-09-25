@@ -33,6 +33,8 @@ type MemoryRepository struct {
 	requestRunners     map[string]Runner
 	runs               map[string]AgentRun
 	requestRuns        map[string]AgentRun
+	sessions           map[string]AgentSession
+	requestSessions    map[string]string
 	notes              map[string]Note
 	requestNotes       map[string]Note
 	requestNoteActors  map[string]string
@@ -60,6 +62,8 @@ func NewMemoryRepository() *MemoryRepository {
 		requestRunners:     make(map[string]Runner),
 		runs:               make(map[string]AgentRun),
 		requestRuns:        make(map[string]AgentRun),
+		sessions:           make(map[string]AgentSession),
+		requestSessions:    make(map[string]string),
 		notes:              make(map[string]Note),
 		requestNotes:       make(map[string]Note),
 		requestNoteActors:  make(map[string]string),
@@ -564,6 +568,9 @@ func (repository *MemoryRepository) ListAgentRuns(_ context.Context, filter Agen
 		if filter.ReminderID != "" && run.ReminderID != filter.ReminderID {
 			continue
 		}
+		if filter.SessionID != "" && run.SessionID != filter.SessionID {
+			continue
+		}
 		if filter.Status != nil && run.Status != *filter.Status {
 			continue
 		}
@@ -1021,4 +1028,98 @@ func (repository *MemoryRepository) ListNoteAuditEvents(_ context.Context, noteI
 		}
 	}
 	return events, nil
+}
+
+func (repository *MemoryRepository) CreateAgentSession(_ context.Context, session AgentSession, event AuditEvent, first AgentRun, firstEvent AuditEvent, clientRequestID string) (AgentSession, bool, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+
+	if existingID, ok := repository.requestSessions[clientRequestID]; ok && clientRequestID != "" {
+		return repository.sessions[existingID], false, nil
+	}
+	if _, ok := repository.reminders[session.ReminderID]; !ok {
+		return AgentSession{}, false, ErrNotFound
+	}
+	repository.appendAuditEvent(event)
+	repository.appendAuditEvent(firstEvent)
+	repository.sessions[session.ID] = session
+	repository.runs[first.ID] = cloneAgentRun(first)
+	if clientRequestID != "" {
+		repository.requestSessions[clientRequestID] = session.ID
+	}
+	return session, true, nil
+}
+
+func (repository *MemoryRepository) CreateAgentSessionTurn(_ context.Context, run AgentRun, event AuditEvent, clientRequestID string) (AgentRun, bool, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+
+	if existing, ok := repository.requestRuns[clientRequestID]; ok && clientRequestID != "" {
+		return cloneAgentRun(existing), false, nil
+	}
+	session, ok := repository.sessions[run.SessionID]
+	if !ok {
+		return AgentRun{}, false, ErrNotFound
+	}
+	if session.Closed {
+		return AgentRun{}, false, ErrRunStateConflict
+	}
+	for _, existing := range repository.runs {
+		if existing.SessionID == run.SessionID && !existing.Terminal() {
+			return AgentRun{}, false, ErrRunStateConflict
+		}
+	}
+	repository.appendAuditEvent(event)
+	repository.runs[run.ID] = cloneAgentRun(run)
+	if clientRequestID != "" {
+		repository.requestRuns[clientRequestID] = cloneAgentRun(run)
+	}
+	return cloneAgentRun(run), true, nil
+}
+
+func (repository *MemoryRepository) GetAgentSession(_ context.Context, sessionID string) (AgentSession, error) {
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+
+	session, ok := repository.sessions[sessionID]
+	if !ok {
+		return AgentSession{}, ErrNotFound
+	}
+	return session, nil
+}
+
+func (repository *MemoryRepository) ListAgentSessions(_ context.Context, limit int) ([]AgentSession, error) {
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+
+	sessions := make([]AgentSession, 0, len(repository.sessions))
+	for _, session := range repository.sessions {
+		sessions = append(sessions, session)
+	}
+	sort.Slice(sessions, func(left, right int) bool {
+		if !sessions[left].CreatedAt.Equal(sessions[right].CreatedAt) {
+			return sessions[left].CreatedAt.After(sessions[right].CreatedAt)
+		}
+		return sessions[left].ID > sessions[right].ID
+	})
+	if limit = normalizeLimit(limit); len(sessions) > limit {
+		sessions = sessions[:limit]
+	}
+	return sessions, nil
+}
+
+func (repository *MemoryRepository) UpdateAgentSession(_ context.Context, session AgentSession, expectedRevision int64, event AuditEvent, _ string) (AgentSession, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+
+	current, ok := repository.sessions[session.ID]
+	if !ok {
+		return AgentSession{}, ErrNotFound
+	}
+	if current.Revision != expectedRevision {
+		return AgentSession{}, ErrRevisionConflict
+	}
+	repository.appendAuditEvent(event)
+	repository.sessions[session.ID] = session
+	return session, nil
 }

@@ -114,7 +114,7 @@ func TestScriptAdapterCancelKillsProcess(t *testing.T) {
 func TestCLIAdapterReportsMissingBinary(t *testing.T) {
 	t.Parallel()
 
-	adapter := &cliAdapter{slug: "codex", binary: "state-runner-definitely-missing-binary", args: func(prompt string) []string { return []string{prompt} }}
+	adapter := &cliAdapter{slug: "codex", binary: "state-runner-definitely-missing-binary", args: func(_ state.TaskContract, prompt string) []string { return []string{prompt} }}
 	err := adapter.Validate(testContract())
 	if !errors.Is(err, ErrAdapterUnavailable) {
 		t.Fatalf("Validate() error = %v, want ErrAdapterUnavailable", err)
@@ -145,7 +145,7 @@ func TestDefaultAdaptersIncludePiAgent(t *testing.T) {
 	if cli.binary != "pi" {
 		t.Fatalf("binary = %q", cli.binary)
 	}
-	if got := cli.args("do the thing"); !reflect.DeepEqual(got, []string{"-p", "do the thing"}) {
+	if got := cli.args(testContract(), "do the thing"); !reflect.DeepEqual(got, []string{"-p", "do the thing"}) {
 		t.Fatalf("args = %#v", got)
 	}
 }
@@ -164,7 +164,7 @@ func TestDefaultAdaptersIncludeDeepSeekHarness(t *testing.T) {
 	if cli.binary != "dsh" {
 		t.Fatalf("binary = %q", cli.binary)
 	}
-	if got := cli.args("do the thing"); !reflect.DeepEqual(got, []string{"--profile", "headless", "do the thing"}) {
+	if got := cli.args(testContract(), "do the thing"); !reflect.DeepEqual(got, []string{"--profile", "headless", "do the thing"}) {
 		t.Fatalf("args = %#v", got)
 	}
 }

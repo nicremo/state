@@ -34,6 +34,27 @@ func (manager *Manager) DesktopOwner(ctx context.Context) (state.Actor, error) {
 	return state.Actor{ID: row.ID, Kind: state.ActorKindOwner, DisplayName: row.DisplayName, DeviceName: row.DeviceName}, nil
 }
 
+// ExistingOwner returns the paired owner, or state.ErrNotFound when the
+// server has none yet. Unlike DesktopOwner it never creates one.
+func (manager *Manager) ExistingOwner(ctx context.Context) (state.Actor, error) {
+	if err := ctx.Err(); err != nil {
+		return state.Actor{}, err
+	}
+	row := struct {
+		ID          string `db:"id"`
+		DisplayName string `db:"display_name"`
+		DeviceName  string `db:"device_name"`
+	}{}
+	err := manager.app.DB().NewQuery(`SELECT id, display_name, device_name FROM state_actors WHERE kind = 'owner'`).One(&row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return state.Actor{}, state.ErrNotFound
+	}
+	if err != nil {
+		return state.Actor{}, err
+	}
+	return state.Actor{ID: row.ID, Kind: state.ActorKindOwner, DisplayName: row.DisplayName, DeviceName: row.DeviceName}, nil
+}
+
 // DesktopPairingAvailable lets the local UI discard expired or consumed codes.
 func (manager *Manager) DesktopPairingAvailable(ctx context.Context, owner state.Actor, code string) (bool, error) {
 	if err := ctx.Err(); err != nil {

@@ -168,6 +168,23 @@ systemctl --user status state-runner.service
 `state-runner pair` works on Linux unchanged, including the keychain-backed
 credential store. The documented macOS commands in this file do not apply.
 
+## Agent sessions
+
+Besides scheduled runs, the runner executes the rounds of agent sessions the
+owner starts in the app. Each round starts the agent CLI in the project
+folder without a terminal: `claude -p --output-format json`, `codex exec
+--json` or `kimi -p --output-format stream-json`, later rounds with
+`--resume`, `exec resume` or `-S` and the session ID the CLI printed. The
+runner reads the final message from that output and reports it, redacted.
+The policy's capabilities set the CLI's rights: read only by default,
+`edit_repository` lets it edit files (`acceptEdits`, `workspace-write`, `-y`),
+and any of `run_tests`, `network_access`, `write_state`, `deploy`,
+`message_external` or `destructive` lets it run commands without asking.
+
+"Open on the Mac" writes `.state/sessions/<session>/open.command` into the
+project folder, a script that changes into the folder and runs the CLI's
+interactive resume, and opens it with `/usr/bin/open`, which starts Terminal.
+
 ## Security boundaries
 
 - **Outgoing only.** The runner polls the server it was paired with

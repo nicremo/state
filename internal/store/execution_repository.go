@@ -649,6 +649,10 @@ func (repository *PocketBaseRepository) ListAgentRuns(_ context.Context, filter 
 		where += " AND reminder_id = {:reminder_id}"
 		params["reminder_id"] = filter.ReminderID
 	}
+	if filter.SessionID != "" {
+		where += " AND json_extract(data_json, '$.session_id') = {:session_id}"
+		params["session_id"] = filter.SessionID
+	}
 	if filter.Status != nil {
 		where += " AND status = {:status}"
 		params["status"] = string(*filter.Status)

@@ -62,6 +62,7 @@ type Repository interface {
 	LookupNoteRequest(ctx context.Context, clientRequestID string, actorID string) (Note, bool, error)
 
 	NoteAIRepository
+	AgentSessionRepository
 }
 
 type Service struct {

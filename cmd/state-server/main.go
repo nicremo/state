@@ -63,6 +63,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer, logger *slog.Logger)
 		return runDesktop(args, os.Stdin, stdout, stderr, logger)
 	case "bootstrap-token":
 		return runBootstrapToken(args, stdout, stderr)
+	case "agent-project":
+		return runAgentProject(args, stdout, stderr)
 	case "verify-audit":
 		return runVerifyAudit(args, stdout, stderr)
 	case "version":

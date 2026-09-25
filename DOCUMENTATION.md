@@ -331,6 +331,23 @@ delete.
 You can edit that block. `statectl` only rewrites it when you pair or install
 again.
 
+## Agents that work for you on the Mac
+
+The app's **Agent** tab shows the sessions of coding agents that State starts
+on your Mac. Open a reminder, tap **Let an agent work on it**, pick the agent
+and project and add an instruction if you like. The paired runner on the Mac
+starts Claude Code, Codex or Kimi Code in the project folder; when the agent
+finishes its round, its answer appears in the Agent tab (and as a push, where
+push is set up). Answer there and the agent continues the same conversation.
+**Open on the Mac** opens the session in Terminal on the Mac, for when you
+sit in front of it. **Cancel round** stops a round, **End session** closes the
+conversation.
+
+The owner decides what an agent may do: a project (a folder under the
+runner's work root) and a policy with the agent and its rights, set up on the
+server with `state-server agent-project`. Your devices start and answer
+sessions within those policies; they cannot widen them.
+
 ## Agents on Windows
 
 `statectl` is a single Go binary and builds for Windows:
