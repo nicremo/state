@@ -298,10 +298,13 @@ type AcceptReminderProposalInput struct {
 
 // NoteAgentOutcome is what one AI job produced.
 type NoteAgentOutcome struct {
-	Title           string
-	Summary         string
-	Document        string
-	NeedsReview     bool
+	Title       string
+	Summary     string
+	Document    string
+	NeedsReview bool
+	// ReviewReason tells the owner why the note needs a look, for example
+	// when the agent did not condense a voice note into bullet points.
+	ReviewReason    string
 	Model           string
 	AttachmentTexts map[string]NoteAttachmentText
 	Relations       []NoteRelation
@@ -846,7 +849,7 @@ func (service *Service) ApplyNoteAgentOutcomeFrom(ctx context.Context, job NoteJ
 	if outcome.NeedsReview {
 		status = NoteProcessingNeedsReview
 	}
-	processing := NoteProcessing{Status: status, Model: result.Model, UpdatedAt: now}.carryRequests(aiState.Processing)
+	processing := NoteProcessing{Status: status, Error: truncateRunes(singleLine(outcome.ReviewReason), 280), Model: result.Model, UpdatedAt: now}.carryRequests(aiState.Processing)
 	change := NoteAIChange{Processing: &processing, Result: &result, AddRelations: relations, AddProposals: proposals}
 	after := map[string]any{
 		"title":       result.Title,

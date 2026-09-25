@@ -140,7 +140,11 @@ func (worker *Worker) process(ctx context.Context, job state.NoteJob) error {
 }
 
 func (worker *Worker) run(ctx context.Context, note state.NoteView, settings state.NoteAISettings, capabilities Capabilities, budget *monthlyBudget) (state.NoteAgentOutcome, error) {
-	transcripts, err := worker.transcribe(ctx, note, settings, capabilities, budget)
+	dictionary, err := worker.service.GetNotesDictionary(ctx)
+	if err != nil {
+		return state.NoteAgentOutcome{}, err
+	}
+	transcripts, err := worker.transcribe(ctx, note, settings, capabilities, budget, dictionary)
 	if err != nil {
 		return state.NoteAgentOutcome{}, err
 	}
@@ -166,15 +170,14 @@ func (worker *Worker) run(ctx context.Context, note state.NoteView, settings sta
 	}
 	pricing, _ := worker.gateway.Model(settings.AgentModel)
 	agent := NewAgent(worker.gateway.Client(), settings.AgentModel, worker.service, budget, pricing)
-	return agent.Run(ctx, AgentInput{Note: note, Images: images, Transcripts: transcripts})
+	return agent.Run(ctx, AgentInput{Note: note, Images: images, Transcripts: transcripts, Dictionary: dictionary})
 }
 
 // transcribe turns every recording into text on the dedicated speech-to-text
 // endpoint. Each transcript is stored at once, so a later failure does not
 // pay for the same audio twice.
-func (worker *Worker) transcribe(ctx context.Context, note state.NoteView, settings state.NoteAISettings, capabilities Capabilities, budget *monthlyBudget) ([]string, error) {
+func (worker *Worker) transcribe(ctx context.Context, note state.NoteView, settings state.NoteAISettings, capabilities Capabilities, budget *monthlyBudget, dictionary state.NotesDictionary) ([]string, error) {
 	transcripts := make([]string, 0)
-	var dictionary *state.NotesDictionary
 	for _, attachment := range note.Attachments {
 		if attachment.Kind != state.NoteAttachmentAudio {
 			continue
@@ -200,13 +203,6 @@ func (worker *Worker) transcribe(ctx context.Context, note state.NoteView, setti
 		estimate := seconds * transcriptionPrice(worker.gateway, settings.TranscriptionModel)
 		if err := budget.Allow(ctx, estimate); err != nil {
 			return nil, err
-		}
-		if dictionary == nil {
-			loaded, err := worker.service.GetNotesDictionary(ctx)
-			if err != nil {
-				return nil, err
-			}
-			dictionary = &loaded
 		}
 		transcript, err := worker.gateway.Client().Transcribe(ctx, TranscribeRequest{Model: settings.TranscriptionModel, Audio: audio, Format: audioFormat(attachment.MimeType), Segments: true})
 		if spendErr := budget.Spend(ctx, billedCost(transcript.Usage.Cost, estimate, err)); spendErr != nil {
