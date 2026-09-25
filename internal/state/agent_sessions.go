@@ -49,7 +49,9 @@ const (
 	maxSessionTurns       = 500
 )
 
-var harnessSessionIDPattern = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,128}$`)
+// harnessSessionIDPattern starts with a letter or digit, so an ID can never
+// be read as a flag or a relative path when it is passed back to the CLI.
+var harnessSessionIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 
 // ValidHarnessSessionID reports whether an agent CLI session ID is safe to
 // store and to pass back to the CLI as an argument.

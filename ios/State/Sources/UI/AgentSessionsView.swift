@@ -24,7 +24,7 @@ struct AgentSessionsView: View {
         .task { await model.loadAgentSessions() }
         .task(id: model.agentSessions.contains { $0.status == .working || $0.status == .needsApproval }) {
             // While a round runs, the list follows it without a manual refresh.
-            while !Task.isCancelled, model.agentSessions.contains(where: { $0.status == .working }) {
+            while !Task.isCancelled, model.agentSessions.contains(where: { $0.status == .working || $0.status == .needsApproval }) {
                 try? await Task.sleep(for: .seconds(5))
                 guard !Task.isCancelled else { return }
                 await model.loadAgentSessions()

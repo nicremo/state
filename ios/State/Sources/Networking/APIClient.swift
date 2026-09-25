@@ -331,7 +331,7 @@ actor APIClient: StateAPI {
     }
 
     func listAgentSessions() async throws -> [AgentSession] {
-        let data = try await request(path: "/api/v1/agent-sessions?limit=100")
+        let data = try await request(path: "/api/v1/agent-sessions", query: [URLQueryItem(name: "limit", value: "100")])
         return try StateJSON.decoder.decode(AgentSessionListResponse.self, from: data).sessions
     }
 

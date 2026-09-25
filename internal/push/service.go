@@ -83,6 +83,12 @@ func (service *Service) NotifyRunFinished(ctx context.Context, run state.AgentRu
 	}
 	switch run.Status {
 	case state.AgentRunStatusSucceeded, state.AgentRunStatusFailed, state.AgentRunStatusNeedsApproval:
+	case state.AgentRunStatusCancelled:
+		// A cancelled round of a session is news for the owner's other
+		// devices; other cancellations were the owner's own action.
+		if run.SessionID == "" {
+			return nil
+		}
 	default:
 		return nil
 	}

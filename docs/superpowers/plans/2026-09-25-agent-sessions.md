@@ -38,6 +38,9 @@
 | D12 | "Jetzt arbeiten lassen" replaces the old one-shot "Run now" button on the reminder | Two manual paths would confuse; scheduled runs stay as they are |
 | D13 | New adapter `kimi-code` (`kimi -p ... --output-format stream-json`, resume with `-S`) | Requested ("Kimi") and probed |
 | D14 | Live test on a harmless probe project, not on the Karla report | The report is due on 02.10. and does real work; its policy is prepared so the button is ready |
+| D15 | Added during E2E: the owner's devices start, answer, open, close and cancel rounds of sessions; projects, policies and approvals stay with the owner | On the Mac Server the owner is the desktop app and the iPhone is a device; the owner decides what agents may do, the devices dispatch within that |
+| D16 | Added during E2E: `POST /api/v1/agent-sessions/{id}/cancel` for owner and devices instead of the owner-only run cancel | Follows from D15 |
+| D17 | Added during E2E: `state-server agent-project --data --name --adapter --rights --runner` sets up project, policy and runner scope as the owner, locally on the data directory, idempotent | The iPhone cannot create policies (D15) and the Mac Server has no owner UI |
 
 ### Probed CLI behaviour (25.09.2026, owner's Mac)
 

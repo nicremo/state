@@ -96,3 +96,40 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(StateTab.launch(from: nil), .agenda)
     }
 }
+
+/// Records the requests of an APIClient and answers with a fixed body.
+final class RecordingURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var requests: [URLRequest] = []
+    nonisolated(unsafe) static var body = Data()
+    nonisolated(unsafe) static var status = 200
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.requests.append(request)
+        let response = HTTPURLResponse(url: request.url!, statusCode: Self.status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Self.body)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+final class AgentSessionAPITests: XCTestCase {
+    /// The E2E run found the list asked for `/api/v1/agent-sessions%3Flimit=100`:
+    /// the server answered 404 and the app emptied its session list.
+    func testTheSessionListSendsItsLimitAsAQueryParameter() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RecordingURLProtocol.self]
+        RecordingURLProtocol.requests = []
+        RecordingURLProtocol.status = 200
+        RecordingURLProtocol.body = Data(#"{"sessions":[]}"#.utf8)
+        let client = try APIClient(serverURL: URL(string: "http://127.0.0.1:19848")!, token: "t", session: URLSession(configuration: configuration))
+        _ = try await client.listAgentSessions()
+        let url = try XCTUnwrap(RecordingURLProtocol.requests.first?.url)
+        XCTAssertEqual(url.path, "/api/v1/agent-sessions")
+        XCTAssertEqual(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems, [URLQueryItem(name: "limit", value: "100")])
+    }
+}

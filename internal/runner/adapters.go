@@ -148,14 +148,14 @@ func (adapter *cliAdapter) Start(ctx context.Context, request StartRequest) (Ses
 	command := exec.CommandContext(ctx, adapter.binary, adapter.args(request.Contract, request.Prompt)...)
 	command.Dir = request.Dir
 	tail := &tailBuffer{limit: OutputTailLimit}
-	output := &tailBuffer{limit: agentOutputLimit}
+	output := newOutputCollector(adapter.slug)
 	command.Stdout = io.MultiWriter(tail, output)
 	command.Stderr = tail
 	prepareProcessGroup(command)
 	if err := command.Start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", adapter.binary, err)
 	}
-	return &processSession{command: command, tail: tail, output: output, adapter: adapter.slug}, nil
+	return &processSession{command: command, tail: tail, output: output}, nil
 }
 
 // scriptAdapter is the test-only adapter: it runs one fixed local script
@@ -196,17 +196,16 @@ func (adapter *scriptAdapter) Start(ctx context.Context, request StartRequest) (
 type processSession struct {
 	command *exec.Cmd
 	tail    *tailBuffer
-	// output is the standard output alone, for adapters with structured
-	// output; nil for the test script adapter.
-	output  *tailBuffer
-	adapter string
+	// output reads the standard output alone; nil for the test script
+	// adapter.
+	output *outputCollector
 }
 
 func (session *processSession) Wait(_ context.Context) (Result, error) {
 	err := session.command.Wait()
 	result := Result{ExitCode: 0, Tail: session.tail.String()}
 	if session.output != nil {
-		parsed := parseAgentOutput(session.adapter, []byte(session.output.String()))
+		parsed := session.output.Finish()
 		result.Text, result.HarnessSessionID, result.AgentFailed = parsed.Text, parsed.SessionID, parsed.Failed
 	}
 	if err == nil {

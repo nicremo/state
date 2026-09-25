@@ -321,6 +321,16 @@ func TestNotifyRunFinishedNamesTheSession(t *testing.T) {
 	if payload["session_id"] != run.SessionID || strings.Contains(string(recorder.deliveries[0].plaintext), "must not leak") {
 		t.Fatalf("payload = %s", recorder.deliveries[0].plaintext)
 	}
+	// Review finding 3: a cancelled round of a session is news for the
+	// other devices too.
+	recorder.deliveries = nil
+	run.Status = state.AgentRunStatusCancelled
+	if err := service.NotifyRunFinished(context.Background(), run, "Karla-Monatsreport"); err != nil {
+		t.Fatal(err)
+	}
+	if len(recorder.deliveries) != 1 {
+		t.Fatalf("cancelled session round deliveries = %d, want 1", len(recorder.deliveries))
+	}
 }
 
 func TestNotifyRunFinishedStatusFilter(t *testing.T) {

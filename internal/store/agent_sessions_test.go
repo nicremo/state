@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -82,5 +83,65 @@ func TestAgentSessionsPersistWithRoundsAndAudit(t *testing.T) {
 	sessions, err := restarted.ListAgentSessions(ctx, 10)
 	if err != nil || len(sessions) != 1 {
 		t.Fatalf("list = %d, %v", len(sessions), err)
+	}
+}
+
+// Review: two devices answering at the same moment must not start two
+// rounds; the check runs inside the insert transaction.
+func TestConcurrentMessagesStartOneRound(t *testing.T) {
+	t.Parallel()
+	dataDirectory := t.TempDir()
+	service, _ := newExecutionService(t, bootstrappedApp(t, dataDirectory))
+	ctx := context.Background()
+	project, err := service.CreateProject(ctx, executorOwner, state.CreateProjectInput{Name: "karla-report", ClientRequestID: uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := service.CreatePolicy(ctx, executorOwner, state.CreatePolicyInput{
+		Name: "karla-claude", ProjectID: project.ID, Adapter: "claude-code", Mode: state.ExecutionModeSupervised,
+		AllowedCapabilities: []string{state.CapabilityReadRepository}, TimeoutMinutes: 30, ClientRequestID: uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.RegisterRunner(ctx, executorRunner, state.RegisterRunnerInput{DisplayName: "Mac", Projects: []string{project.ID}, Adapters: []string{"claude-code"}, ClientRequestID: uuid.NewString()}); err != nil {
+		t.Fatal(err)
+	}
+	reminder, err := service.CreateReminder(ctx, executorOwner, state.CreateReminderInput{Title: "Karla", ClientRequestID: uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := service.StartAgentSession(ctx, executorOwner, state.StartAgentSessionInput{ReminderID: reminder.ID, PolicyID: policy.ID, MutationMetadata: state.MutationMetadata{ClientRequestID: uuid.NewString()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, _ := service.ClaimAgentRun(ctx, executorRunner, state.ClaimRunInput{})
+	run, _ = service.ReportAgentRunEvent(ctx, executorRunner, state.ReportRunEventInput{RunID: run.ID, Event: state.RunEventStarted, ExpectedRevision: run.Revision})
+	if _, err := service.CompleteAgentRun(ctx, executorRunner, state.CompleteRunInput{RunID: run.ID, Outcome: state.AgentRunStatusSucceeded, ResultText: "Fertig", HarnessSessionID: "s-1", ExpectedRevision: run.Revision, MutationMetadata: state.MutationMetadata{ClientRequestID: uuid.NewString()}}); err != nil {
+		t.Fatal(err)
+	}
+
+	const senders = 8
+	results := make(chan error, senders)
+	for index := 0; index < senders; index++ {
+		go func() {
+			_, err := service.SendAgentSessionMessage(ctx, executorOwner, state.SendAgentSessionMessageInput{SessionID: session.ID, Text: "Weiter", MutationMetadata: state.MutationMetadata{ClientRequestID: uuid.NewString()}})
+			results <- err
+		}()
+	}
+	succeeded := 0
+	for index := 0; index < senders; index++ {
+		err := <-results
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, state.ErrRunStateConflict):
+		default:
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	view, _ := service.GetAgentSession(ctx, session.ID)
+	if succeeded != 1 || len(view.Turns) != 2 {
+		t.Fatalf("succeeded = %d, rounds = %d, want exactly one new round", succeeded, len(view.Turns))
 	}
 }

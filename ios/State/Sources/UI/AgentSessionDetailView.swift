@@ -50,7 +50,6 @@ struct AgentSessionDetailView: View {
         } message: {
             Text("The agent keeps its work. You can open the session on the Mac later, but not answer here any more.")
         }
-        .accessibilityIdentifier("agent-session-detail")
     }
 
     private func conversation(_ session: AgentSession) -> some View {
@@ -65,6 +64,7 @@ struct AgentSessionDetailView: View {
                 }
                 .padding(StateTheme.Space.section)
             }
+            .accessibilityIdentifier("agent-session-detail")
             .onChange(of: session.turns.map(\.status)) { _, _ in
                 withAnimation(StateTheme.contentChange) { proxy.scrollTo("bottom", anchor: .bottom) }
             }

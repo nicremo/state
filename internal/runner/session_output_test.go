@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"bytes"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/nicremo/state/internal/state"
@@ -113,5 +115,50 @@ func TestRightsLevels(t *testing.T) {
 		if rightsFor([]string{capability}) != rightsFull {
 			t.Errorf("%s does not give full rights", capability)
 		}
+	}
+}
+
+// Review finding 2: a session ID from the CLI's output becomes an argument of
+// the next round; one that looks like a flag must never be accepted.
+func TestFlagShapedSessionIDsAreRejected(t *testing.T) {
+	t.Parallel()
+	for _, id := range []string{"--dangerously-skip-permissions", "-x", "..", ".hidden"} {
+		output := []byte(`{"type":"result","result":"x","session_id":"` + id + `"}`)
+		if parsed := parseAgentOutput("claude-code", output); parsed.SessionID != "" {
+			t.Errorf("session ID %q was accepted", id)
+		}
+	}
+}
+
+// Review finding 4: output beyond the limit must not drop codex's thread ID
+// from the start, and a result too large to read must fail the round
+// instead of looking like an empty success.
+func TestLargeOutputsKeepTheSessionOrFailTheRound(t *testing.T) {
+	t.Parallel()
+	var codex bytes.Buffer
+	codex.WriteString(`{"type":"thread.started","thread_id":"t-keep"}` + "\n")
+	noise := `{"type":"item.completed","item":{"type":"command_execution","text":"` + strings.Repeat("x", 1<<20) + `"}}` + "\n"
+	for index := 0; index < 6; index++ {
+		codex.WriteString(noise)
+	}
+	codex.WriteString(`{"type":"item.completed","item":{"type":"agent_message","text":"Fertig"}}` + "\n")
+	collector := newOutputCollector("codex")
+	if _, err := collector.Write(codex.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	if parsed := collector.Finish(); parsed.SessionID != "t-keep" || parsed.Text != "Fertig" {
+		t.Fatalf("codex = %+v", parsed)
+	}
+
+	huge := `{"type":"result","result":"` + strings.Repeat("y", agentOutputLimit+10) + `","session_id":"s-1"}`
+	collector = newOutputCollector("claude-code")
+	for start := 0; start < len(huge); start += 1 << 16 {
+		end := min(start+1<<16, len(huge))
+		if _, err := collector.Write([]byte(huge[start:end])); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if parsed := collector.Finish(); !parsed.Failed || parsed.Text == "" {
+		t.Fatalf("an unreadable result looked like success: %+v", parsed)
 	}
 }

@@ -1226,11 +1226,22 @@ paths:
         "200": { description: The session., content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
         "400": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-sessions/{session_id}/cancel:
+    post:
+      tags: [Agent sessions]
+      operationId: cancelAgentSessionTurn
+      description: Owner and devices. Cancels the round in progress; the session stays open. 409 when no round is in progress.
+      parameters: [{ name: session_id, in: path, required: true, schema: { $ref: "#/components/schemas/UUIDv7" } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MutationMetadata" } } } }
+      responses:
+        "200": { description: The session., content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/agent-sessions/{session_id}/close:
     post:
       tags: [Agent sessions]
       operationId: closeAgentSession
-      description: Ends the session. 409 while a round is in progress; cancel it first with the run's cancel endpoint.
+      description: Ends the session. 409 while a round is in progress; cancel it first with the session's cancel endpoint.
       parameters: [{ name: session_id, in: path, required: true, schema: { $ref: "#/components/schemas/UUIDv7" } }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MutationMetadata" } } } }
       responses:
