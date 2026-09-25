@@ -44,12 +44,11 @@ struct RecordingTimeline: Equatable {
                 let offset = offsets[index]
                 if let partSegments = part.segments, !partSegments.isEmpty {
                     for segment in partSegments.sorted(by: { $0.startMs < $1.startMs }) {
-                        segments.append(Segment(
-                            id: segments.count,
-                            start: offset + TimeInterval(segment.startMs) / 1000,
-                            end: offset + TimeInterval(segment.endMs) / 1000,
-                            text: segment.text
-                        ))
+                        let start = offset + TimeInterval(segment.startMs) / 1000
+                        let end = offset + TimeInterval(segment.endMs) / 1000
+                        for sentence in Self.sentences(of: segment.text, from: start, to: end) {
+                            segments.append(Segment(id: segments.count, start: sentence.start, end: sentence.end, text: sentence.text))
+                        }
                     }
                 } else if let text = part.derivedText, !text.isEmpty {
                     segments.append(Segment(id: segments.count, start: offset, end: offset + lengths[index], text: text))
@@ -61,6 +60,36 @@ struct RecordingTimeline: Equatable {
         self.duration = running
         self.segments = segments
         self.transcript = parts.compactMap(\.derivedText).filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    /// Splits a passage into its sentences and gives each a share of the
+    /// passage's time by its length. Some providers return one passage for
+    /// a whole short recording, which would mark everything at once.
+    static func sentences(of text: String, from start: TimeInterval, to end: TimeInterval) -> [(text: String, start: TimeInterval, end: TimeInterval)] {
+        var parts: [String] = []
+        var current = ""
+        let characters = Array(text)
+        for (index, character) in characters.enumerated() {
+            current.append(character)
+            let next = index + 1 < characters.count ? characters[index + 1] : nil
+            // A sentence ends at . ! ? followed by a space, not inside
+            // "CLAUDE.md" or "2.5".
+            if ".!?".contains(character), next == nil || next == " " {
+                parts.append(current.trimmingCharacters(in: .whitespaces))
+                current = ""
+            }
+        }
+        let rest = current.trimmingCharacters(in: .whitespaces)
+        if !rest.isEmpty { parts.append(rest) }
+        parts = parts.filter { !$0.isEmpty }
+        guard parts.count > 1 else { return [(text.trimmingCharacters(in: .whitespaces), start, end)] }
+        let total = Double(parts.reduce(0) { $0 + $1.count })
+        var cursor = start
+        return parts.enumerated().map { index, part in
+            let length = index == parts.count - 1 ? end - cursor : (end - start) * Double(part.count) / total
+            defer { cursor += length }
+            return (part, cursor, cursor + length)
+        }
     }
 
     /// The passage spoken at `time`: the last one that started. Between two

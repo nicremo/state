@@ -91,4 +91,29 @@ final class RecordingTimelineTests: XCTestCase {
         XCTAssertEqual(attachment.rawText, "Cloud.md angepasst")
         XCTAssertEqual(attachment.segments, [TranscriptSegment(startMs: 0, endMs: 2400, text: "CLAUDE.md angepasst")])
     }
+
+    func testALongSegmentIsSplitIntoSentencesByLength() {
+        // Providers may return one segment for a short recording; the
+        // sentences get times in proportion to their length.
+        let timeline = RecordingTimeline(attachments: [
+            part(0, durationMs: 12000, text: "Kurz. Ein deutlich längerer zweiter Satz?", segments: [
+                TranscriptSegment(startMs: 0, endMs: 12000, text: "Kurz. Ein deutlich längerer zweiter Satz?"),
+            ]),
+        ])
+        XCTAssertEqual(timeline.segments.map(\.text), ["Kurz.", "Ein deutlich längerer zweiter Satz?"])
+        XCTAssertEqual(timeline.segments[0].start, 0)
+        XCTAssertEqual(timeline.segments[1].end, 12, accuracy: 0.0001)
+        XCTAssertEqual(timeline.segments[0].end, timeline.segments[1].start, accuracy: 0.0001)
+        XCTAssertLessThan(timeline.segments[0].end, 3, "the short sentence gets the shorter time")
+        XCTAssertEqual(timeline.segmentIndex(at: 6), 1)
+    }
+
+    func testNumbersAndAbbreviationsDoNotSplit() {
+        let timeline = RecordingTimeline(attachments: [
+            part(0, durationMs: 4000, text: "Datei CLAUDE.md und 2.5 Punkte", segments: [
+                TranscriptSegment(startMs: 0, endMs: 4000, text: "Datei CLAUDE.md und 2.5 Punkte"),
+            ]),
+        ])
+        XCTAssertEqual(timeline.segments.count, 1)
+    }
 }
