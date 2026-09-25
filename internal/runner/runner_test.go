@@ -379,7 +379,7 @@ func TestRunnerReportsMissingAdapterBinary(t *testing.T) {
 	fixture := newRunnerFixture(t, "echo done")
 	process := fixture.newRunner("echo done", 50*time.Millisecond)
 	process.Adapters = map[string]Adapter{
-		"script": &cliAdapter{slug: "script", binary: "state-runner-definitely-missing-binary", args: func(prompt string) []string { return []string{prompt} }},
+		"script": &cliAdapter{slug: "script", binary: "state-runner-definitely-missing-binary", args: func(_ state.TaskContract, prompt string) []string { return []string{prompt} }},
 	}
 	if err := process.Run(context.Background(), true); err != nil {
 		t.Fatalf("Run(--once) error = %v", err)
