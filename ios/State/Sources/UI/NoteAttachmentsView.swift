@@ -91,12 +91,14 @@ struct NoteAIStatusView: View {
     }
 }
 
-/// Photos in their order, then recordings with their transcripts.
+/// Photos in their order, then one compact row for the recording. The
+/// transcript is not repeated here; the recording screen shows it.
 struct NoteMediaView: View {
     @Bindable var model: AppModel
     let note: Note
-    @State private var player = VoicePlayer()
+    @State private var player = RecordingPlayer()
     @State private var inspected: NoteAttachment?
+    @State private var showsRecording = false
 
     var body: some View {
         let attachments = (note.attachments ?? []).sorted { $0.ordinal < $1.ordinal }
@@ -122,59 +124,82 @@ struct NoteMediaView: View {
                     }
                 }
             }
-            ForEach(recordings) { recording in
-                recordingRow(recording, part: (recordings.firstIndex(of: recording) ?? 0) + 1, parts: recordings.count)
+            if !recordings.isEmpty {
+                recordingRow(RecordingTimeline(attachments: recordings))
             }
         }
         .sheet(item: $inspected) { attachment in
             PhotoInspector(model: model, noteID: note.id, attachment: attachment)
         }
+        .sheet(isPresented: $showsRecording) {
+            RecordingDetailView(model: model, note: note)
+                #if os(macOS)
+                .frame(minWidth: 480, minHeight: 560)
+                #endif
+        }
         .onDisappear { player.stop() }
     }
 
-    private func recordingRow(_ attachment: NoteAttachment, part: Int, parts: Int) -> some View {
-        VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
-            HStack(spacing: StateTheme.Space.inner) {
-                Button {
-                    Task {
-                        if let data = await model.attachmentData(noteID: note.id, attachment: attachment) {
-                            player.toggle(id: attachment.id, data: data)
-                        }
-                    }
-                } label: {
-                    Image(systemName: player.playingID == attachment.id ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.title)
-                        .foregroundStyle(StateTheme.accent)
-                        .frame(width: StateControlMetrics.tapTarget, height: StateControlMetrics.tapTarget)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(player.playingID == attachment.id ? String(localized: "Pause") : String(localized: "Play recording"))
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(parts > 1 ? String(localized: "Recording, part \(part)") : String(localized: "Recording"))
-                        .font(.subheadline.weight(.semibold))
-                    if let duration = attachment.durationMs {
-                        Text(Duration.milliseconds(duration), format: .time(pattern: .minuteSecond))
+    /// Play, "Recording" with its length, and the info button that opens
+    /// the recording screen with the transcript.
+    private func recordingRow(_ timeline: RecordingTimeline) -> some View {
+        HStack(spacing: StateTheme.Space.inner) {
+            Button {
+                Task { await togglePlayback(timeline) }
+            } label: {
+                Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.title)
+                    .foregroundStyle(StateTheme.accent)
+                    .frame(width: StateControlMetrics.tapTarget, height: StateControlMetrics.tapTarget)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(player.isPlaying ? String(localized: "Pause") : String(localized: "Play recording"))
+            .accessibilityIdentifier("note-recording-play")
+            Button {
+                player.stop()
+                showsRecording = true
+            } label: {
+                HStack(spacing: StateTheme.Space.inner) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Recording")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(StateTheme.graphite)
+                        Text(RecordingDetailView.clock(timeline.duration))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
+                    Spacer(minLength: 0)
+                    Image(systemName: "info.circle")
+                        .font(.title3)
+                        .foregroundStyle(StateTheme.accent)
+                        .frame(width: StateControlMetrics.tapTarget, height: StateControlMetrics.tapTarget)
+                        .accessibilityIdentifier("note-recording-info")
                 }
-                Spacer(minLength: 0)
+                .contentShape(Rectangle())
             }
-            if let transcript = attachment.derivedText, !transcript.isEmpty {
-                VStack(alignment: .leading, spacing: StateTheme.Space.tight) {
-                    Text("Transcript")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text(transcript)
-                        .font(.callout)
-                        .foregroundStyle(StateTheme.graphite.opacity(0.86))
-                        .textSelection(.enabled)
-                }
-                .accessibilityIdentifier("note-transcript")
-            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "Recording, \(RecordingDetailView.clock(timeline.duration))"))
+            .accessibilityHint(String(localized: "Opens the recording with its transcript"))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("note-recording-row")
         }
-        .padding(StateTheme.Space.group)
+        .padding(.vertical, StateTheme.Space.tight)
+        .padding(.leading, StateTheme.Space.tight)
+        .padding(.trailing, StateTheme.Space.tight)
         .background(StateTheme.accentSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func togglePlayback(_ timeline: RecordingTimeline) async {
+        if !player.isLoaded {
+            var parts: [Data] = []
+            for part in timeline.parts {
+                guard let data = await model.attachmentData(noteID: note.id, attachment: part) else { return }
+                parts.append(data)
+            }
+            guard player.load(parts) else { return }
+        }
+        player.toggle()
     }
 }
 
@@ -498,6 +523,17 @@ struct NoteAISettingsView: View {
 
                 keySection(settings)
 
+                Section {
+                    NavigationLink {
+                        NotesDictionaryView(model: model)
+                    } label: {
+                        LabeledContent(String(localized: "Dictionary"), value: dictionarySummary)
+                    }
+                    .accessibilityIdentifier("notes-ai-dictionary")
+                } footer: {
+                    Text("Names and terms speech recognition gets wrong. Voice notes are corrected with them; the original transcript is kept.")
+                }
+
                 Section(String(localized: "Models")) {
                     LabeledContent(String(localized: "Notes agent"), value: settings.agentModel)
                     LabeledContent(String(localized: "Transcription"), value: settings.transcriptionModel)
@@ -522,6 +558,12 @@ struct NoteAISettingsView: View {
         .task {
             await model.loadNotesAISettings()
             if let settings = model.notesAISettings { limit = settings.monthlyLimitUsd }
+            await model.loadNotesDictionary()
         }
+    }
+
+    private var dictionarySummary: String {
+        guard let dictionary = model.notesDictionary else { return "" }
+        return String(localized: "\(dictionary.words.count + dictionary.corrections.count) entries")
     }
 }
