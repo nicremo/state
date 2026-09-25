@@ -307,6 +307,8 @@ type NoteAIRepository interface {
 	SaveNoteAISettings(ctx context.Context, settings NoteAISettings, event AuditEvent) error
 	AddNoteAIUsage(ctx context.Context, month string, costUSD float64) error
 	NoteAIUsage(ctx context.Context, month string) (float64, error)
+	GetNotesDictionary(ctx context.Context) (NotesDictionary, bool, error)
+	SaveNotesDictionary(ctx context.Context, dictionary NotesDictionary, event AuditEvent) error
 }
 
 // WithNoteAI tells the service whether the OpenRouter key is configured and
