@@ -815,6 +815,47 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/NotesAISettings" }
         "403": { $ref: "#/components/responses/Error" }
+  /api/v1/notes-ai/dictionary:
+    get:
+      tags: [Notes]
+      operationId: getNotesDictionary
+      description: Owner, devices and agents. The owner's dictionary for voice notes. Runners have no access.
+      responses:
+        "200":
+          description: The dictionary; empty with revision 0 before the first save.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotesDictionary" }
+        "403": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [Notes]
+      operationId: updateNotesDictionary
+      description: Owner and devices only. Replaces the whole dictionary and writes one audit event. With expected_revision a stale save is refused with 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                words:
+                  type: array
+                  maxItems: 500
+                  items: { type: string, maxLength: 80 }
+                corrections:
+                  type: array
+                  maxItems: 500
+                  items: { $ref: "#/components/schemas/DictionaryCorrection" }
+                expected_revision: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: The stored dictionary with its new revision.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotesDictionary" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/projects:
     post:
       tags: [Projects]
@@ -1662,9 +1703,20 @@ components:
         byte_size: { type: integer, format: int64 }
         sha256: { type: string }
         duration_ms: { type: integer, format: int64 }
-        derived_text: { type: string, description: OCR text of a photo or transcript of a recording. }
+        derived_text: { type: string, description: OCR text of a photo or transcript of a recording, corrected with the owner's dictionary. }
         derived_kind: { type: string, enum: [ocr, transcript] }
         derived_model: { type: string }
+        raw_text: { type: string, description: The transcript exactly as speech recognition returned it. }
+        segments:
+          type: array
+          description: Timed passages of a transcript, when the provider returns them.
+          items:
+            type: object
+            required: [start_ms, end_ms, text]
+            properties:
+              start_ms: { type: integer, format: int64 }
+              end_ms: { type: integer, format: int64 }
+              text: { type: string }
         created_at: { type: string, format: date-time }
     NoteProcessing:
       type: object
@@ -1727,6 +1779,21 @@ components:
         month: { type: string }
         spent_this_month_usd: { type: number }
         key_configured: { type: boolean }
+    DictionaryCorrection:
+      type: object
+      required: [from, to, mode]
+      properties:
+        from: { type: string, maxLength: 80, description: What speech recognition hears. }
+        to: { type: string, maxLength: 80, description: What the owner means. }
+        mode: { type: string, enum: [always, context], description: always is replaced in every transcript as a whole word; context is only corrected by the notes agent where the context fits. }
+    NotesDictionary:
+      type: object
+      required: [words, corrections, revision]
+      properties:
+        words: { type: array, items: { type: string } }
+        corrections: { type: array, items: { $ref: "#/components/schemas/DictionaryCorrection" } }
+        revision: { type: integer, format: int64 }
+        updated_at: { type: string, format: date-time }
     CreateNoteRequest:
       allOf:
         - $ref: "#/components/schemas/MutationMetadata"

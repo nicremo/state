@@ -237,6 +237,11 @@ func (service *NoteService) Processing(ctx context.Context, noteID string) (json
 	return callToolRaw(ctx, service.caller, "get_note_processing", map[string]any{"note_id": noteID})
 }
 
+// Dictionary reads the owner's dictionary for notes.
+func (service *NoteService) Dictionary(ctx context.Context) (json.RawMessage, error) {
+	return callToolRaw(ctx, service.caller, "get_notes_dictionary", map[string]any{})
+}
+
 func (service *NoteService) Related(ctx context.Context, noteID string) (json.RawMessage, error) {
 	if strings.TrimSpace(noteID) == "" {
 		return nil, errors.New("note id is required")

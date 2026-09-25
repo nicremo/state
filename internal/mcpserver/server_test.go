@@ -67,6 +67,7 @@ func TestMCPServerNegotiatesListsToolsAndCreatesAuditedReminder(t *testing.T) {
 		"get_execution_context",
 		"get_note",
 		"get_note_processing",
+		"get_notes_dictionary",
 		"get_reminder",
 		"list_related_notes",
 		"process_note",

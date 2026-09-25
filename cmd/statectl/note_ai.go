@@ -231,10 +231,12 @@ func writeProcessing(stdout io.Writer, raw json.RawMessage) error {
 			Model   string `json:"model"`
 		} `json:"ai"`
 		Attachments []struct {
-			ID          string `json:"id"`
-			Kind        string `json:"kind"`
-			DerivedKind string `json:"derived_kind"`
-			DerivedText string `json:"derived_text"`
+			ID          string            `json:"id"`
+			Kind        string            `json:"kind"`
+			DerivedKind string            `json:"derived_kind"`
+			DerivedText string            `json:"derived_text"`
+			RawText     string            `json:"raw_text"`
+			Segments    []json.RawMessage `json:"segments"`
 		} `json:"attachments"`
 	}{}
 	if err := json.Unmarshal(raw, &detail); err != nil {
@@ -257,7 +259,71 @@ func writeProcessing(stdout io.Writer, raw json.RawMessage) error {
 		if text == "" {
 			text = "(no text yet)"
 		}
-		if _, err := fmt.Fprintf(stdout, "%s %s %s: %s\n", attachment.ID, attachment.Kind, attachment.DerivedKind, terminalSafe(text)); err != nil {
+		label := attachment.DerivedKind
+		if len(attachment.Segments) > 0 {
+			label = fmt.Sprintf("%s (%d segments)", label, len(attachment.Segments))
+		}
+		if _, err := fmt.Fprintf(stdout, "%s %s %s: %s\n", attachment.ID, attachment.Kind, label, terminalSafe(text)); err != nil {
+			return err
+		}
+		if attachment.RawText != "" && attachment.RawText != attachment.DerivedText {
+			if _, err := fmt.Fprintf(stdout, "  raw: %s\n", terminalSafe(attachment.RawText)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func runNoteDictionary(args []string, stdout io.Writer, stderr io.Writer) error {
+	flags := flag.NewFlagSet("statectl note dictionary", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	profileName := flags.String("profile", "", "statectl profile name")
+	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
+	asJSON := flags.Bool("json", false, "print the dictionary as JSON")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if err := requireReminderProfile(*profileName); err != nil {
+		return err
+	}
+	return withNoteService(*configPath, *profileName, func(ctx context.Context, service *statectl.NoteService) error {
+		raw, err := service.Dictionary(ctx)
+		if err != nil {
+			return err
+		}
+		if *asJSON {
+			return writeIndentedJSON(stdout, raw)
+		}
+		return writeDictionary(stdout, raw)
+	})
+}
+
+// writeDictionary prints one entry per line in the same format the app
+// imports: "word X", "always A -> B", "context A -> B".
+func writeDictionary(stdout io.Writer, raw json.RawMessage) error {
+	dictionary := struct {
+		Words       []string `json:"words"`
+		Corrections []struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+			Mode string `json:"mode"`
+		} `json:"corrections"`
+		Revision int64 `json:"revision"`
+	}{}
+	if err := json.Unmarshal(raw, &dictionary); err != nil {
+		return fmt.Errorf("decode dictionary: %w", err)
+	}
+	if _, err := fmt.Fprintf(stdout, "dictionary revision %d: %d words, %d corrections\n", dictionary.Revision, len(dictionary.Words), len(dictionary.Corrections)); err != nil {
+		return err
+	}
+	for _, word := range dictionary.Words {
+		if _, err := fmt.Fprintf(stdout, "word %s\n", terminalSafe(word)); err != nil {
+			return err
+		}
+	}
+	for _, correction := range dictionary.Corrections {
+		if _, err := fmt.Fprintf(stdout, "%s %s -> %s\n", terminalSafe(correction.Mode), terminalSafe(correction.From), terminalSafe(correction.To)); err != nil {
 			return err
 		}
 	}

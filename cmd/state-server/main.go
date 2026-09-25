@@ -221,6 +221,7 @@ func newApplication(config applicationConfig) (*application, error) {
 		state.WithNoteAI(gateway.Configured, gateway.MediaPolicy),
 	)
 	notesAI := &notesai.Runtime{Gateway: gateway, Store: mediaStore, Worker: notesai.NewWorker(stateService, gateway, mediaStore, slog.Default()), KeyPath: openRouterKeyPath}
+	seedNotesDictionary(stateService, environmentOrDefault("STATE_NOTES_DICTIONARY_SEED_FILE", filepath.Join(config.dataDirectory, "notes-dictionary-seed.txt")))
 	restHandler := api.NewHandler(api.Config{
 		Auth:    authManager,
 		State:   stateService,
@@ -247,6 +248,27 @@ func newApplication(config applicationConfig) (*application, error) {
 		state:      stateService,
 		notesAI:    notesAI,
 	}, nil
+}
+
+// seedNotesDictionary fills the owner's dictionary from a local file the
+// first time the server starts with one. The list is personal, so it never
+// ships with the code. A broken file is reported and the server starts.
+func seedNotesDictionary(service *state.Service, path string) {
+	content, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil {
+		slog.Warn("notes dictionary seed not readable", "path", path, "error", err)
+		return
+	}
+	seeded, err := service.SeedNotesDictionary(context.Background(), string(content))
+	switch {
+	case err != nil:
+		slog.Warn("notes dictionary seed not imported", "path", path, "error", err)
+	case seeded:
+		slog.Info("notes dictionary seeded", "path", path)
+	}
 }
 
 func runPushScheduler(ctx context.Context, service *statepush.Service, logger *slog.Logger) {
