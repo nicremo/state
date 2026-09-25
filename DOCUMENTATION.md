@@ -370,6 +370,7 @@ The MCP endpoint is `/mcp`, Streamable HTTP. It exposes these tools to agents:
 | `process_note` | Ask State's notes AI to transcribe, read and organize a note |
 | `get_note_processing` | Processing status, AI title and summary, OCR text and transcripts |
 | `list_related_notes` | Notes the notes AI linked, each with its reason |
+| `get_notes_dictionary` | The owner's dictionary of spellings and misheard words (read only) |
 
 Paired runners additionally see the five runner tools described in
 [Scheduled agent execution](README.md#scheduled-agent-execution).
@@ -437,6 +438,34 @@ replaced (the AI's text is then offered as a suggestion), and every AI write is
 a signed audit event by the `notes-agent` actor. Text notes are organized again
 after an edit, 45 seconds after typing stops, unless only a checkbox changed.
 
+**Voice notes** show one compact row in the note: play, **Recording** with its
+length and an info button. The info button opens the recording screen with a
+scrubber, 15 seconds back and forward and the full transcript. While it plays,
+the passage being spoken is marked and kept in view; tapping a passage jumps
+there. The times come from OpenRouter's `verbose_json` transcription; when a
+provider returns none, the transcript is shown without marking. The note body
+itself is never the transcript: the agent writes condensed bullet points or a
+checklist, the server checks that it is a list in the model's own words, asks
+once more if it is not, and otherwise marks the note for review instead of
+filling it with the transcript. Nothing the notes AI writes contains an en dash
+or an em dash; the server replaces them before storing.
+
+**Dictionary.** Under **Settings, Notes AI, Dictionary** the owner keeps words
+the notes AI spells exactly so, and corrections for words speech recognition
+mishears. A correction set to **Always** is replaced in every transcript, as a
+whole word, ignoring case and whether it was heard with a dot, hyphen or space
+("Cloud.md", "Cloud-MD"). **By context** is for everyday words ("Note", "Cloud"):
+only the notes agent corrects them, where the note shows that meaning. The agent
+also reports other misheard variants of dictionary words, which are then
+corrected in the transcript too. The transcript as it was heard is always kept.
+Only the owner and the owner's devices change the dictionary; agents read it
+with `get_notes_dictionary` or `statectl note dictionary`. A list can be pasted
+in the app, one entry per line (`word: Term`, `always: heard -> meant`,
+`context: heard -> meant`). A server can also fill an empty dictionary once at
+start from `notes-dictionary-seed.txt` in its data directory (or the file named
+by `STATE_NOTES_DICTIONARY_SEED_FILE`), so a personal list never has to be part
+of the code.
+
 The number of photos per note comes from the server: OpenRouter publishes the
 model's modalities and context window but no image count, so the server allows
 the smaller of its own limit (10 photos, 8 MB each, 40 MB in total) and what
@@ -485,6 +514,7 @@ statectl note attach     --profile codex --id NOTE_ID --file seite.jpg --source-
 statectl note process    --profile codex --id NOTE_ID
 statectl note processing --profile codex --id NOTE_ID
 statectl note related    --profile codex --id NOTE_ID
+statectl note dictionary --profile codex
 ```
 
 ## Notifications

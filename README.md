@@ -120,7 +120,7 @@ statectl reminder create --profile codex \
   --date 2026-10-01 --time 09:00 --tz Europe/Berlin --repeat monthly
 ```
 
-`statectl reminder add-context`, `schedule`, `show` and `search` cover the rest, and `statectl note list|show|create|update|attach|process|processing|related` does the same for notes, photos and recordings included. Every write carries the original wording in `--source-text`, and `--json` prints the raw server response for scripts.
+`statectl reminder add-context`, `schedule`, `show` and `search` cover the rest, and `statectl note list|show|create|update|attach|process|processing|related|dictionary` does the same for notes, photos and recordings included. Every write carries the original wording in `--source-text`, and `--json` prints the raw server response for scripts.
 
 ## MCP tools
 
@@ -143,6 +143,7 @@ The Streamable HTTP endpoint is `/mcp`. It exposes:
 - `process_note`
 - `get_note_processing`
 - `list_related_notes`
+- `get_notes_dictionary`
 
 Runner-scoped tools, available only to paired `state-runner` credentials:
 

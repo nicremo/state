@@ -214,3 +214,46 @@ Einklappen, Foto aus der Mediathek mit Handschrift, OCR und verwandter Notiz,
 Sprachaufnahme mit Transkript, Wiedergabe und Erinnerungsvorschlag, der nach
 Bestätigung als Erinnerung unter "Geplant" erscheint, Einstellungen mit
 Einwilligung, Limit, Modellen und Fotogrenze.
+
+## 9. Sprachnotizen: Aufnahme-Screen, Stichpunkte, Wörterbuch (25.09.2026)
+
+Umgesetzt nach [`superpowers/plans/2026-09-25-voice-notes.md`](superpowers/plans/2026-09-25-voice-notes.md)
+(Entscheidungen D1 bis D9). Anlass war die erste Sprachnotiz in TestFlight: Das
+Transkript stand zweimal in der Notiz, einmal unter der Überschrift
+"Sprachnotiz" als Notiztext, "CLAUDE.md" war als "Cloud.md" verstanden, und der
+KI-Titel enthielt einen Gedankenstrich.
+
+- In der Notiz steht nur noch eine kompakte Zeile "Aufnahme" mit Dauer und
+  Info-Knopf. Der Aufnahme-Screen spielt alle Teile als eine Aufnahme ab und
+  markiert die gerade gesprochene Stelle im Transkript.
+- Der Notiztext einer Sprachnotiz ist immer eine Stichpunktliste. Der Server
+  prüft das und fordert einmal nach, sonst `needs_review` ohne Notiztext.
+- Gedankenstriche entfernt der Server aus allem, was die Notiz-KI schreibt.
+- Das Wörterbuch liegt auf dem Server und ist auditiert. Owner und Geräte
+  ändern es, Agenten lesen es. Das Startwörterbuch des Owners kommt aus einer
+  lokalen Datei, nie aus dem Code.
+
+**Live-Test mit OpenRouter** (lokaler Testserver, Schlüssel-Kopie danach
+gelöscht): Whisper verstand "Cloud-MD" und "SafeDisk" statt der Schreibweisen
+aus dem Wörterbuch, und der Anbieter lieferte für elf Sekunden nur ein Segment.
+Daraus wurden drei Änderungen: Trennzeichen innerhalb eines Eintrags gelten als
+gleich, der Agent kennt alle Korrekturen und meldet ähnlich klingende Varianten
+als `transcript_fixes` (nur zu Schreibweisen aus dem Wörterbuch), und die App
+teilt ein langes Segment nach Sätzen mit anteiliger Zeit. Danach ergab derselbe
+Test "CLAUDE.md" und "sevDesk" im Transkript, Titel und Notiztext, Stichpunkte,
+keine Gedankenstriche, Kosten 0,0024 USD.
+
+**Review** (unabhängiger Subagent), jeder Befund mit Regressionstest:
+
+| Befund | Lösung |
+| --- | --- |
+| Stichpunkte mit Gedankenstrich als Aufzählungszeichen galten als Fließtext und lösten eine unnötige Nachforderung aus | Die Prüfung bereinigt Gedankenstriche vorher wie beim Speichern |
+| Ein Gedankenstrich direkt am Zeilenanfang ohne Leerzeichen löschte das Aufzählungszeichen | Er wird zu `- ` |
+| Die Abrechnung bei abgelehntem `verbose_json` und Wiederholung war ungetestet | Test belegt: genau eine Transkription wird verbucht |
+| Der Player hatte keinen Abbruch seiner Zeitschleife beim Freigeben | `deinit` bricht sie ab |
+
+**End-to-End per MobAI** (iPhone 16 Pro, iOS 18.5) gegen einen lokalen Server mit
+Fake-OpenRouter: Wörterbuch mit 56 Einträgen aus der Seed-Datei, Modus ändern und
+speichern (Revision 2, Audit), Sprachnotiz mit kompakter Zeile und Stichpunkten,
+Aufnahme-Screen mit mitlaufender Markierung, Sprung per Tippen, 15 Sekunden vor
+und zurück.
