@@ -890,13 +890,19 @@ final class AppModel {
 
     /// Cancels the round in progress; the session stays open.
     func cancelAgentTurn(in session: AgentSession) async {
-        guard let api, !isDemo, let turn = session.activeTurn else { return }
+        guard let api, !isDemo, session.activeTurn != nil else { return }
         do {
-            _ = try await api.cancelRun(id: turn.id, expectedRevision: turn.revision)
-            await refreshAgentSession(id: session.id)
+            replaceAgentSession(try await api.cancelAgentTurn(sessionID: session.id))
         } catch {
             present(error)
         }
+    }
+
+    /// The owner and the owner's devices start and drive agent sessions,
+    /// within the policies the owner set up.
+    var canDriveAgents: Bool {
+        guard !isDemo, let kind = session?.actor.kind else { return false }
+        return kind == .owner || kind == .device
     }
 
     private func replaceAgentSession(_ session: AgentSession) {

@@ -2251,12 +2251,12 @@
         }
       }
     },
-    "No agent is set up yet. Create an execution policy in Settings, Agents: it names the project on your Mac, the agent and what it may do." : {
+    "No agent is set up yet. The owner sets one up on the Mac with state-server agent-project: it names the project folder, the agent and what it may do." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Noch kein Agent eingerichtet. Lege unter Einstellungen, Agenten eine Ausführungsrichtlinie an: Sie nennt das Projekt auf deinem Mac, den Agenten und was er darf."
+            "value" : "Noch kein Agent eingerichtet. Der Owner richtet ihn auf dem Mac mit state-server agent-project ein: Projektordner, Agent und was er darf."
           }
         }
       }
@@ -2747,6 +2747,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Online"
+          }
+        }
+      }
+    },
+    "Only the owner account can allow this. You can cancel the round." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das kann nur das Owner-Konto erlauben. Du kannst die Runde abbrechen."
           }
         }
       }

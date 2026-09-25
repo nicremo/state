@@ -356,6 +356,11 @@ actor APIClient: StateAPI {
         return try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions/\(sessionID)/open", method: "POST", body: body))
     }
 
+    func cancelAgentTurn(sessionID: String) async throws -> AgentSession {
+        let body = try sessionBody([:])
+        return try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions/\(sessionID)/cancel", method: "POST", body: body))
+    }
+
     func closeAgentSession(sessionID: String) async throws -> AgentSession {
         let body = try sessionBody([:])
         return try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions/\(sessionID)/close", method: "POST", body: body))

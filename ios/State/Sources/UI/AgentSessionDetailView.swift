@@ -210,6 +210,7 @@ struct AgentSessionDetailView: View {
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
             }
+            if model.session?.actor.kind == .owner {
             HStack(spacing: StateTheme.Space.inner) {
                 Button(String(localized: "Allow")) {
                     Task {
@@ -226,6 +227,11 @@ struct AgentSessionDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.orange)
+            }
+            } else {
+                Text("Only the owner account can allow this. You can cancel the round.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(StateTheme.Space.group)

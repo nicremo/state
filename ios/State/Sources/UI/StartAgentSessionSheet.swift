@@ -28,7 +28,7 @@ struct StartAgentSessionSheet: View {
                 }
                 if model.sessionPolicies.isEmpty {
                     Section {
-                        Text("No agent is set up yet. Create an execution policy in Settings, Agents: it names the project on your Mac, the agent and what it may do.")
+                        Text("No agent is set up yet. The owner sets one up on the Mac with state-server agent-project: it names the project folder, the agent and what it may do.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }

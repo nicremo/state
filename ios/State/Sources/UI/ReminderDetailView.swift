@@ -178,7 +178,7 @@ struct ReminderDetailView: View {
     @ViewBuilder
     private func agentSection(_ reminder: Reminder) -> some View {
         let sessions = model.agentSessions.filter { $0.reminderID == reminder.id }
-        if model.session?.actor.kind == .owner, !model.isDemo, !model.sessionPolicies.isEmpty || !sessions.isEmpty {
+        if model.canDriveAgents, !model.sessionPolicies.isEmpty || !sessions.isEmpty {
             Section(String(localized: "Agent")) {
                 ForEach(sessions) { session in
                     Button {

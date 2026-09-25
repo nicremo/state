@@ -154,6 +154,7 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("POST /api/v1/agent-sessions/{id}/messages", handler.sendAgentSessionMessage)
 	handler.router.HandleFunc("POST /api/v1/agent-sessions/{id}/open", handler.openAgentSessionOnMac)
 	handler.router.HandleFunc("POST /api/v1/agent-sessions/{id}/close", handler.closeAgentSession)
+	handler.router.HandleFunc("POST /api/v1/agent-sessions/{id}/cancel", handler.cancelAgentSessionTurn)
 }
 
 func (handler *Handler) healthLive(writer http.ResponseWriter, _ *http.Request) {

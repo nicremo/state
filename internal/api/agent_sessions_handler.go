@@ -75,6 +75,10 @@ func (handler *Handler) openAgentSessionOnMac(writer http.ResponseWriter, reques
 	handler.sessionAction(writer, request, handler.state.OpenAgentSessionOnMac)
 }
 
+func (handler *Handler) cancelAgentSessionTurn(writer http.ResponseWriter, request *http.Request) {
+	handler.sessionAction(writer, request, handler.state.CancelAgentSessionTurn)
+}
+
 func (handler *Handler) closeAgentSession(writer http.ResponseWriter, request *http.Request) {
 	handler.sessionAction(writer, request, handler.state.CloseAgentSession)
 }

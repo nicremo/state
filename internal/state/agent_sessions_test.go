@@ -342,3 +342,36 @@ func TestContractsWithoutSessionsKeepTheirHash(t *testing.T) {
 		t.Fatalf("hash = %s, want %s", got, want)
 	}
 }
+
+// The owner's devices dispatch agents, so they can also stop a round; the
+// general run cancel stays with the owner.
+func TestDevicesCancelTheRoundOfTheirSession(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixture(t)
+	ctx := context.Background()
+	device := Actor{ID: "01989d9b-b5c4-7aa9-a48d-00000000000b", Kind: ActorKindDevice, DisplayName: "iPhone"}
+	view, err := fixture.service.StartAgentSession(ctx, device, StartAgentSessionInput{
+		ReminderID: fixture.reminder.ID, PolicyID: fixture.policy.ID,
+		MutationMetadata: MutationMetadata{ClientRequestID: requestID()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	harness := Actor{ID: "01989d9b-b5c4-7aa9-a48d-00000000000c", Kind: ActorKindHarness, DisplayName: "Codex", Harness: "codex"}
+	if _, err := fixture.service.CancelAgentSessionTurn(ctx, harness, AgentSessionActionInput{SessionID: view.ID, MutationMetadata: MutationMetadata{ClientRequestID: requestID()}}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("harness cancelled a round: %v", err)
+	}
+	cancelled, err := fixture.service.CancelAgentSessionTurn(ctx, device, AgentSessionActionInput{SessionID: view.ID, MutationMetadata: MutationMetadata{ClientRequestID: requestID()}})
+	if err != nil {
+		t.Fatalf("CancelAgentSessionTurn() error = %v", err)
+	}
+	if cancelled.Turns[0].Status != AgentRunStatusCancelled || cancelled.Status != SessionStatusWaiting {
+		t.Fatalf("after cancel = %s, round %s", cancelled.Status, cancelled.Turns[0].Status)
+	}
+	if _, err := fixture.service.CancelAgentSessionTurn(ctx, device, AgentSessionActionInput{SessionID: view.ID, MutationMetadata: MutationMetadata{ClientRequestID: requestID()}}); !errors.Is(err, ErrRunStateConflict) {
+		t.Fatalf("cancel without a round = %v", err)
+	}
+	if _, err := fixture.send(t, view.ID, "Neuer Versuch"); err != nil {
+		t.Fatalf("session must continue after a cancel: %v", err)
+	}
+}

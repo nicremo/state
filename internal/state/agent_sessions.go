@@ -318,6 +318,34 @@ func (service *Service) newSessionTurn(ctx context.Context, actor Actor, session
 	return run, event, nil
 }
 
+// CancelAgentSessionTurn stops the round in progress. The owner's devices
+// start rounds, so they may stop them too; the session stays open.
+func (service *Service) CancelAgentSessionTurn(ctx context.Context, actor Actor, input AgentSessionActionInput) (AgentSessionView, error) {
+	if !canDriveSessions(actor) {
+		return AgentSessionView{}, ErrForbidden
+	}
+	if actor.ID == "" || input.SessionID == "" || input.ClientRequestID == "" {
+		return AgentSessionView{}, ErrInvalidInput
+	}
+	view, err := service.GetAgentSession(ctx, input.SessionID)
+	if err != nil {
+		return AgentSessionView{}, err
+	}
+	var active *AgentRun
+	for index := range view.Turns {
+		if !view.Turns[index].Terminal() {
+			active = &view.Turns[index]
+		}
+	}
+	if active == nil {
+		return AgentSessionView{}, ErrRunStateConflict
+	}
+	if _, err := service.cancelRun(ctx, actor, CancelRunInput{RunID: active.ID, ExpectedRevision: active.Revision, MutationMetadata: input.MutationMetadata}); err != nil {
+		return AgentSessionView{}, err
+	}
+	return service.GetAgentSession(ctx, input.SessionID)
+}
+
 // CloseAgentSession ends a session. A round in progress has to be cancelled
 // first.
 func (service *Service) CloseAgentSession(ctx context.Context, actor Actor, input AgentSessionActionInput) (AgentSessionView, error) {

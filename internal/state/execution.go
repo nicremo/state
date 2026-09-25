@@ -937,6 +937,11 @@ func (service *Service) CancelAgentRun(ctx context.Context, actor Actor, input C
 	if actor.Kind != ActorKindOwner {
 		return AgentRun{}, ErrForbidden
 	}
+	return service.cancelRun(ctx, actor, input)
+}
+
+// cancelRun cancels a run that is not finished yet. Callers check who may.
+func (service *Service) cancelRun(ctx context.Context, actor Actor, input CancelRunInput) (AgentRun, error) {
 	run, err := service.repository.GetAgentRun(ctx, input.RunID)
 	if err != nil {
 		return AgentRun{}, err
