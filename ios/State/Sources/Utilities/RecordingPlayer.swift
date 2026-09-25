@@ -16,7 +16,12 @@ final class RecordingPlayer {
 
     private var players: [AVAudioPlayer] = []
     private var part = 0
-    private var ticker: Task<Void, Never>?
+    // Cancelled in deinit as well, should a view go away without stop().
+    @ObservationIgnored nonisolated(unsafe) private var ticker: Task<Void, Never>?
+
+    deinit {
+        ticker?.cancel()
+    }
 
     var duration: TimeInterval { durations.reduce(0, +) }
 

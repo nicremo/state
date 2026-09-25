@@ -299,7 +299,7 @@ func runPushScheduler(ctx context.Context, service *statepush.Service, logger *s
 }
 
 // runExecutionScheduler materializes eligible runs from due occurrences,
-// requeues expired leases, and retires stale runs — immediately at startup and
+// requeues expired leases, and retires stale runs, immediately at startup and
 // then every 30 seconds, mirroring the push scheduler's discipline.
 func runExecutionScheduler(ctx context.Context, service *state.Service, logger *slog.Logger) {
 	if service == nil {

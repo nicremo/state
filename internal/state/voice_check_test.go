@@ -17,6 +17,9 @@ func TestVoiceDocumentProblem(t *testing.T) {
 		{"empty body", "", true},
 		{"condensed bullets", "- Nerviger Tag\n- CLAUDE.md angepasst, damit sie besser laufen", false},
 		{"checklist with topic heading", "## Setup\n- [x] CLAUDE.md angepasst\n- [ ] Prüfen, ob es besser läuft", false},
+		// Review finding 1: models often write dash bullets; they are
+		// normalised later and must not count as running text.
+		{"en dash and em dash bullets", "\u2013 Nerviger Tag\n\u2014 CLAUDE.md angepasst", false},
 		{"numbered list and table", "1. Tag war nervig\n2. CLAUDE.md optimiert\n\n| Datei | Stand |\n| --- | --- |\n| CLAUDE.md | angepasst |", false},
 	} {
 		problem := VoiceDocumentProblem(test.document, transcript)

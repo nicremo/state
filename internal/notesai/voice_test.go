@@ -3,6 +3,7 @@ package notesai_test
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"strings"
 	"testing"
@@ -251,5 +252,30 @@ func TestPhotoNotesIgnoreTranscriptFixes(t *testing.T) {
 	view := h.process(t, note.ID)
 	if view.Attachments[0].DerivedText != "Superbase" {
 		t.Fatalf("photo text changed: %q", view.Attachments[0].DerivedText)
+	}
+}
+
+// Review finding 3: a refused verbose request and its plain retry count as
+// one transcription, billed with what the retry cost.
+func TestTranscriptionRetryIsBilledOnce(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, testKey)
+	h.consent(t, 10)
+	note := h.captureNote(t, state.NoteCaptureAudio, "audio", "audio/mp4", m4a)
+	h.fake.ScriptTranscription(
+		fakeopenrouter.Error(http.StatusBadRequest, "verbose_json is not supported"),
+		fakeopenrouter.Transcript("Milch kaufen.", 0.0007),
+	)
+	h.fake.ScriptChat(submit("Einkauf", "Milch.", "- [ ] Milch kaufen"))
+	h.process(t, note.ID)
+	settings, err := h.service.GetNoteAISettings(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := 0.0007 + 0.002; math.Abs(settings.SpentThisMonthUSD-want) > 1e-9 {
+		t.Fatalf("spent = %v, want %v", settings.SpentThisMonthUSD, want)
+	}
+	if len(h.fake.Requests("/audio/transcriptions")) != 2 {
+		t.Fatal("expected the refused request and one retry")
 	}
 }

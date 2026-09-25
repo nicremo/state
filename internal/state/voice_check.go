@@ -35,6 +35,9 @@ func VoiceDocumentProblem(document string, transcript string) string {
 	if strings.TrimSpace(transcript) == "" {
 		return ""
 	}
+	// Dash bullets are turned into list markers before the note is stored,
+	// so they count as a list here too.
+	document = RemoveDashes(document, false)
 	listItems := 0
 	for _, line := range strings.Split(document, "\n") {
 		line = strings.TrimSpace(line)

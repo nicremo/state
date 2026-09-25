@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	enDash = "–"
-	emDash = "—"
+	enDash = "\xe2\x80\x93"
+	emDash = "\xe2\x80\x94"
 )
 
 func TestRemoveDashes(t *testing.T) {
@@ -24,6 +24,8 @@ func TestRemoveDashes(t *testing.T) {
 		{"prose", "Heute " + enDash + " wie immer " + enDash + " nervig", false, "Heute, wie immer, nervig"},
 		{"number range", "10" + enDash + "12 Uhr", false, "10-12 Uhr"},
 		{"list line", "## Einkauf\n" + enDash + " Milch\n" + emDash + " Brot", false, "## Einkauf\n- Milch\n- Brot"},
+		// Review finding 2: an unspaced dash bullet keeps its marker.
+		{"list marker without space", enDash + "Milch", false, "- Milch"},
 		{"trailing dash", "Ende " + emDash, false, "Ende"},
 		{"unspaced between words", "Wort" + emDash + "Wort", false, "Wort, Wort"},
 		{"dash before punctuation", "Fertig " + enDash + ".", false, "Fertig."},
