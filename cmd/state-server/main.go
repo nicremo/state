@@ -223,6 +223,7 @@ func newApplication(config applicationConfig) (*application, error) {
 		State:   stateService,
 		Push:    pushService,
 		Version: config.version,
+		NotesAI: notesAI,
 	})
 	handler := http.NewServeMux()
 	handler.Handle("/mcp", mcpHandler)

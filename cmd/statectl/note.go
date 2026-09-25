@@ -13,7 +13,7 @@ import (
 	"github.com/nicremo/state/internal/statectl"
 )
 
-const noteUsage = "usage: statectl note <list|show|create|update>"
+const noteUsage = "usage: statectl note <list|show|create|update|attach|process|processing|related>"
 
 // maxNoteDocumentBytes is the server's limit, not the smaller reminder one.
 const maxNoteDocumentBytes = state.MaxNoteDocumentBytes
@@ -31,6 +31,14 @@ func runNote(args []string, stdout io.Writer, stderr io.Writer) error {
 		return runNoteCreate(args[1:], stdout, stderr)
 	case "update":
 		return runNoteUpdate(args[1:], stdout, stderr)
+	case "attach":
+		return runNoteAttach(args[1:], stdout, stderr)
+	case "process":
+		return runNoteProcess(args[1:], stdout, stderr)
+	case "processing":
+		return runNoteProcessing(args[1:], stdout, stderr)
+	case "related":
+		return runNoteRelated(args[1:], stdout, stderr)
 	default:
 		return errors.New(noteUsage)
 	}
@@ -97,6 +105,7 @@ func runNoteCreate(args []string, stdout io.Writer, stderr io.Writer) error {
 	configPath := flags.String("config", defaultConfigPath(), "statectl config path")
 	title := flags.String("title", "", "note title, defaults to the first line of the document")
 	documentFile := flags.String("document-file", "", "read the Markdown document from a file, - for stdin")
+	capture := flags.String("capture", "", "image or audio: an empty photo or voice note for statectl note attach")
 	sourceText := flags.String("source-text", "", "original wording that caused the note")
 	requestID := flags.String("request-id", "", "stable UUID for idempotent retries")
 	asJSON := flags.Bool("json", false, "print the stored note as JSON")
@@ -117,11 +126,11 @@ func runNoteCreate(args []string, stdout io.Writer, stderr io.Writer) error {
 		}
 		document = text
 	}
-	if strings.TrimSpace(*title) == "" && strings.TrimSpace(document) == "" {
-		return errors.New("statectl note create requires --title or --document-file")
+	if *capture == "" && strings.TrimSpace(*title) == "" && strings.TrimSpace(document) == "" {
+		return errors.New("statectl note create requires --title, --document-file or --capture")
 	}
 	return withNoteService(*configPath, *profileName, func(ctx context.Context, service *statectl.NoteService) error {
-		stored, raw, err := service.Create(ctx, *title, document, *sourceText, *requestID)
+		stored, raw, err := service.Create(ctx, *title, document, *capture, *sourceText, *requestID)
 		if err != nil {
 			return err
 		}
@@ -240,15 +249,50 @@ func writeNoteDetail(stdout io.Writer, raw json.RawMessage) error {
 	detail := struct {
 		Note struct {
 			statectl.StoredNote
-			Document string `json:"document"`
+			TitleSource string `json:"title_source"`
+			Document    string `json:"document"`
+			Processing  struct {
+				Status string `json:"status"`
+			} `json:"processing"`
+			Attachments []struct {
+				Kind        string `json:"kind"`
+				DerivedText string `json:"derived_text"`
+			} `json:"attachments"`
+			Relations []struct {
+				RelatedTitle string `json:"related_title"`
+				Reason       string `json:"reason"`
+			} `json:"relations"`
+			Proposals []struct {
+				Title     string `json:"title"`
+				LocalDate string `json:"local_date"`
+				Status    string `json:"status"`
+			} `json:"reminder_proposals"`
 		} `json:"note"`
 		History []json.RawMessage `json:"history"`
 	}{}
 	if err := json.Unmarshal(raw, &detail); err != nil {
 		return fmt.Errorf("decode note: %w", err)
 	}
-	_, err := fmt.Fprintf(stdout, "note %s %q, revision %d, %d events\n\n%s\n",
-		detail.Note.ID, terminalSafe(detail.Note.Title), detail.Note.Revision, len(detail.History), terminalSafe(strings.TrimRight(detail.Note.Document, "\n")))
+	note := detail.Note
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "note %s %q, revision %d, %d events\n", note.ID, terminalSafe(note.Title), note.Revision, len(detail.History))
+	if note.TitleSource == "ai" {
+		builder.WriteString("title and summary by the notes AI\n")
+	}
+	if note.Processing.Status != "" && note.Processing.Status != "idle" {
+		fmt.Fprintf(&builder, "processing %s\n", note.Processing.Status)
+	}
+	fmt.Fprintf(&builder, "\n%s\n", terminalSafe(strings.TrimRight(note.Document, "\n")))
+	for index, attachment := range note.Attachments {
+		fmt.Fprintf(&builder, "\n[%s %d] %s\n", attachment.Kind, index+1, terminalSafe(attachment.DerivedText))
+	}
+	for _, relation := range note.Relations {
+		fmt.Fprintf(&builder, "related: %q (%s)\n", terminalSafe(relation.RelatedTitle), terminalSafe(relation.Reason))
+	}
+	for _, proposal := range note.Proposals {
+		fmt.Fprintf(&builder, "reminder proposal (%s): %q %s\n", proposal.Status, terminalSafe(proposal.Title), proposal.LocalDate)
+	}
+	_, err := io.WriteString(stdout, builder.String())
 	return err
 }
 

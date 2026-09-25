@@ -2,6 +2,7 @@ package statectl
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -40,8 +41,13 @@ func NewNoteService(caller ToolCaller, newID func() (string, error)) *NoteServic
 	return &NoteService{caller: caller, newID: newID}
 }
 
-func (service *NoteService) Create(ctx context.Context, title, document, sourceText, requestID string) (StoredNote, json.RawMessage, error) {
-	if strings.TrimSpace(title) == "" && strings.TrimSpace(document) == "" {
+// Create stores a text note, or with capture "image" or "audio" an empty
+// photo or voice note that attachments fill.
+func (service *NoteService) Create(ctx context.Context, title, document, capture, sourceText, requestID string) (StoredNote, json.RawMessage, error) {
+	if capture != "" && capture != "image" && capture != "audio" {
+		return StoredNote{}, nil, errors.New("capture must be image or audio")
+	}
+	if capture == "" && strings.TrimSpace(title) == "" && strings.TrimSpace(document) == "" {
 		return StoredNote{}, nil, errors.New("a note needs a title or a document")
 	}
 	if strings.TrimSpace(sourceText) == "" {
@@ -58,6 +64,9 @@ func (service *NoteService) Create(ctx context.Context, title, document, sourceT
 	}
 	if strings.TrimSpace(title) != "" {
 		arguments["title"] = title
+	}
+	if capture != "" {
+		arguments["capture"] = capture
 	}
 	return service.write(ctx, "create_note", arguments)
 }
@@ -171,4 +180,66 @@ func callToolRaw(ctx context.Context, caller ToolCaller, name string, arguments 
 		return nil, err
 	}
 	return raw, nil
+}
+
+// AttachOptions describes one file the owner named for a note.
+type AttachOptions struct {
+	NoteID     string
+	MimeType   string
+	Content    []byte
+	Ordinal    int
+	SourceText string
+	RequestID  string
+}
+
+// Attach uploads one photo or recording through the authenticated server;
+// the CLI never sends a file to OpenRouter itself.
+func (service *NoteService) Attach(ctx context.Context, options AttachOptions) (json.RawMessage, error) {
+	if strings.TrimSpace(options.NoteID) == "" {
+		return nil, errors.New("note id is required")
+	}
+	if strings.TrimSpace(options.SourceText) == "" {
+		return nil, errors.New("source text is required")
+	}
+	if len(options.Content) == 0 {
+		return nil, errors.New("the file is empty")
+	}
+	requestID, err := resolveRequestID(options.RequestID, service.newID)
+	if err != nil {
+		return nil, err
+	}
+	return callToolRaw(ctx, service.caller, "add_note_attachment", map[string]any{
+		"note_id":           options.NoteID,
+		"mime_type":         options.MimeType,
+		"content_base64":    base64.StdEncoding.EncodeToString(options.Content),
+		"ordinal":           options.Ordinal,
+		"source_text":       options.SourceText,
+		"client_request_id": requestID,
+	})
+}
+
+// Process asks the server's notes AI to process a note.
+func (service *NoteService) Process(ctx context.Context, noteID string, requestID string) (json.RawMessage, error) {
+	if strings.TrimSpace(noteID) == "" {
+		return nil, errors.New("note id is required")
+	}
+	requestID, err := resolveRequestID(requestID, service.newID)
+	if err != nil {
+		return nil, err
+	}
+	return callToolRaw(ctx, service.caller, "process_note", map[string]any{"note_id": noteID, "client_request_id": requestID})
+}
+
+func (service *NoteService) Processing(ctx context.Context, noteID string) (json.RawMessage, error) {
+	if strings.TrimSpace(noteID) == "" {
+		return nil, errors.New("note id is required")
+	}
+	return callToolRaw(ctx, service.caller, "get_note_processing", map[string]any{"note_id": noteID})
+}
+
+func (service *NoteService) Related(ctx context.Context, noteID string) (json.RawMessage, error) {
+	if strings.TrimSpace(noteID) == "" {
+		return nil, errors.New("note id is required")
+	}
+	return callToolRaw(ctx, service.caller, "list_related_notes", map[string]any{"note_id": noteID})
 }
