@@ -234,6 +234,7 @@ func (repository *PocketBaseRepository) SaveNoteAIChange(_ context.Context, note
 					continue
 				}
 				attachment.DerivedText, attachment.DerivedKind, attachment.DerivedModel = text.Text, text.Kind, text.Model
+				attachment.RawText, attachment.Segments = text.RawText, text.Segments
 				if err := updateDataJSON(txApp, "state_note_attachments", attachment.ID, attachment); err != nil {
 					return err
 				}

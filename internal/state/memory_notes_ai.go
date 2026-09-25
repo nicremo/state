@@ -126,6 +126,8 @@ func (repository *MemoryRepository) SaveNoteAIChange(_ context.Context, noteID s
 			state.Attachments[index].DerivedText = text.Text
 			state.Attachments[index].DerivedKind = text.Kind
 			state.Attachments[index].DerivedModel = text.Model
+			state.Attachments[index].RawText = text.RawText
+			state.Attachments[index].Segments = append([]TranscriptSegment(nil), text.Segments...)
 		}
 	}
 	state.Relations = append(state.Relations, change.AddRelations...)

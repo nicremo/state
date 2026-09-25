@@ -104,7 +104,20 @@ type NoteAttachment struct {
 	DerivedText  string    `json:"derived_text,omitempty"`
 	DerivedKind  string    `json:"derived_kind,omitempty"`
 	DerivedModel string    `json:"derived_model,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	// RawText is the transcript exactly as speech recognition returned it,
+	// before the owner's dictionary corrected it into DerivedText.
+	RawText string `json:"raw_text,omitempty"`
+	// Segments are the transcript's sentences with their time in the
+	// recording, when the speech recognition provider returns them.
+	Segments  []TranscriptSegment `json:"segments,omitempty"`
+	CreatedAt time.Time           `json:"created_at"`
+}
+
+// TranscriptSegment is one spoken passage and where it is in its recording.
+type TranscriptSegment struct {
+	StartMS int64  `json:"start_ms"`
+	EndMS   int64  `json:"end_ms"`
+	Text    string `json:"text"`
 }
 
 type NoteProcessing struct {
@@ -198,9 +211,11 @@ type NoteView struct {
 }
 
 type NoteAttachmentText struct {
-	Text  string `json:"text"`
-	Kind  string `json:"kind"`
-	Model string `json:"model"`
+	Text     string              `json:"text"`
+	Kind     string              `json:"kind"`
+	Model    string              `json:"model"`
+	RawText  string              `json:"raw_text,omitempty"`
+	Segments []TranscriptSegment `json:"segments,omitempty"`
 }
 
 // NoteAIChange is one atomic write of AI data, stored with one audit event.
@@ -690,9 +705,49 @@ func cleanAttachmentTexts(texts map[string]NoteAttachmentText) map[string]NoteAt
 		if len(value) > maxAttachmentTextBytes {
 			value = strings.ToValidUTF8(value[:maxAttachmentTextBytes], "")
 		}
-		cleaned[id] = NoteAttachmentText{Text: strings.TrimSpace(value), Kind: text.Kind, Model: text.Model}
+		cleaned[id] = NoteAttachmentText{
+			Text:     strings.TrimSpace(value),
+			Kind:     text.Kind,
+			Model:    text.Model,
+			RawText:  strings.TrimSpace(boundedUTF8(text.RawText, maxAttachmentTextBytes)),
+			Segments: cleanSegments(text.Segments),
+		}
 	}
 	return cleaned
+}
+
+const (
+	maxTranscriptSegments     = 5000
+	maxTranscriptSegmentBytes = 4096
+)
+
+// cleanSegments keeps well-formed segments in time order, bounded in number
+// and size, so a provider answer cannot bloat a note.
+func cleanSegments(segments []TranscriptSegment) []TranscriptSegment {
+	if len(segments) == 0 {
+		return nil
+	}
+	cleaned := make([]TranscriptSegment, 0, min(len(segments), maxTranscriptSegments))
+	for _, segment := range segments {
+		text := strings.TrimSpace(boundedUTF8(segment.Text, maxTranscriptSegmentBytes))
+		if len(cleaned) >= maxTranscriptSegments || text == "" || segment.StartMS < 0 || segment.EndMS < segment.StartMS {
+			continue
+		}
+		cleaned = append(cleaned, TranscriptSegment{StartMS: segment.StartMS, EndMS: segment.EndMS, Text: text})
+	}
+	sort.SliceStable(cleaned, func(left, right int) bool { return cleaned[left].StartMS < cleaned[right].StartMS })
+	if len(cleaned) == 0 {
+		return nil
+	}
+	return cleaned
+}
+
+func boundedUTF8(value string, limit int) string {
+	value = strings.ToValidUTF8(value, "")
+	if len(value) > limit {
+		value = strings.ToValidUTF8(value[:limit], "")
+	}
+	return value
 }
 
 // attachmentTextDigest keeps the audit event small: the texts themselves are

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -173,6 +174,7 @@ func (worker *Worker) run(ctx context.Context, note state.NoteView, settings sta
 // pay for the same audio twice.
 func (worker *Worker) transcribe(ctx context.Context, note state.NoteView, settings state.NoteAISettings, capabilities Capabilities, budget *monthlyBudget) ([]string, error) {
 	transcripts := make([]string, 0)
+	var dictionary *state.NotesDictionary
 	for _, attachment := range note.Attachments {
 		if attachment.Kind != state.NoteAttachmentAudio {
 			continue
@@ -199,22 +201,47 @@ func (worker *Worker) transcribe(ctx context.Context, note state.NoteView, setti
 		if err := budget.Allow(ctx, estimate); err != nil {
 			return nil, err
 		}
-		transcript, err := worker.gateway.Client().Transcribe(ctx, TranscribeRequest{Model: settings.TranscriptionModel, Audio: audio, Format: audioFormat(attachment.MimeType)})
+		if dictionary == nil {
+			loaded, err := worker.service.GetNotesDictionary(ctx)
+			if err != nil {
+				return nil, err
+			}
+			dictionary = &loaded
+		}
+		transcript, err := worker.gateway.Client().Transcribe(ctx, TranscribeRequest{Model: settings.TranscriptionModel, Audio: audio, Format: audioFormat(attachment.MimeType), Segments: true})
 		if spendErr := budget.Spend(ctx, billedCost(transcript.Usage.Cost, estimate, err)); spendErr != nil {
 			return nil, spendErr
 		}
 		if err != nil {
 			return nil, err
 		}
-		text := strings.TrimSpace(transcript.Text)
+		raw := strings.TrimSpace(transcript.Text)
+		text := state.ApplyDictionary(raw, dictionary.Corrections)
 		if err := worker.service.RecordAttachmentTexts(ctx, note.ID, map[string]state.NoteAttachmentText{
-			attachment.ID: {Text: text, Kind: "transcript", Model: settings.TranscriptionModel},
+			attachment.ID: {Text: text, Kind: "transcript", Model: settings.TranscriptionModel, RawText: raw, Segments: correctedSegments(transcript.Segments, dictionary.Corrections)},
 		}); err != nil {
 			return nil, err
 		}
 		transcripts = append(transcripts, text)
 	}
 	return transcripts, nil
+}
+
+// correctedSegments turns the provider's seconds into milliseconds and
+// applies the same dictionary corrections as the full transcript.
+func correctedSegments(segments []TranscriptionSegment, corrections []state.DictionaryCorrection) []state.TranscriptSegment {
+	if len(segments) == 0 {
+		return nil
+	}
+	converted := make([]state.TranscriptSegment, 0, len(segments))
+	for _, segment := range segments {
+		converted = append(converted, state.TranscriptSegment{
+			StartMS: int64(math.Round(segment.Start * 1000)),
+			EndMS:   int64(math.Round(segment.End * 1000)),
+			Text:    state.ApplyDictionary(strings.TrimSpace(segment.Text), corrections),
+		})
+	}
+	return converted
 }
 
 func transcriptionPrice(gateway *Gateway, model string) float64 {

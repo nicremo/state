@@ -5,6 +5,7 @@
 package fakeopenrouter
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -170,6 +171,22 @@ func Transcript(text string, cost float64) Reply {
 	return Reply{Status: http.StatusOK, Body: map[string]any{"text": text, "usage": map[string]any{"seconds": 12.5, "cost": cost}}}
 }
 
+// Segment is one timed passage of a verbose transcript.
+type Segment struct {
+	Start float64
+	End   float64
+	Text  string
+}
+
+// TranscriptWithSegments is a verbose_json speech-to-text reply.
+func TranscriptWithSegments(text string, segments []Segment, cost float64) Reply {
+	encoded := make([]map[string]any, 0, len(segments))
+	for index, segment := range segments {
+		encoded = append(encoded, map[string]any{"id": index, "start": segment.Start, "end": segment.End, "text": segment.Text})
+	}
+	return Reply{Status: http.StatusOK, Body: map[string]any{"text": text, "segments": encoded, "usage": map[string]any{"seconds": 12.5, "cost": cost}}}
+}
+
 // Error is an OpenRouter error envelope.
 func Error(status int, message string) Reply {
 	return Reply{Status: status, Body: map[string]any{"error": map[string]any{"code": status, "message": message}}}
@@ -234,7 +251,14 @@ func (server *Server) serve(writer http.ResponseWriter, request *http.Request) {
 			write(writer, Error(http.StatusBadRequest, "input_audio.data and input_audio.format are required"))
 			return
 		}
+		verbose := bytes.Contains(body, []byte(`"verbose_json"`))
 		write(writer, server.next(&server.transcribeReplies, func() Reply {
+			if verbose {
+				return TranscriptWithSegments("Transkript aus dem Fake. Zweiter Satz aus dem Fake.", []Segment{
+					{Start: 0, End: 2.5, Text: " Transkript aus dem Fake."},
+					{Start: 2.5, End: 5, Text: " Zweiter Satz aus dem Fake."},
+				}, 0.0004)
+			}
 			return Transcript("Transkript aus dem Fake", 0.0004)
 		}))
 	default:
