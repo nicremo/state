@@ -24,6 +24,8 @@ type Config struct {
 	State   *state.Service
 	Push    *statepush.Service
 	Version string
+	// NotesAI is optional; without it notes work and AI reports not_configured.
+	NotesAI NotesAI
 }
 
 type Handler struct {
@@ -31,6 +33,7 @@ type Handler struct {
 	state   *state.Service
 	push    *statepush.Service
 	version string
+	notesAI NotesAI
 	router  *http.ServeMux
 }
 
@@ -56,9 +59,10 @@ type Export struct {
 	Notes       []NoteDetail     `json:"notes"`
 }
 
-// NoteDetail is one note with its complete audit history in an export.
+// NoteDetail is one note with its complete audit history in an export. The
+// note carries attachment metadata and AI provenance, never media bytes.
 type NoteDetail struct {
-	Note    state.Note         `json:"note"`
+	Note    state.NoteView     `json:"note"`
 	History []state.AuditEvent `json:"history"`
 }
 
@@ -68,6 +72,7 @@ func NewHandler(config Config) http.Handler {
 		state:   config.State,
 		push:    config.Push,
 		version: config.Version,
+		notesAI: config.NotesAI,
 		router:  http.NewServeMux(),
 	}
 	handler.registerRoutes()
@@ -106,6 +111,17 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("GET /api/v1/notes/{id}", handler.getNote)
 	handler.router.HandleFunc("PATCH /api/v1/notes/{id}", handler.updateNote)
 	handler.router.HandleFunc("GET /api/v1/notes/{id}/history", handler.getNoteHistory)
+	handler.router.HandleFunc("POST /api/v1/notes/{id}/attachments", handler.uploadNoteAttachment)
+	handler.router.HandleFunc("GET /api/v1/notes/{id}/attachments/{attachment_id}", handler.downloadNoteAttachment)
+	handler.router.HandleFunc("POST /api/v1/notes/{id}/processing", handler.requestNoteProcessing)
+	handler.router.HandleFunc("GET /api/v1/notes/{id}/processing", handler.getNoteProcessing)
+	handler.router.HandleFunc("GET /api/v1/notes/{id}/relations", handler.listNoteRelations)
+	handler.router.HandleFunc("PATCH /api/v1/notes/{id}/relations/{relation_id}", handler.dismissNoteRelation)
+	handler.router.HandleFunc("POST /api/v1/notes/{id}/reminder-proposals/{proposal_id}/accept", handler.acceptReminderProposal)
+	handler.router.HandleFunc("POST /api/v1/notes/{id}/reminder-proposals/{proposal_id}/dismiss", handler.dismissReminderProposal)
+	handler.router.HandleFunc("GET /api/v1/note-capabilities", handler.getNoteCapabilities)
+	handler.router.HandleFunc("GET /api/v1/notes-ai/settings", handler.getNotesAISettings)
+	handler.router.HandleFunc("PATCH /api/v1/notes-ai/settings", handler.updateNotesAISettings)
 	handler.router.HandleFunc("GET /api/v1/briefing", handler.getBriefing)
 	handler.router.HandleFunc("GET /api/v1/export", handler.exportState)
 	handler.router.HandleFunc("POST /api/v1/projects", handler.createProject)
@@ -493,7 +509,7 @@ func (handler *Handler) exportState(writer http.ResponseWriter, request *http.Re
 	sort.Strings(sortedNoteIDs)
 	noteDetails := make([]NoteDetail, 0, len(sortedNoteIDs))
 	for _, id := range sortedNoteIDs {
-		note, err := handler.state.GetNote(request.Context(), id)
+		note, err := handler.state.GetNoteView(request.Context(), id)
 		if err != nil {
 			writeError(writer, err, nil)
 			return

@@ -321,3 +321,22 @@ func (budget *monthlyBudget) Allow(ctx context.Context, estimateUSD float64) err
 func (budget *monthlyBudget) Spend(ctx context.Context, costUSD float64) error {
 	return budget.service.AddNoteAIUsage(ctx, costUSD)
 }
+
+// Runtime bundles what the REST and MCP layers need from the notes AI.
+type Runtime struct {
+	Gateway *Gateway
+	Store   *MediaStore
+	Worker  *Worker
+}
+
+func (runtime *Runtime) Media() *MediaStore {
+	return runtime.Store
+}
+
+func (runtime *Runtime) Capabilities(ctx context.Context, settings state.NoteAISettings) Capabilities {
+	return runtime.Gateway.Capabilities(ctx, settings)
+}
+
+func (runtime *Runtime) Kick() {
+	runtime.Worker.Kick()
+}

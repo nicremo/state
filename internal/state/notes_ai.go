@@ -296,6 +296,16 @@ func (service *Service) aiAvailable() bool {
 	return service.noteAIAvailable != nil && service.noteAIAvailable()
 }
 
+// NoteMediaPolicy is the upload policy in force right now.
+func (service *Service) NoteMediaPolicy() NoteMediaPolicy {
+	return service.mediaPolicy()
+}
+
+// NoteAIAvailable reports whether the server has an OpenRouter key.
+func (service *Service) NoteAIAvailable() bool {
+	return service.aiAvailable()
+}
+
 func (service *Service) mediaPolicy() NoteMediaPolicy {
 	if service.noteMediaPolicy == nil {
 		return DefaultNoteMediaPolicy()

@@ -32,7 +32,18 @@ func (handler *Handler) createNote(writer http.ResponseWriter, request *http.Req
 		return
 	}
 	handler.notifySync(request.Context(), actor.ID)
-	writeJSON(writer, http.StatusCreated, note)
+	handler.writeNoteView(writer, request, http.StatusCreated, note)
+}
+
+// writeNoteView answers every note mutation with the note as clients see
+// it, AI title and attachments included, also for idempotent replays.
+func (handler *Handler) writeNoteView(writer http.ResponseWriter, request *http.Request, status int, note state.Note) {
+	view, err := handler.state.NoteViewOf(request.Context(), note)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, status, view)
 }
 
 func (handler *Handler) listNotes(writer http.ResponseWriter, request *http.Request) {
@@ -53,7 +64,7 @@ func (handler *Handler) listNotes(writer http.ResponseWriter, request *http.Requ
 		}
 		includeArchived = parsed
 	}
-	notes, err := handler.state.ListNotes(request.Context(), state.NoteListOptions{
+	notes, err := handler.state.ListNoteViews(request.Context(), state.NoteListOptions{
 		Query:           request.URL.Query().Get("q"),
 		IncludeArchived: includeArchived,
 		Limit:           limit,
@@ -69,7 +80,7 @@ func (handler *Handler) getNote(writer http.ResponseWriter, request *http.Reques
 	if _, ok := handler.authenticateKind(writer, request, noteActorKinds...); !ok {
 		return
 	}
-	note, err := handler.state.GetNote(request.Context(), request.PathValue("id"))
+	note, err := handler.state.GetNoteView(request.Context(), request.PathValue("id"))
 	if err != nil {
 		writeError(writer, err, nil)
 		return
@@ -95,7 +106,7 @@ func (handler *Handler) updateNote(writer http.ResponseWriter, request *http.Req
 	if err != nil {
 		var details any
 		if errors.Is(err, state.ErrRevisionConflict) {
-			if current, getErr := handler.state.GetNote(request.Context(), noteID); getErr == nil {
+			if current, getErr := handler.state.GetNoteView(request.Context(), noteID); getErr == nil {
 				details = map[string]any{"server": current}
 			}
 		}
@@ -103,7 +114,7 @@ func (handler *Handler) updateNote(writer http.ResponseWriter, request *http.Req
 		return
 	}
 	handler.notifySync(request.Context(), actor.ID)
-	writeJSON(writer, http.StatusOK, note)
+	handler.writeNoteView(writer, request, http.StatusOK, note)
 }
 
 func (handler *Handler) getNoteHistory(writer http.ResponseWriter, request *http.Request) {

@@ -126,7 +126,7 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 		serverErrors <- server.Serve(tls.NewListener(listener, &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12}))
 	}()
 	go func() { serverErrors <- localServer.Serve(localListener) }()
-	logger.Info("state-server desktop listening", "address", serverURL, "local_address", localURL, "version", version)
+	logger.Info("state-server desktop listening", "address", serverURL, "local_address", localURL, "version", version, "notes_ai_configured", app.notesAI.Gateway.Configured())
 	defer func() {
 		shutdown, stop := context.WithTimeout(context.Background(), 10*time.Second)
 		defer stop()
@@ -135,6 +135,7 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 	}()
 	go runPushScheduler(ctx, app.push, logger)
 	go runExecutionScheduler(ctx, app.state, logger)
+	go app.notesAI.Worker.Run(ctx)
 	requests := make(chan desktopRequest)
 	go func() {
 		defer cancel() // A closed parent pipe also stops the child after an app crash.
