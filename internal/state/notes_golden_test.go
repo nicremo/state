@@ -39,6 +39,8 @@ var noteDerivationInputs = []string{
 	"Titel\x1b[31m mit  Escape\nZeile\x07 zwei\tTab",
 	"\x1b\nEinkaufsliste Milch",
 	"Bidi \u202eoverride\u202c und \u0085 C1",
+	"# Titel\n++unter++ ==hell== ~~weg~~\n| A | B |\n|---|:-:|\n| 1 | 2 |",
+	"| nur Zelle |\nText | Strich\n|---|\n||",
 }
 
 // fuzzTokens build random documents from the characters where the Go and
@@ -47,7 +49,7 @@ var noteDerivationInputs = []string{
 var fuzzTokens = []string{"#", "## ", "# ", "-", "- ", "* ", "+ ", "> ", "[ ]", "[x]", " ", "  ", "\t", "\n", "\n", "\r\n", "\r",
 	"*", "**", "_", "__", "~~", "~", "`", "```", "~~~", "---", "***", "1. ", "12) ", "\u0661. ", "a", "b", "Wort", "äöü",
 	"e\u0301", "\u00e9", "\u00a0", "\u2003", "\u0085", "\u200b", "\u3000", "👨‍👩‍👧", "🇩🇪", "x_y", "2 * 3", "\x1b", "\u0301",
-	"\ufeff", "\u202e", "\u009b"}
+	"\ufeff", "\u202e", "\u009b", "++", "==", "|", "| ", " |", "|---|", ":-:"}
 
 // fuzzDocuments is deterministic, so the golden file only changes when the
 // derivation does.

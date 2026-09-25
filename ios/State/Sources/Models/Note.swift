@@ -83,6 +83,7 @@ enum NoteText {
 
     private static let headingMarker = regex(#"^#{1,6}([ \t]+|$)"#)
     private static let orderedListMarker = regex(#"^[0-9]{1,3}[.)][ \t]+"#)
+    private static let tableSeparator = regex(#"^\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?$"#)
     private static let emptyTaskMarkers: Set<String> = ["- [ ]", "- [x]", "- [X]", "* [ ]", "* [x]", "* [X]"]
     private static let linePrefixes = ["- [ ] ", "- [x] ", "- [X] ", "* [ ] ", "* [x] ", "* [X] ", "- ", "* ", "+ ", "> "]
     private static let emphasis: [(NSRegularExpression, String)] = [
@@ -90,6 +91,8 @@ enum NoteText {
         (regex(#"\*\*([^ \t*](?:[^*]*[^ \t*])?)\*\*"#), "$1"),
         (regex(#"(^|[^A-Za-z0-9_])__([^ \t_](?:[^_]*[^ \t_])?)__([^A-Za-z0-9_]|$)"#), "$1$2$3"),
         (regex(#"~~([^ \t~](?:[^~]*[^ \t~])?)~~"#), "$1"),
+        (regex(#"\+\+([^ \t+](?:[^+]*[^ \t+])?)\+\+"#), "$1"),
+        (regex(#"==([^ \t=](?:[^=]*[^ \t=])?)=="#), "$1"),
         (regex(#"\*([^ \t*](?:[^*]*[^ \t*])?)\*"#), "$1"),
         (regex(#"(^|[^A-Za-z0-9_])_([^ \t_](?:[^_]*[^ \t_])?)_([^A-Za-z0-9_]|$)"#), "$1$2$3"),
     ]
@@ -108,6 +111,11 @@ enum NoteText {
                 continue
             }
             if ["---", "***", "___"].contains(line) { continue }
+            if line.unicodeScalars.contains("|"), matches(tableSeparator, line) { continue }
+            if isTableRow(line) {
+                line = tableRowText(line)
+                if line.isEmpty { continue }
+            }
             line = replace(headingMarker, in: line, with: "")
             if emptyTaskMarkers.contains(line) { continue }
             for prefix in linePrefixes where hasScalarPrefix(line, prefix) {
@@ -189,6 +197,24 @@ enum NoteText {
         var scalars = String.UnicodeScalarView()
         for scalar in text.unicodeScalars.prefix(limit - 1) { scalars.append(scalar) }
         return trimSpace(String(scalars)) + "…"
+    }
+
+    /// Go's isNoteTableRow: a trimmed line framed by pipes.
+    static func isTableRow(_ line: String) -> Bool {
+        let scalars = line.unicodeScalars
+        return scalars.count >= 2 && scalars.first == "|" && scalars.last == "|"
+    }
+
+    /// Go's tableRowText: the non-empty cells, joined with a space.
+    private static func tableRowText(_ line: String) -> String {
+        // Split on scalars: a pipe followed by a combining mark is still a
+        // separator for Go, but not for a character-based split.
+        let cells = line.unicodeScalars.dropFirst().dropLast().split(separator: "|", omittingEmptySubsequences: false)
+        return cells.map { trimSpace(String(String.UnicodeScalarView($0))) }.filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
+    private static func matches(_ pattern: NSRegularExpression, _ text: String) -> Bool {
+        pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
     private static func codeFence(_ line: String) -> String? {

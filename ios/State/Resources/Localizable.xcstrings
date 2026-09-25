@@ -431,6 +431,16 @@
         }
       }
     },
+    "Body" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        }
+      }
+    },
     "Bold" : {
       "localizations" : {
         "de" : {
@@ -607,6 +617,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Codex, Claude Code und OpenCode schreiben Erinnerungen nach State. Du siehst jede einzelne auf deinem iPhone, mit dem Wortlaut, der sie ausgelöst hat."
+          }
+        }
+      }
+    },
+    "Collapsed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eingeklappt"
+          }
+        }
+      }
+    },
+    "Column 1" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spalte 1"
+          }
+        }
+      }
+    },
+    "Column 2" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spalte 2"
           }
         }
       }
@@ -1201,6 +1241,16 @@
         }
       }
     },
+    "Expanded" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausgeklappt"
+          }
+        }
+      }
+    },
     "Expired" : {
       "localizations" : {
         "de" : {
@@ -1311,6 +1361,16 @@
         }
       }
     },
+    "Folds or unfolds this section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klappt diesen Abschnitt ein oder aus"
+          }
+        }
+      }
+    },
     "Frequency" : {
       "localizations" : {
         "de" : {
@@ -1357,6 +1417,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hilfe"
+          }
+        }
+      }
+    },
+    "Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hervorheben"
           }
         }
       }
@@ -3191,6 +3261,26 @@
         }
       }
     },
+    "Strikethrough" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchgestrichen"
+          }
+        }
+      }
+    },
+    "Subheading" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterüberschrift"
+          }
+        }
+      }
+    },
     "Succeeded" : {
       "localizations" : {
         "de" : {
@@ -3257,6 +3347,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Systemberechtigung"
+          }
+        }
+      }
+    },
+    "Table" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tabelle"
+          }
+        }
+      }
+    },
+    "Text style" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Textstil"
           }
         }
       }
@@ -3537,6 +3647,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unbeaufsichtigt (geringes Risiko)"
+          }
+        }
+      }
+    },
+    "Underline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterstrichen"
           }
         }
       }

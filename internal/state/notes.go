@@ -307,6 +307,8 @@ func changedNoteFields(before Note, after Note) []string {
 var (
 	noteHeadingMarker     = regexp.MustCompile(`^#{1,6}([ \t]+|$)`)
 	noteOrderedListMarker = regexp.MustCompile(`^[0-9]{1,3}[.)][ \t]+`)
+	// The row under a table header: "|---|:-:|".
+	noteTableSeparator = regexp.MustCompile(`^\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?$`)
 	// A checklist item without text, as the format bar inserts it.
 	emptyTaskMarkers = map[string]bool{"- [ ]": true, "- [x]": true, "- [X]": true, "* [ ]": true, "* [x]": true, "* [X]": true}
 	noteLinePrefixes = []string{"- [ ] ", "- [x] ", "- [X] ", "* [ ] ", "* [x] ", "* [X] ", "- ", "* ", "+ ", "> "}
@@ -320,6 +322,8 @@ var (
 		{regexp.MustCompile(`\*\*([^ \t*](?:[^*]*[^ \t*])?)\*\*`), "$1"},
 		{regexp.MustCompile(`(^|[^A-Za-z0-9_])__([^ \t_](?:[^_]*[^ \t_])?)__([^A-Za-z0-9_]|$)`), "$1$2$3"},
 		{regexp.MustCompile(`~~([^ \t~](?:[^~]*[^ \t~])?)~~`), "$1"},
+		{regexp.MustCompile(`\+\+([^ \t+](?:[^+]*[^ \t+])?)\+\+`), "$1"},
+		{regexp.MustCompile(`==([^ \t=](?:[^=]*[^ \t=])?)==`), "$1"},
 		{regexp.MustCompile(`\*([^ \t*](?:[^*]*[^ \t*])?)\*`), "$1"},
 		{regexp.MustCompile(`(^|[^A-Za-z0-9_])_([^ \t_](?:[^_]*[^ \t_])?)_([^A-Za-z0-9_]|$)`), "$1$2$3"},
 	}
@@ -349,6 +353,14 @@ func NotePlainText(document string) string {
 		if line == "---" || line == "***" || line == "___" {
 			continue
 		}
+		if strings.Contains(line, "|") && noteTableSeparator.MatchString(line) {
+			continue
+		}
+		if isNoteTableRow(line) {
+			if line = tableRowText(line); line == "" {
+				continue
+			}
+		}
 		line = noteHeadingMarker.ReplaceAllString(line, "")
 		if emptyTaskMarkers[line] {
 			continue
@@ -366,6 +378,24 @@ func NotePlainText(document string) string {
 		out = append(out, strings.TrimSpace(line))
 	}
 	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+// isNoteTableRow reports a GFM table row: a trimmed line framed by pipes.
+func isNoteTableRow(line string) bool {
+	return len(line) >= 2 && strings.HasPrefix(line, "|") && strings.HasSuffix(line, "|")
+}
+
+// tableRowText joins a row's non-empty cells with a space, so a table reads
+// as lines of words in search, MCP and CLI output.
+func tableRowText(line string) string {
+	cells := strings.Split(line[1:len(line)-1], "|")
+	words := make([]string, 0, len(cells))
+	for _, cell := range cells {
+		if cell = strings.TrimSpace(cell); cell != "" {
+			words = append(words, cell)
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 func codeFence(line string) string {

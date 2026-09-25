@@ -438,3 +438,19 @@ func TestBriefingHidesNoteEventsFromRunners(t *testing.T) {
 		t.Fatalf("owner briefing changes = %d, want 1", len(ownerBriefing.Changes))
 	}
 }
+
+func TestNotePlainTextFormats(t *testing.T) {
+	cases := map[string]string{
+		"++unter++ ==hell== ~~weg~~":                      "unter hell weg",
+		"| A | B |\n|---|:-:|\n| 1 | **2** |":             "A B\n1 2",
+		"a ++ b == c":                                     "a ++ b == c",
+		"| nur eine Zelle |":                              "nur eine Zelle",
+		"Text | mit Strich":                               "Text | mit Strich",
+		"| Spalte 1 | Spalte 2 |\n| --- | --- |\n|  |  |": "Spalte 1 Spalte 2",
+	}
+	for document, want := range cases {
+		if got := NotePlainText(document); got != want {
+			t.Errorf("NotePlainText(%q) = %q, want %q", document, got, want)
+		}
+	}
+}

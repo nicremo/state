@@ -116,7 +116,7 @@ struct NoteDetailView: View {
                         .foregroundStyle(.orange)
                 }
 
-                MarkdownView(Self.body(of: note), style: .document) { line in
+                MarkdownView(Self.body(of: note), style: .document, collapsible: true) { line in
                     Task { await model.toggleNoteTask(id: note.id, line: line) }
                 }
                 .padding(.top, StateTheme.Space.tight)
@@ -213,18 +213,52 @@ struct NoteDetailView: View {
                 .frame(height: 1)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
-                    formatButton(String(localized: "Heading"), systemImage: "textformat.size") { prefix("## ") }
+                    paragraphStyleMenu
                     formatButton(String(localized: "Bold"), systemImage: "bold") { wrap("**") }
                     formatButton(String(localized: "Italic"), systemImage: "italic") { wrap("*") }
+                    formatButton(String(localized: "Underline"), systemImage: "underline") { wrap("++") }
+                    formatButton(String(localized: "Strikethrough"), systemImage: "strikethrough") { wrap("~~") }
+                    formatButton(String(localized: "Highlight"), systemImage: "highlighter") { wrap("==") }
                     formatButton(String(localized: "List"), systemImage: "list.bullet") { prefix("- ") }
                     formatButton(String(localized: "Numbered list"), systemImage: "list.number") { prefix("1. ") }
                     formatButton(String(localized: "Checklist"), systemImage: "checklist") { prefix("- [ ] ") }
+                    formatButton(String(localized: "Table"), systemImage: "tablecells") { table() }
                     formatButton(String(localized: "Divider"), systemImage: "minus") { divider() }
                 }
                 .padding(.horizontal, StateTheme.Space.inner)
             }
         }
         .background(StateTheme.ground)
+    }
+
+    /// The "Aa" menu of iPhone Notes: paragraph styles for the cursor's line.
+    private var paragraphStyleMenu: some View {
+        Menu {
+            Button(String(localized: "Title")) { paragraphStyle(1) }
+            Button(String(localized: "Heading")) { paragraphStyle(2) }
+            Button(String(localized: "Subheading")) { paragraphStyle(3) }
+            Button(String(localized: "Body")) { paragraphStyle(0) }
+        } label: {
+            Image(systemName: "textformat")
+                .font(.body.weight(.medium))
+                .frame(width: StateControlMetrics.formatButton, height: StateControlMetrics.formatButton)
+                .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .foregroundStyle(StateTheme.accent)
+        .accessibilityLabel(String(localized: "Text style"))
+        .help(String(localized: "Text style"))
+    }
+
+    private func paragraphStyle(_ level: Int) {
+        let (text, cursor) = NoteEditing.setParagraphStyle(level: level, in: documentDraft, at: currentRange)
+        apply(text, cursor: cursor)
+    }
+
+    private func table() {
+        let columns = [String(localized: "Column 1"), String(localized: "Column 2")]
+        let (text, cursor) = NoteEditing.insertTable(in: documentDraft, at: currentRange, columns: columns)
+        apply(text, cursor: cursor)
     }
 
     private func formatButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
