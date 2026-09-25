@@ -55,6 +55,9 @@ final class AppModel {
     private(set) var archivedNotes: [Note] = []
     private(set) var noteAliases: [String: String] = [:]
     private(set) var noteSyncErrors: [String: String] = [:]
+    /// What the server allows for photos and recordings right now.
+    private(set) var noteCapabilities: NoteCapabilities = .offline
+    private(set) var notesAISettings: NotesAISettings?
     private var pendingNoteSync: Task<Void, Never>?
     private var needsAnotherSync = false
     private(set) var activity: [AuditEvent] = []
@@ -193,6 +196,7 @@ final class AppModel {
             lastSyncAt = Date()
             await reloadCache()
             await reloadActors()
+            await refreshNoteCapabilities()
         } catch is CancellationError {
         } catch {
             await reloadCache()
@@ -1289,6 +1293,8 @@ final class AppModel {
         do {
             guard let current = try await database.note(id: id) else { return .rejected }
             if isEmpty {
+                // A photo or voice note is its media; empty text is normal.
+                guard current.capture == nil else { return .skipped }
                 // Cleared text is archived only when the editor closes. While
                 // typing, an empty moment is just a moment.
                 guard isFinal else { return .skipped }
@@ -1367,6 +1373,159 @@ final class AppModel {
 
     func noteSyncError(id: String) -> String? {
         noteSyncErrors[noteAliases[id] ?? id]
+    }
+
+    // MARK: Notes AI
+
+    /// A captured file before it is stored: the bytes, their type and, for
+    /// a recording, its length.
+    struct CapturedMedia: Sendable {
+        let data: Data
+        let mimeType: String
+        let fileExtension: String
+        var durationMs: Int64? = nil
+    }
+
+    /// Creates a photo or voice note with its files. The note exists on this
+    /// device at once; the files and the processing request follow with the
+    /// next sync, in the order they were captured.
+    @discardableResult
+    func createCaptureNote(kind: String, media: [CapturedMedia]) async -> String? {
+        guard !media.isEmpty, kind == "image" || kind == "audio" else { return nil }
+        var note = Note.local(id: UUIDv7.generate().uuidString.lowercased(), title: "", document: "", at: Date())
+        note.capture = kind
+        note.processing = NoteProcessing(status: NoteProcessing.queued)
+        do {
+            var uploads: [NoteUpload] = []
+            for (ordinal, item) in media.enumerated() {
+                let stored = try NoteMediaFiles.save(item.data, fileExtension: item.fileExtension)
+                uploads.append(NoteUpload(
+                    id: UUIDv7.generate().uuidString.lowercased(),
+                    noteID: note.id,
+                    ordinal: ordinal,
+                    kind: kind,
+                    mimeType: item.mimeType,
+                    fileName: stored.fileName,
+                    sha256: stored.sha256,
+                    byteSize: stored.byteSize,
+                    durationMs: item.durationMs,
+                    requestID: UUIDv7.generate().uuidString.lowercased(),
+                    status: NoteUpload.pending
+                ))
+            }
+            try await database.insertLocalNote(note)
+            try await database.enqueueNoteUploads(uploads, processRequestID: UUIDv7.generate().uuidString.lowercased(), noteID: note.id)
+            if isDemo { demoVisibleIDs.insert(note.id) }
+            await reloadCache()
+            scheduleNoteSync()
+            return note.id
+        } catch is CancellationError {
+            return nil
+        } catch {
+            presentedError = error.localizedDescription
+            return nil
+        }
+    }
+
+    /// Files of a note still on this device: waiting, or refused with a reason.
+    func noteUploads(for noteID: String) async -> [NoteUpload] {
+        (try? await database.noteUploads(for: noteID)) ?? []
+    }
+
+    /// The bytes of an attachment, from this device or downloaded once.
+    func attachmentData(noteID: String, attachment: NoteAttachment) async -> Data? {
+        if let cached = NoteMediaFiles.cachedData(sha256: attachment.sha256) {
+            return cached
+        }
+        guard let api, !isDemo, let data = try? await api.downloadNoteAttachment(noteID: noteAliases[noteID] ?? noteID, attachmentID: attachment.id) else {
+            return nil
+        }
+        return NoteMediaFiles.cache(data, sha256: attachment.sha256) ? data : nil
+    }
+
+    func refreshNoteCapabilities() async {
+        guard let api, !isDemo else { return }
+        if let capabilities = try? await api.noteCapabilities() {
+            noteCapabilities = capabilities
+        }
+    }
+
+    func loadNotesAISettings() async {
+        guard let api, !isDemo else { return }
+        do {
+            notesAISettings = try await api.notesAISettings()
+            await refreshNoteCapabilities()
+        } catch StateAPIError.notFound {
+            notesAISettings = nil
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func updateNotesAISettings(consent: Bool? = nil, monthlyLimitUSD: Double? = nil) async {
+        guard let api else { return }
+        do {
+            notesAISettings = try await api.updateNotesAISettings(consent: consent, monthlyLimitUSD: monthlyLimitUSD)
+            await refreshNoteCapabilities()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    /// Creates the reminder the AI proposed. Only the owner does this; the
+    /// agent itself can never create one.
+    func acceptReminderProposal(noteID: String, proposal: ReminderProposal) async {
+        guard let api else { return }
+        do {
+            _ = try await api.acceptReminderProposal(
+                noteID: noteAliases[noteID] ?? noteID,
+                proposalID: proposal.id,
+                timeZone: TimeZone.current.identifier,
+                requestID: UUIDv7.generate().uuidString.lowercased()
+            )
+            await synchronize()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func dismissReminderProposal(noteID: String, proposal: ReminderProposal) async {
+        guard let api else { return }
+        do {
+            try await database.applyServer(note: try await api.dismissReminderProposal(noteID: noteAliases[noteID] ?? noteID, proposalID: proposal.id))
+            await reloadCache()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func dismissNoteRelation(noteID: String, relation: NoteRelation) async {
+        guard let api else { return }
+        do {
+            try await database.applyServer(note: try await api.dismissNoteRelation(noteID: noteAliases[noteID] ?? noteID, relationID: relation.id))
+            await reloadCache()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    /// Sends refused files again and asks for a fresh processing pass.
+    func retryNoteProcessing(noteID: String) async {
+        do {
+            try await database.retryNoteUploads(noteID: noteID)
+            try await database.requestNoteProcessingAgain(noteID: noteAliases[noteID] ?? noteID)
+            await afterNoteEdit()
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    /// Takes the body the AI wrote for a note whose text the owner had
+    /// already started, as a normal edit.
+    func adoptProposedDocument(noteID: String) async {
+        guard let note = note(id: noteID), let proposed = note.ai?.proposedDocument, !proposed.isEmpty else { return }
+        let document = note.document.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? proposed : note.document + "\n\n" + proposed
+        _ = await saveNote(id: note.id, title: note.titleSource == Note.userSource ? note.title : "", document: document, base: note)
     }
 
     private func afterNoteEdit() async {

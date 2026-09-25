@@ -16,9 +16,19 @@ struct Note: Codable, Hashable, Identifiable, Sendable {
     var revision: Int64
     var createdAt: Date
     var updatedAt: Date
+    /// "image" or "audio" for a photo or voice note, nil for text.
+    var capture: String? = nil
+    var attachments: [NoteAttachment]? = nil
+    var processing: NoteProcessing? = nil
+    var ai: NoteAIResult? = nil
+    var relations: [NoteRelation]? = nil
+    var reminderProposals: [ReminderProposal]? = nil
 
     static let userSource = "user"
     static let derivedSource = "derived"
+    /// Title or summary made by the notes AI. It never replaces a written
+    /// one, and an edit does not throw it away: the AI refreshes it later.
+    static let aiSource = "ai"
 
     /// Builds a local note the way the server would store it.
     static func local(id: String, title: String, document: String, at date: Date) -> Note {
@@ -45,14 +55,20 @@ struct Note: Codable, Hashable, Identifiable, Sendable {
         plainText = NoteText.plainText(document)
         if let title {
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            titleSource = trimmed.isEmpty ? Self.derivedSource : Self.userSource
-            self.title = trimmed
+            if !trimmed.isEmpty {
+                titleSource = Self.userSource
+                self.title = trimmed
+            } else if titleSource == Self.userSource {
+                titleSource = Self.derivedSource
+            }
         }
         if titleSource == Self.derivedSource {
             self.title = NoteText.title(document)
         }
         if summarySource == Self.derivedSource {
-            summary = titleSource == Self.derivedSource
+            // The server stores an AI title as derived and shows the AI's
+            // on top, so its derived summary also skips the first line.
+            summary = titleSource != Self.userSource
                 ? NoteText.summary(document)
                 : NoteText.summarize(NoteText.lines(plainText))
         }
@@ -268,6 +284,7 @@ struct NoteListResponse: Decodable, Sendable {
 struct CreateNoteRequest: Encodable, Sendable {
     let title: String?
     let document: String
+    var capture: String? = nil
     let clientTime: Date
     let source: String
     let clientRequestID: String

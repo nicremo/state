@@ -12,7 +12,49 @@ actor SyncEngine {
     func sync() async throws {
         try await pushPendingMutations()
         try await pushDirtyNotes()
+        try await pushNoteMedia()
         try await pullChanges()
+    }
+
+    /// Uploads photos and recordings of notes the server already knows, then
+    /// asks for processing once a note's files are all in. A file the server
+    /// refuses for good is marked and skipped, like a rejected note.
+    private func pushNoteMedia() async throws {
+        for upload in try await database.readyNoteUploads() {
+            guard let data = NoteMediaFiles.pendingData(upload.fileName) else {
+                try await database.markNoteUploadFailed(id: upload.id, message: String(localized: "The file is missing on this device."))
+                continue
+            }
+            do {
+                let note = try await api.uploadNoteAttachment(noteID: upload.noteID, upload: upload, data: data)
+                try await database.applyServer(note: note)
+                NoteMediaFiles.keepUploaded(upload)
+                try await database.markNoteUploadDone(id: upload.id)
+            } catch let StateAPIError.server(status, code) where (400..<500).contains(status) && status != 408 && status != 429 {
+                try await database.markNoteUploadFailed(id: upload.id, message: Self.uploadFailure(code: code))
+            } catch StateAPIError.notFound {
+                try await database.markNoteUploadFailed(id: upload.id, message: StateAPIError.notFound.localizedDescription)
+            }
+        }
+        for request in try await database.readyProcessRequests() {
+            do {
+                let note = try await api.requestNoteProcessing(noteID: request.noteID, requestID: request.requestID)
+                try await database.applyServer(note: note)
+                try await database.markProcessRequestSent(noteID: request.noteID, requestID: request.requestID)
+            } catch let StateAPIError.server(status, _) where (400..<500).contains(status) && status != 408 && status != 429 {
+                try await database.markProcessRequestSent(noteID: request.noteID, requestID: request.requestID)
+            } catch StateAPIError.notFound {
+                try await database.markProcessRequestSent(noteID: request.noteID, requestID: request.requestID)
+            }
+        }
+    }
+
+    private static func uploadFailure(code: String) -> String {
+        switch code {
+        case "invalid_input": String(localized: "The server did not accept this file.")
+        case "forbidden": String(localized: "This device may not add files.")
+        default: String(localized: "The upload failed.")
+        }
     }
 
     private func pushPendingMutations() async throws {
@@ -95,6 +137,7 @@ actor SyncEngine {
             let request = CreateNoteRequest(
                 title: note.titleSource == Note.userSource ? note.title : nil,
                 document: note.document,
+                capture: note.capture,
                 clientTime: note.updatedAt,
                 source: "ios",
                 clientRequestID: record.createRequestID ?? UUIDv7.generate().uuidString.lowercased()

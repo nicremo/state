@@ -51,7 +51,7 @@ struct StoredConflict: Identifiable, Sendable {
 }
 
 final class StateDatabase: Sendable {
-    private let pool: DatabasePool
+    let pool: DatabasePool
 
     init(path: String) throws {
         var configuration = Configuration()
@@ -195,6 +195,8 @@ final class StateDatabase: Sendable {
                 try database.execute(sql: "DELETE FROM pending_mutations")
                 try database.execute(sql: "DELETE FROM note_cache")
                 try database.execute(sql: "DELETE FROM note_alias")
+                try database.execute(sql: "DELETE FROM note_upload")
+                try database.execute(sql: "DELETE FROM note_process_request")
             }
         }
     }
@@ -590,7 +592,7 @@ final class StateDatabase: Sendable {
         return false
     }
 
-    private static func noteRecord(id: String, in database: Database) throws -> NoteRecord? {
+    static func noteRecord(id: String, in database: Database) throws -> NoteRecord? {
         let resolved = try String.fetchOne(database, sql: "SELECT server_id FROM note_alias WHERE provisional_id = ?", arguments: [id]) ?? id
         return try Row.fetchOne(database, sql: "SELECT * FROM note_cache WHERE id = ?", arguments: [resolved]).map(noteRecord(row:))
     }
@@ -615,7 +617,7 @@ final class StateDatabase: Sendable {
         )
     }
 
-    private static func write(_ record: NoteRecord, in database: Database) throws {
+    static func write(_ record: NoteRecord, in database: Database) throws {
         let json = try StateJSON.encoder.encode(record.note)
         let base = try record.base.map { try StateJSON.encoder.encode($0) }
         let latest = try record.latest.map { try StateJSON.encoder.encode($0) }
@@ -888,6 +890,30 @@ final class StateDatabase: Sendable {
         migrator.registerMigration("v6-note-conflict-origin") { database in
             try database.alter(table: "note_cache") { table in
                 table.add(column: "conflict_of", .text)
+            }
+        }
+        migrator.registerMigration("v7-note-media") { database in
+            // Photos and recordings wait here until their note exists on the
+            // server; the file itself lives in Application Support.
+            try database.create(table: "note_upload") { table in
+                table.column("id", .text).primaryKey()
+                table.column("note_id", .text).notNull()
+                table.column("ordinal", .integer).notNull()
+                table.column("kind", .text).notNull()
+                table.column("mime_type", .text).notNull()
+                table.column("file_name", .text).notNull()
+                table.column("sha256", .text).notNull()
+                table.column("byte_size", .integer).notNull()
+                table.column("duration_ms", .integer)
+                table.column("request_id", .text).notNull()
+                table.column("status", .text).notNull()
+                table.column("error", .text)
+                table.column("created_at", .datetime).notNull()
+            }
+            try database.create(table: "note_process_request") { table in
+                table.column("note_id", .text).primaryKey()
+                table.column("request_id", .text).notNull()
+                table.column("sent", .boolean).notNull().defaults(to: false)
             }
         }
         return migrator
