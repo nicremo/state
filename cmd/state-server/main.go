@@ -98,7 +98,16 @@ func runServe(args []string, stderr io.Writer, logger *slog.Logger) error {
 	defer stop()
 	go runPushScheduler(ctx, app.push, logger)
 	go runExecutionScheduler(ctx, app.state, logger)
-	go app.notesAI.Worker.Run(ctx)
+	// The worker must be done with the database before it is closed.
+	workerDone := make(chan struct{})
+	go func() {
+		app.notesAI.Worker.Run(ctx)
+		close(workerDone)
+	}()
+	defer func() {
+		stop()
+		<-workerDone
+	}()
 	serverError := make(chan error, 1)
 	go func() {
 		logger.Info("state-server listening", "address", *httpAddress, "version", version, "notes_ai_configured", app.notesAI.Gateway.Configured())
@@ -195,7 +204,8 @@ func newApplication(config applicationConfig) (*application, error) {
 	pushService := statepush.NewService(pushRepository, statepush.NewHTTPSender(nil))
 	// The OpenRouter key lives only on this server. Without the file the
 	// notes work as before and AI processing reports not_configured.
-	openRouterKey, err := notesai.LoadKey(environmentOrDefault("STATE_OPENROUTER_API_KEY_FILE", filepath.Join(secretDirectory, "openrouter.key")))
+	openRouterKeyPath := environmentOrDefault("STATE_OPENROUTER_API_KEY_FILE", filepath.Join(secretDirectory, "openrouter.key"))
+	openRouterKey, err := notesai.LoadKey(openRouterKeyPath)
 	if err != nil {
 		_ = pb.ResetBootstrapState()
 		return nil, err
@@ -210,7 +220,7 @@ func newApplication(config applicationConfig) (*application, error) {
 		state.WithRunNotifier(pushService.NotifyRunFinished),
 		state.WithNoteAI(gateway.Configured, gateway.MediaPolicy),
 	)
-	notesAI := &notesai.Runtime{Gateway: gateway, Store: mediaStore, Worker: notesai.NewWorker(stateService, gateway, mediaStore, slog.Default())}
+	notesAI := &notesai.Runtime{Gateway: gateway, Store: mediaStore, Worker: notesai.NewWorker(stateService, gateway, mediaStore, slog.Default()), KeyPath: openRouterKeyPath}
 	restHandler := api.NewHandler(api.Config{
 		Auth:    authManager,
 		State:   stateService,

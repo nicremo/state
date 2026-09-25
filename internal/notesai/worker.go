@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -333,6 +336,70 @@ type Runtime struct {
 	Gateway *Gateway
 	Store   *MediaStore
 	Worker  *Worker
+	// KeyPath is where the owner's OpenRouter key is kept on this server.
+	KeyPath string
+}
+
+var keyPattern = regexp.MustCompile(`^sk-or-[A-Za-z0-9_-]{20,200}$`)
+
+// ErrMalformedKey means the text does not look like an OpenRouter key.
+var ErrMalformedKey = errors.New("not an OpenRouter key")
+
+// SetKey checks a key with OpenRouter, stores it readable only by the server
+// user and uses it at once. The key is never returned or logged.
+func (runtime *Runtime) SetKey(ctx context.Context, key string) error {
+	key = strings.TrimSpace(key)
+	if !keyPattern.MatchString(key) || runtime.KeyPath == "" {
+		return ErrMalformedKey
+	}
+	verifyContext, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	if err := runtime.Gateway.Client().VerifyKey(verifyContext, key); err != nil {
+		return err
+	}
+	if err := writeSecret(runtime.KeyPath, key); err != nil {
+		return err
+	}
+	runtime.Gateway.Client().SetKey(key)
+	runtime.Gateway.Refresh(ctx)
+	return nil
+}
+
+// RemoveKey switches the AI off and deletes the stored key.
+func (runtime *Runtime) RemoveKey() error {
+	runtime.Gateway.Client().SetKey("")
+	if runtime.KeyPath == "" {
+		return nil
+	}
+	if err := os.Remove(runtime.KeyPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove OpenRouter key: %w", err)
+	}
+	return nil
+}
+
+// writeSecret replaces the file atomically with mode 0600 in a 0700 folder.
+func writeSecret(path string, value string) error {
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return fmt.Errorf("create secret directory: %w", err)
+	}
+	temporary, err := os.CreateTemp(directory, ".openrouter-*")
+	if err != nil {
+		return fmt.Errorf("create secret file: %w", err)
+	}
+	defer os.Remove(temporary.Name())
+	if err := temporary.Chmod(0o600); err != nil {
+		temporary.Close()
+		return fmt.Errorf("protect secret file: %w", err)
+	}
+	if _, err := temporary.WriteString(value + "\n"); err != nil {
+		temporary.Close()
+		return fmt.Errorf("write secret file: %w", err)
+	}
+	if err := temporary.Close(); err != nil {
+		return fmt.Errorf("close secret file: %w", err)
+	}
+	return os.Rename(temporary.Name(), path)
 }
 
 func (runtime *Runtime) Media() *MediaStore {

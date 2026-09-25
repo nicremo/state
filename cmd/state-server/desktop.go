@@ -135,7 +135,16 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 	}()
 	go runPushScheduler(ctx, app.push, logger)
 	go runExecutionScheduler(ctx, app.state, logger)
-	go app.notesAI.Worker.Run(ctx)
+	// The worker must be done with the database before it is closed.
+	workerDone := make(chan struct{})
+	go func() {
+		app.notesAI.Worker.Run(ctx)
+		close(workerDone)
+	}()
+	defer func() {
+		cancel()
+		<-workerDone
+	}()
 	requests := make(chan desktopRequest)
 	go func() {
 		defer cancel() // A closed parent pipe also stops the child after an app crash.

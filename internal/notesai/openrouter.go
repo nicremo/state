@@ -13,6 +13,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -27,8 +28,10 @@ var ErrNotConfigured = errors.New("openrouter key not configured")
 // server, never appears in an error and never reaches the audit log.
 type Client struct {
 	baseURL string
-	key     string
 	http    *http.Client
+
+	mu  sync.RWMutex
+	key string
 }
 
 func NewClient(baseURL string, key string, httpClient *http.Client) *Client {
@@ -43,7 +46,36 @@ func NewClient(baseURL string, key string, httpClient *http.Client) *Client {
 
 // Configured reports whether a key is present.
 func (client *Client) Configured() bool {
-	return client != nil && client.key != ""
+	return client != nil && client.apiKey() != ""
+}
+
+func (client *Client) apiKey() string {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+	return client.key
+}
+
+// SetKey swaps the key at runtime, for example after the owner set it in
+// the app. An empty key switches the AI off.
+func (client *Client) SetKey(key string) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.key = strings.TrimSpace(key)
+}
+
+// ErrInvalidKey means OpenRouter does not accept the key.
+var ErrInvalidKey = errors.New("OpenRouter does not accept this key")
+
+// VerifyKey asks OpenRouter whether a key is valid before it is stored.
+func (client *Client) VerifyKey(ctx context.Context, key string) error {
+	probe := &Client{baseURL: client.baseURL, http: client.http, key: strings.TrimSpace(key)}
+	var info map[string]any
+	err := probe.do(ctx, http.MethodGet, "/key", nil, &info, true)
+	var providerError *ProviderError
+	if errors.As(err, &providerError) && (providerError.Status == http.StatusUnauthorized || providerError.Status == http.StatusForbidden) {
+		return ErrInvalidKey
+	}
+	return err
 }
 
 // LoadKey reads the key file. A missing file is not an error: the server
@@ -293,8 +325,8 @@ func (client *Client) do(ctx context.Context, method string, path string, body a
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Title", "State")
-	if client.key != "" && (authenticated || strings.HasPrefix(path, "/models")) {
-		request.Header.Set("Authorization", "Bearer "+client.key)
+	if key := client.apiKey(); key != "" && (authenticated || strings.HasPrefix(path, "/models")) {
+		request.Header.Set("Authorization", "Bearer "+key)
 	}
 	response, err := client.http.Do(request)
 	if err != nil {
@@ -361,8 +393,8 @@ var openRouterKeyPattern = regexp.MustCompile(`sk-or-[A-Za-z0-9_-]+`)
 // shaped like an OpenRouter key. It runs before any shortening, so no
 // part of a key survives a cut.
 func (client *Client) redact(message string) string {
-	if client.key != "" {
-		message = strings.ReplaceAll(message, client.key, "[redacted]")
+	if key := client.apiKey(); key != "" {
+		message = strings.ReplaceAll(message, key, "[redacted]")
 	}
 	return openRouterKeyPattern.ReplaceAllString(message, "[redacted]")
 }

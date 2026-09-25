@@ -199,6 +199,13 @@ func (server *Server) serve(writer http.ResponseWriter, request *http.Request) {
 		}
 		server.mu.Unlock()
 		write(writer, Reply{Status: http.StatusOK, Body: map[string]any{"data": models}})
+	case request.Method == http.MethodGet && request.URL.Path == "/api/v1/key":
+		// Keys containing "bad" are refused, as OpenRouter refuses unknown keys.
+		if !authorized(request) || strings.Contains(request.Header.Get("Authorization"), "bad") {
+			write(writer, Error(http.StatusUnauthorized, "User not found."))
+			return
+		}
+		write(writer, Reply{Status: http.StatusOK, Body: map[string]any{"data": map[string]any{"label": "fake", "limit": nil}}})
 	case request.Method == http.MethodPost && request.URL.Path == "/api/v1/chat/completions":
 		if !authorized(request) {
 			write(writer, Error(http.StatusUnauthorized, "No auth credentials found"))

@@ -380,11 +380,86 @@ struct NoteAISuggestionsView: View {
     }
 }
 
+extension NoteAISettingsView {
+    /// The OpenRouter key: set here once, kept only on the owner's server.
+    @ViewBuilder
+    func keySection(_ settings: NotesAISettings) -> some View {
+        Section {
+            if settings.keyConfigured && !replacesKey {
+                LabeledContent(String(localized: "OpenRouter key")) {
+                    Label(String(localized: "Set up"), systemImage: "checkmark.seal")
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityIdentifier("notes-ai-key-status")
+                Button(String(localized: "Replace key")) { replacesKey = true }
+                Button(String(localized: "Remove key"), role: .destructive) { confirmsRemoval = true }
+            } else {
+                SecureField(String(localized: "OpenRouter key (sk-or-...)"), text: $keyDraft)
+                    .textContentType(.password)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .accessibilityIdentifier("notes-ai-key-field")
+                Button {
+                    Task { await saveKey() }
+                } label: {
+                    if savesKey {
+                        ProgressView()
+                    } else {
+                        Text("Check and save key")
+                    }
+                }
+                .disabled(keyDraft.trimmingCharacters(in: .whitespaces).isEmpty || savesKey)
+                .accessibilityIdentifier("notes-ai-key-save")
+                if settings.keyConfigured {
+                    Button(String(localized: "Cancel")) {
+                        keyDraft = ""
+                        replacesKey = false
+                    }
+                }
+            }
+            if let keyMessage {
+                Text(keyMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
+        } header: {
+            Text("OpenRouter key")
+        } footer: {
+            Text("Only you and your own devices can set the key. The server checks it with OpenRouter and keeps it; this device and your agents never see it again. Set a spending limit for the key on openrouter.ai.")
+        }
+    }
+
+    private func saveKey() async {
+        savesKey = true
+        keyMessage = nil
+        let outcome = await model.setNotesAIKey(keyDraft)
+        savesKey = false
+        switch outcome {
+        case .saved:
+            keyDraft = ""
+            replacesKey = false
+        case .invalid:
+            keyMessage = String(localized: "OpenRouter did not accept this key.")
+        case .malformed:
+            keyMessage = String(localized: "This is not an OpenRouter key. It starts with sk-or-.")
+        case .failed:
+            keyMessage = String(localized: "The key could not be saved. Check the connection to your server.")
+        }
+    }
+}
+
 /// Settings for the notes AI: consent first, then the monthly limit, what
 /// was spent, and which models run.
 struct NoteAISettingsView: View {
     @Bindable var model: AppModel
     @State private var limit: Double = 10
+    @State private var keyDraft = ""
+    @State private var replacesKey = false
+    @State private var savesKey = false
+    @State private var keyMessage: String?
+    @State private var confirmsRemoval = false
 
     var body: some View {
         Form {
@@ -421,14 +496,12 @@ struct NoteAISettingsView: View {
                     Text("Once the limit is reached, notes stay usable and wait for next month or a higher limit.")
                 }
 
+                keySection(settings)
+
                 Section(String(localized: "Models")) {
                     LabeledContent(String(localized: "Notes agent"), value: settings.agentModel)
                     LabeledContent(String(localized: "Transcription"), value: settings.transcriptionModel)
                     LabeledContent(String(localized: "Photos per note"), value: "\(model.noteCapabilities.photoLimit)")
-                    LabeledContent(String(localized: "OpenRouter key on the server")) {
-                        Text(settings.keyConfigured ? String(localized: "Set up") : String(localized: "Missing"))
-                            .foregroundStyle(settings.keyConfigured ? Color.secondary : Color.orange)
-                    }
                 }
             } else {
                 ProgressView()
@@ -436,6 +509,14 @@ struct NoteAISettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(String(localized: "Remove the OpenRouter key?"), isPresented: $confirmsRemoval) {
+            Button(String(localized: "Remove key"), role: .destructive) {
+                Task { await model.removeNotesAIKey() }
+            }
+            Button(String(localized: "Cancel"), role: .cancel) {}
+        } message: {
+            Text("Notes stay usable; nothing is processed until a key is set again.")
+        }
         .navigationTitle(String(localized: "Notes AI"))
         .stateBackground()
         .task {
