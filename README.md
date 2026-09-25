@@ -167,6 +167,16 @@ state-runner run
 
 The runner polls outbound-only, validates the hash-pinned task contract against its local configuration, writes the contract and status under the project's `.state/runs/` directory, launches the matching local harness adapter (`codex`, `claude-code`, `opencode`, `pi-agent`, `deepseek-harness`) and reports a redacted result. `pi-agent` runs `pi --print` and `deepseek-harness` runs `dsh --profile headless`, each with the prompt as a single argument. The owner watches the lifecycle in the iOS app, approves sensitive capabilities per run, and receives an encrypted push when a run finishes. Unattended policies are limited to low-risk capabilities; everything else stays supervised.
 
+### Agent sessions from the app
+
+A reminder can also be handed to an agent right away: **Let an agent work on it** in the app starts a session on the owner's Mac. The runner starts Claude Code (`claude -p`), Codex (`codex exec`) or Kimi Code (`kimi -p`) in the project folder without a terminal; the agent's final message appears in the app's **Agent** tab, and the owner answers there, which starts the next round with the CLI's own resume flag. **Open on the Mac** opens the same session in a terminal. What an agent may do comes from the policy (read, edit, or run commands); the owner's devices dispatch within it. The owner sets up a project and its policy on the server:
+
+```bash
+state-server agent-project --data "$DATA" --name karla-report --adapter claude-code --rights full --runner "MacBook Pro"
+```
+
+The project name is the folder name under the runner's `work_root`, and the runner's `runner.json` lists the project ID it prints.
+
 Read [`docs/agent-execution-implementation-plan.md`](docs/agent-execution-implementation-plan.md) for the full design and [`docs/agent-execution-extension.md`](docs/agent-execution-extension.md) for the originating concept.
 
 ## Deployment
