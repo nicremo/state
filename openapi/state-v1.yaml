@@ -2141,12 +2141,12 @@ components:
           maxLength: 2000
         result_artifact_ref:
           type: [string, "null"]
+          description: Opaque local path label; artifact content never leaves the workstation.
         session_id: { type: string, description: The agent session this run is a round of. }
         turn_kind: { type: string, enum: [message, open_terminal] }
         prompt: { type: string, description: The owner's message for this round. }
         result_text: { type: string, maxLength: 20000, description: The agent's final message, redacted. }
         harness_session_id: { type: string, description: The agent CLI's own session ID. }
-          description: Opaque local path label; artifact content never leaves the workstation.
         failure_code: { type: [string, "null"], enum: [evidence_mismatch, approval_declined, null] }
         approval_capability:
           oneOf:
