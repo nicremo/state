@@ -201,6 +201,11 @@ type TaskContract struct {
 	AllowedCapabilities []string `json:"allowed_capabilities"`
 	TimeoutMinutes      int      `json:"timeout_minutes"`
 	CompletionRule      string   `json:"completion_rule,omitempty"`
+	// Session fields are empty for scheduled and one-shot runs; omitempty
+	// keeps the hash of contracts created before sessions existed.
+	SessionID       string `json:"session_id,omitempty"`
+	TurnKind        string `json:"turn_kind,omitempty"`
+	ResumeSessionID string `json:"resume_session_id,omitempty"`
 }
 
 // ComputeHash returns the SHA-256 over the canonical JSON encoding of the
@@ -238,11 +243,19 @@ type AgentRun struct {
 	ResultArtifactRef  string         `json:"result_artifact_ref,omitempty"`
 	FailureCode        string         `json:"failure_code,omitempty"`
 	ApprovalCapability string         `json:"approval_capability,omitempty"`
-	CreatedByActor     Actor          `json:"created_by_actor"`
-	CompletedByActor   *Actor         `json:"completed_by_actor,omitempty"`
-	Revision           int64          `json:"revision"`
-	CreatedAt          time.Time      `json:"created_at"`
-	UpdatedAt          time.Time      `json:"updated_at"`
+	// A run that belongs to an agent session is one round of it: Prompt is
+	// what the owner wrote, ResultText the agent's final message and
+	// HarnessSessionID the agent CLI's own session, used to resume it.
+	SessionID        string    `json:"session_id,omitempty"`
+	TurnKind         TurnKind  `json:"turn_kind,omitempty"`
+	Prompt           string    `json:"prompt,omitempty"`
+	ResultText       string    `json:"result_text,omitempty"`
+	HarnessSessionID string    `json:"harness_session_id,omitempty"`
+	CreatedByActor   Actor     `json:"created_by_actor"`
+	CompletedByActor *Actor    `json:"completed_by_actor,omitempty"`
+	Revision         int64     `json:"revision"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // MutationMetadata carries the idempotency and provenance fields of a
@@ -363,7 +376,11 @@ type CompleteRunInput struct {
 	ResultArtifactRef string         `json:"result_artifact_ref,omitempty"`
 	// FailureCode is optional and caller-supplied; only
 	// RunFailureAdapterUnavailable is accepted from runners.
-	FailureCode      string `json:"failure_code,omitempty"`
+	FailureCode string `json:"failure_code,omitempty"`
+	// ResultText is the agent's final message and HarnessSessionID the agent
+	// CLI's session, both optional.
+	ResultText       string `json:"result_text,omitempty"`
+	HarnessSessionID string `json:"harness_session_id,omitempty"`
 	ExitCode         int    `json:"exit_code"`
 	ExpectedRevision int64  `json:"expected_revision"`
 	MutationMetadata
@@ -391,6 +408,7 @@ type CancelRunInput struct {
 
 type AgentRunListFilter struct {
 	ReminderID string
+	SessionID  string
 	Status     *AgentRunStatus
 	RunnerID   string
 	Limit      int

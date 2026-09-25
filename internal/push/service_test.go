@@ -286,6 +286,43 @@ func TestNotifyRunFinishedDeliversToAllDeviceRoutes(t *testing.T) {
 	}
 }
 
+// A round of an agent session names its session, so a tap on the push opens
+// the conversation in the app.
+func TestNotifyRunFinishedNamesTheSession(t *testing.T) {
+	t.Parallel()
+
+	app, _, owner := newPushTestApplication(t)
+	repository, err := NewRepository(app, bytes.Repeat([]byte{0x64}, 32))
+	if err != nil {
+		t.Fatalf("NewRepository() error = %v", err)
+	}
+	registerRoute(t, repository, owner.Actor, "0198a08d-1ca1-7122-bf7d-c6f428ad7399", "owner-route-secret", newRouteKey(t))
+	recorder := &recordingSender{}
+	service := NewService(repository, recorder)
+	finishedAt := time.Date(2026, time.September, 25, 17, 0, 0, 0, time.UTC)
+	run := state.AgentRun{
+		ID:         "0198a08d-1ca1-7c44-8a5b-4e2f6a91b209",
+		ReminderID: "0198a08d-1ca1-75b1-9c42-7d0e5f31a8b2",
+		SessionID:  "0198a08d-1ca1-75b1-9c42-7d0e5f31a8ff",
+		Status:     state.AgentRunStatusSucceeded,
+		FinishedAt: &finishedAt,
+		ResultText: "must not leak either",
+	}
+	if err := service.NotifyRunFinished(context.Background(), run, "Karla-Monatsreport"); err != nil {
+		t.Fatalf("NotifyRunFinished() error = %v", err)
+	}
+	if len(recorder.deliveries) != 1 {
+		t.Fatalf("deliveries = %#v", recorder.deliveries)
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(recorder.deliveries[0].plaintext, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["session_id"] != run.SessionID || strings.Contains(string(recorder.deliveries[0].plaintext), "must not leak") {
+		t.Fatalf("payload = %s", recorder.deliveries[0].plaintext)
+	}
+}
+
 func TestNotifyRunFinishedStatusFilter(t *testing.T) {
 	t.Parallel()
 

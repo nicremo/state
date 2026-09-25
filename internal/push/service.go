@@ -106,6 +106,9 @@ func (service *Service) NotifyRunFinished(ctx context.Context, run state.AgentRu
 	if run.OccurrenceID != nil {
 		payload["occurrence_id"] = *run.OccurrenceID
 	}
+	if run.SessionID != "" {
+		payload["session_id"] = run.SessionID
+	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return err

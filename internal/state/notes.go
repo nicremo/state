@@ -233,7 +233,8 @@ func VisibleChanges(viewer Actor, changes []Change) []Change {
 	}
 	visible := make([]Change, 0, len(changes))
 	for _, change := range changes {
-		if change.Event.NoteID == "" && !strings.HasPrefix(string(change.Event.Action), "notes_ai.") {
+		action := string(change.Event.Action)
+		if change.Event.NoteID == "" && !strings.HasPrefix(action, "notes_ai.") && !strings.HasPrefix(action, "agent_session.") {
 			visible = append(visible, change)
 		}
 	}

@@ -716,6 +716,9 @@ func (service *Service) CompleteAgentRun(ctx context.Context, actor Actor, input
 	if input.Outcome != AgentRunStatusSucceeded && input.Outcome != AgentRunStatusFailed {
 		return AgentRun{}, ErrInvalidInput
 	}
+	if input.HarnessSessionID != "" && !ValidHarnessSessionID(input.HarnessSessionID) {
+		return AgentRun{}, ErrInvalidInput
+	}
 	run, err := service.repository.GetAgentRun(ctx, input.RunID)
 	if err != nil {
 		return AgentRun{}, err
@@ -756,6 +759,8 @@ func (service *Service) CompleteAgentRun(ctx context.Context, actor Actor, input
 	updated.LeaseExpiresAt = nil
 	updated.ResultSummary = redactSummary(input.ResultSummary)
 	updated.ResultArtifactRef = strings.TrimSpace(input.ResultArtifactRef)
+	updated.ResultText = redactResultText(input.ResultText)
+	updated.HarnessSessionID = input.HarnessSessionID
 	updated.FailureCode = failureCode
 	completedBy := actor
 	updated.CompletedByActor = &completedBy
@@ -770,7 +775,7 @@ func (service *Service) CompleteAgentRun(ctx context.Context, actor Actor, input
 	if err != nil {
 		return AgentRun{}, fmt.Errorf("generate audit event ID: %w", err)
 	}
-	event, err := service.buildRunEvent(eventID, updated, action, actor, now, input.ClientTime, input.Source, firstLine(updated.ResultSummary), &run, updated, []string{"completed_by", "failure_code", "finished_at", "lease_expires_at", "result_artifact_ref", "result_summary", "status"}, input.ClientRequestID)
+	event, err := service.buildRunEvent(eventID, updated, action, actor, now, input.ClientTime, input.Source, firstLine(updated.ResultSummary), &run, updated, []string{"completed_by", "failure_code", "finished_at", "harness_session_id", "lease_expires_at", "result_artifact_ref", "result_summary", "result_text", "status"}, input.ClientRequestID)
 	if err != nil {
 		return AgentRun{}, err
 	}
@@ -1007,6 +1012,10 @@ func (service *Service) notifyRunFinished(ctx context.Context, run AgentRun, pol
 	}
 	notify := (run.Status == AgentRunStatusSucceeded && policy.NotifyOnCompletion) ||
 		((run.Status == AgentRunStatusFailed || run.Status == AgentRunStatusCancelled) && policy.NotifyOnFailure)
+	// The owner waits for every round of a session, whatever the policy says.
+	if run.SessionID != "" && run.TurnKind != TurnKindOpenTerminal {
+		notify = run.Status == AgentRunStatusSucceeded || run.Status == AgentRunStatusFailed || run.Status == AgentRunStatusCancelled
+	}
 	if !notify {
 		return
 	}
