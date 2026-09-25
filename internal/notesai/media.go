@@ -61,40 +61,83 @@ func NewMediaStore(root string) (*MediaStore, error) {
 // Put stores the content if it is an allowed type, within maxBytes and
 // starts with that type's signature. The same content is stored once.
 func (store *MediaStore) Put(reader io.Reader, maxBytes int64, mime string) (StoredMedia, error) {
+	staged, err := store.Stage(reader, maxBytes, mime)
+	if err != nil {
+		return StoredMedia{}, err
+	}
+	if err := staged.Commit(); err != nil {
+		return StoredMedia{}, err
+	}
+	return staged.StoredMedia, nil
+}
+
+// StagedMedia is an upload that is checked but not kept yet. Commit keeps
+// it once the note accepted the attachment; Discard throws it away, so a
+// refused upload never occupies the disk.
+type StagedMedia struct {
+	StoredMedia
+	store *MediaStore
+	path  string
+}
+
+// Stage receives and checks an upload into a temporary file.
+func (store *MediaStore) Stage(reader io.Reader, maxBytes int64, mime string) (*StagedMedia, error) {
 	if !allowedMedia[mime] || maxBytes <= 0 {
-		return StoredMedia{}, ErrMediaRejected
+		return nil, ErrMediaRejected
 	}
 	temporary, err := os.CreateTemp(store.root, ".upload-*")
 	if err != nil {
-		return StoredMedia{}, fmt.Errorf("create upload file: %w", err)
+		return nil, fmt.Errorf("create upload file: %w", err)
 	}
-	defer os.Remove(temporary.Name())
-	defer temporary.Close()
+	keep := false
+	defer func() {
+		temporary.Close()
+		if !keep {
+			os.Remove(temporary.Name())
+		}
+	}()
 
 	hash := sha256.New()
 	head := &headBuffer{limit: 16}
 	written, err := io.Copy(io.MultiWriter(temporary, hash, head), io.LimitReader(reader, maxBytes+1))
 	if err != nil {
-		return StoredMedia{}, fmt.Errorf("store upload: %w", err)
+		return nil, fmt.Errorf("store upload: %w", err)
 	}
 	if written == 0 || written > maxBytes || !matchesSignature(mime, head.Bytes()) {
-		return StoredMedia{}, ErrMediaRejected
+		return nil, ErrMediaRejected
 	}
 	if err := temporary.Chmod(0o600); err != nil {
-		return StoredMedia{}, fmt.Errorf("protect upload: %w", err)
+		return nil, fmt.Errorf("protect upload: %w", err)
 	}
 	if err := temporary.Sync(); err != nil {
-		return StoredMedia{}, fmt.Errorf("flush upload: %w", err)
+		return nil, fmt.Errorf("flush upload: %w", err)
 	}
-	digest := hex.EncodeToString(hash.Sum(nil))
-	directory := filepath.Join(store.root, digest[:2])
+	keep = true
+	return &StagedMedia{
+		StoredMedia: StoredMedia{SHA256: hex.EncodeToString(hash.Sum(nil)), Size: written, Mime: mime},
+		store:       store,
+		path:        temporary.Name(),
+	}, nil
+}
+
+// Commit moves the upload to its content address. Content that is already
+// stored stays as it is.
+func (staged *StagedMedia) Commit() error {
+	directory := filepath.Join(staged.store.root, staged.SHA256[:2])
 	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return StoredMedia{}, fmt.Errorf("create media directory: %w", err)
+		staged.Discard()
+		return fmt.Errorf("create media directory: %w", err)
 	}
-	if err := os.Rename(temporary.Name(), filepath.Join(directory, digest)); err != nil {
-		return StoredMedia{}, fmt.Errorf("keep upload: %w", err)
+	if err := os.Rename(staged.path, filepath.Join(directory, staged.SHA256)); err != nil {
+		staged.Discard()
+		return fmt.Errorf("keep upload: %w", err)
 	}
-	return StoredMedia{SHA256: digest, Size: written, Mime: mime}, nil
+	return nil
+}
+
+// Discard removes an upload that was refused.
+func (staged *StagedMedia) Discard() {
+	_ = os.Remove(staged.path)
 }
 
 var digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -221,7 +222,9 @@ func (client *Client) Chat(ctx context.Context, request ChatRequest) (ChatRespon
 		return ChatResponse{}, err
 	}
 	if len(response.Choices) == 0 {
-		return ChatResponse{}, &ProviderError{Status: http.StatusBadGateway, Message: "no choices in model response", Retryable: true}
+		// The call is billed even without an answer; the usage goes back to
+		// the caller so the budget counts it.
+		return response, &ProviderError{Status: http.StatusBadGateway, Message: "no choices in model response", Retryable: true, Billed: true}
 	}
 	return response, nil
 }
@@ -266,6 +269,9 @@ type ProviderError struct {
 	Status    int
 	Message   string
 	Retryable bool
+	// Billed marks a call OpenRouter answered successfully but unusably:
+	// it may have cost money, so the budget must count it.
+	Billed bool
 }
 
 func (err *ProviderError) Error() string {
@@ -292,7 +298,7 @@ func (client *Client) do(ctx context.Context, method string, path string, body a
 	}
 	response, err := client.http.Do(request)
 	if err != nil {
-		return &ProviderError{Status: 0, Message: client.redact(safeTransportMessage(err)), Retryable: true}
+		return &ProviderError{Status: 0, Message: safeTransportMessage(err), Retryable: true}
 	}
 	defer response.Body.Close()
 	payload, err := io.ReadAll(io.LimitReader(response.Body, 16<<20))
@@ -302,12 +308,12 @@ func (client *Client) do(ctx context.Context, method string, path string, body a
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return &ProviderError{
 			Status:    response.StatusCode,
-			Message:   client.redact(providerMessage(payload, response.Status)),
+			Message:   shorten(client.redact(providerMessage(payload, response.Status))),
 			Retryable: response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500 || response.StatusCode == http.StatusRequestTimeout,
 		}
 	}
 	if err := json.Unmarshal(payload, output); err != nil {
-		return &ProviderError{Status: response.StatusCode, Message: "response was not valid JSON", Retryable: true}
+		return &ProviderError{Status: response.StatusCode, Message: "response was not valid JSON", Retryable: true, Billed: true}
 	}
 	return nil
 }
@@ -323,9 +329,14 @@ func providerMessage(payload []byte, fallback string) string {
 	if json.Unmarshal(payload, &envelope) == nil && envelope.Error.Message != "" {
 		message = envelope.Error.Message
 	}
-	message = strings.Join(strings.Fields(message), " ")
-	if len(message) > 200 {
-		message = message[:200]
+	return strings.Join(strings.Fields(message), " ")
+}
+
+// shorten cuts a message that is already redacted, on a rune boundary.
+func shorten(message string) string {
+	runes := []rune(message)
+	if len(runes) > 200 {
+		return string(runes[:200])
 	}
 	return message
 }
@@ -344,10 +355,14 @@ func safeTransportMessage(err error) string {
 	return "connection failed"
 }
 
-// redact removes the key should a provider ever echo it back.
+var openRouterKeyPattern = regexp.MustCompile(`sk-or-[A-Za-z0-9_-]+`)
+
+// redact removes the key should a provider ever echo it back, and anything
+// shaped like an OpenRouter key. It runs before any shortening, so no
+// part of a key survives a cut.
 func (client *Client) redact(message string) string {
-	if client.key == "" {
-		return message
+	if client.key != "" {
+		message = strings.ReplaceAll(message, client.key, "[redacted]")
 	}
-	return strings.ReplaceAll(message, client.key, "[redacted]")
+	return openRouterKeyPattern.ReplaceAllString(message, "[redacted]")
 }

@@ -63,7 +63,7 @@ func (handler *Handler) uploadNoteAttachment(writer http.ResponseWriter, request
 		return
 	}
 	defer request.Body.Close()
-	stored, err := handler.notesAI.Media().Put(http.MaxBytesReader(writer, request.Body, limit+1), limit, mediaType)
+	stored, err := handler.notesAI.Media().Stage(http.MaxBytesReader(writer, request.Body, limit+1), limit, mediaType)
 	if err != nil {
 		reason := "media_rejected"
 		var tooLarge *http.MaxBytesError
@@ -78,6 +78,7 @@ func (handler *Handler) uploadNoteAttachment(writer http.ResponseWriter, request
 		return
 	}
 	if stored.SHA256 != claimedHash {
+		stored.Discard()
 		writeError(writer, state.ErrInvalidInput, map[string]string{"reason": "hash_mismatch"})
 		return
 	}
@@ -91,6 +92,12 @@ func (handler *Handler) uploadNoteAttachment(writer http.ResponseWriter, request
 		Ordinal:         ordinal,
 		ClientRequestID: requestID,
 	}); err != nil {
+		// Refused uploads leave nothing behind on the disk.
+		stored.Discard()
+		writeError(writer, err, nil)
+		return
+	}
+	if err := stored.Commit(); err != nil {
 		writeError(writer, err, nil)
 		return
 	}

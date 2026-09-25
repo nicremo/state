@@ -126,8 +126,11 @@ func (worker *Worker) process(ctx context.Context, job state.NoteJob) error {
 	if err != nil {
 		return worker.fail(ctx, job, note.ID, settings, err)
 	}
-	if err := worker.service.ApplyNoteAgentOutcome(ctx, job, note.Revision, outcome); err != nil {
-		return err
+	if err := worker.service.ApplyNoteAgentOutcomeFrom(ctx, job, note.Note, outcome); err != nil {
+		// A result that cannot be stored must not leave the note "processing"
+		// forever, nor be paid for again after a restart.
+		worker.logger.Warn("notes AI result not stored", "note_id", note.ID, "error", err)
+		return worker.fail(ctx, job, note.ID, settings, permanent("The result of the notes AI could not be stored."))
 	}
 	return worker.service.FinishNoteJob(ctx, job, state.NoteJobDone, nil)
 }
@@ -171,8 +174,11 @@ func (worker *Worker) transcribe(ctx context.Context, note state.NoteView, setti
 		if attachment.Kind != state.NoteAttachmentAudio {
 			continue
 		}
-		if attachment.DerivedText != "" {
-			transcripts = append(transcripts, attachment.DerivedText)
+		if attachment.DerivedKind == "transcript" {
+			// Transcribed before, possibly to silence: never paid for twice.
+			if attachment.DerivedText != "" {
+				transcripts = append(transcripts, attachment.DerivedText)
+			}
 			continue
 		}
 		if !capabilities.Audio.Available {
@@ -191,10 +197,10 @@ func (worker *Worker) transcribe(ctx context.Context, note state.NoteView, setti
 			return nil, err
 		}
 		transcript, err := worker.gateway.Client().Transcribe(ctx, TranscribeRequest{Model: settings.TranscriptionModel, Audio: audio, Format: audioFormat(attachment.MimeType)})
-		if err != nil {
-			return nil, err
+		if spendErr := budget.Spend(ctx, billedCost(transcript.Usage.Cost, estimate, err)); spendErr != nil {
+			return nil, spendErr
 		}
-		if err := budget.Spend(ctx, transcript.Usage.Cost); err != nil {
+		if err != nil {
 			return nil, err
 		}
 		text := strings.TrimSpace(transcript.Text)
@@ -242,7 +248,7 @@ func (worker *Worker) fail(ctx context.Context, job state.NoteJob, noteID string
 			return err
 		}
 		return worker.service.FinishNoteJob(ctx, job, state.NoteJobDone, nil)
-	case errors.As(cause, &providerError) && providerError.Retryable && job.Attempts < len(worker.backoff)-1:
+	case errors.As(cause, &providerError) && providerError.Retryable && job.Attempts < len(worker.backoff):
 		retryAt := worker.now().Add(worker.backoff[job.Attempts])
 		if err := worker.service.SetNoteProcessing(ctx, noteID, state.NoteProcessing{Status: state.NoteProcessingQueued, Error: "OpenRouter is busy, State tries again shortly.", Model: settings.AgentModel}); err != nil {
 			return err

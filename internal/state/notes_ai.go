@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -111,6 +112,30 @@ type NoteProcessing struct {
 	Model     string    `json:"model,omitempty"`
 	RequestID string    `json:"request_id,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// RecentRequestIDs remembers earlier processing requests, so a late
+	// retry of an older request never starts a second paid job.
+	RecentRequestIDs []string `json:"recent_request_ids,omitempty"`
+}
+
+const maxRecentProcessingRequests = 20
+
+// carryRequests keeps the request history of the stored processing state.
+func (processing NoteProcessing) carryRequests(stored NoteProcessing) NoteProcessing {
+	processing.RequestID = stored.RequestID
+	processing.RecentRequestIDs = stored.RecentRequestIDs
+	return processing
+}
+
+func (processing NoteProcessing) knows(requestID string) bool {
+	if processing.RequestID == requestID {
+		return true
+	}
+	for _, known := range processing.RecentRequestIDs {
+		if known == requestID {
+			return true
+		}
+	}
+	return false
 }
 
 // NoteAIResult is the AI's view of a note: title and summary with their
@@ -375,7 +400,9 @@ func (service *Service) noteView(ctx context.Context, note Note) (NoteView, erro
 	if view.Processing.Status == "" {
 		view.Processing.Status = NoteProcessingIdle
 	}
-	if result := aiState.Result; result != nil {
+	// An AI title and summary belong to the text they were made from; after
+	// an edit the derived ones show until the next pass.
+	if result := aiState.Result; result != nil && result.SourceHash == plainTextHash(note.PlainText) {
 		if note.TitleSource == NoteFieldSourceDerived && result.Title != "" {
 			view.Title = result.Title
 			view.TitleSource = NoteFieldSourceAI
@@ -528,7 +555,7 @@ func (service *Service) RequestNoteProcessing(ctx context.Context, actor Actor, 
 	if err != nil {
 		return NoteProcessing{}, err
 	}
-	if aiState.Processing.RequestID == clientRequestID {
+	if aiState.Processing.knows(clientRequestID) {
 		return aiState.Processing, nil
 	}
 	settings, err := service.GetNoteAISettings(ctx)
@@ -536,7 +563,11 @@ func (service *Service) RequestNoteProcessing(ctx context.Context, actor Actor, 
 		return NoteProcessing{}, err
 	}
 	now := service.clock().UTC()
-	processing := NoteProcessing{Status: NoteProcessingQueued, RequestID: clientRequestID, UpdatedAt: now}
+	recent := append([]string{clientRequestID}, aiState.Processing.RecentRequestIDs...)
+	if len(recent) > maxRecentProcessingRequests {
+		recent = recent[:maxRecentProcessingRequests]
+	}
+	processing := NoteProcessing{Status: NoteProcessingQueued, RequestID: clientRequestID, RecentRequestIDs: recent, UpdatedAt: now}
 	switch {
 	case !service.aiAvailable():
 		processing.Status = NoteProcessingNotConfigured
@@ -616,7 +647,7 @@ func (service *Service) SetNoteProcessing(ctx context.Context, noteID string, pr
 	if err != nil {
 		return err
 	}
-	processing.RequestID = aiState.Processing.RequestID
+	processing = processing.carryRequests(aiState.Processing)
 	processing.UpdatedAt = service.clock().UTC()
 	processing.Error = truncateRunes(singleLine(processing.Error), 280)
 	return service.saveAIChange(ctx, NotesAgentActor(), note, AuditActionNoteProcessing, NoteAIChange{Processing: &processing}, map[string]any{"status": processing.Status, "error": processing.Error, "model": processing.Model}, "")
@@ -659,11 +690,28 @@ func attachmentTextDigest(texts map[string]NoteAttachmentText) map[string]any {
 	return digest
 }
 
-// ApplyNoteAgentOutcome stores what a job produced. startRevision is the note
-// revision the job read; the empty document of a photo or voice note is only
-// filled if nobody changed the note since.
+// ApplyNoteAgentOutcome stores what a job produced for the note at
+// startRevision, when the caller knows only that revision.
 func (service *Service) ApplyNoteAgentOutcome(ctx context.Context, job NoteJob, startRevision int64, outcome NoteAgentOutcome) error {
+	current, err := service.repository.GetNote(ctx, job.NoteID)
+	if err != nil {
+		return err
+	}
+	start := Note{ID: current.ID, Revision: startRevision}
+	if current.Revision == startRevision {
+		start = current
+	}
+	return service.ApplyNoteAgentOutcomeFrom(ctx, job, start, outcome)
+}
+
+// ApplyNoteAgentOutcomeFrom stores what a job produced from the note as the
+// job read it. The empty document of a photo or voice note is only filled if
+// nobody changed the note since, and the result is bound to the text it was
+// made from: an AI title shows only while the note still has that text.
+func (service *Service) ApplyNoteAgentOutcomeFrom(ctx context.Context, job NoteJob, start Note, outcome NoteAgentOutcome) error {
 	agent := NotesAgentActor()
+	startRevision := start.Revision
+	sourceText := start.PlainText
 	note, err := service.repository.GetNote(ctx, job.NoteID)
 	if err != nil {
 		return err
@@ -686,8 +734,13 @@ func (service *Service) ApplyNoteAgentOutcome(ctx context.Context, job NoteJob, 
 			switch {
 			case err == nil:
 				note = updated
-			case err == ErrRevisionConflict:
+				// The result describes the document it just wrote.
+				sourceText = updated.PlainText
+			case errors.Is(err, ErrRevisionConflict):
 				proposedDocument = document
+			case errors.Is(err, ErrInvalidInput):
+				// A body the note rules refuse (only markers or control
+				// characters) is dropped; the title and summary still count.
 			default:
 				return err
 			}
@@ -705,7 +758,7 @@ func (service *Service) ApplyNoteAgentOutcome(ctx context.Context, job NoteJob, 
 		Title:            truncateRunes(singleLine(outcome.Title), MaxNoteTitleRunes),
 		Summary:          truncateRunes(singleLine(outcome.Summary), MaxNoteSummaryRunes),
 		Model:            singleLine(outcome.Model),
-		SourceHash:       plainTextHash(note.PlainText),
+		SourceHash:       plainTextHash(sourceText),
 		ProposedDocument: proposedDocument,
 		NeedsReview:      outcome.NeedsReview,
 		UpdatedAt:        now,
@@ -722,7 +775,7 @@ func (service *Service) ApplyNoteAgentOutcome(ctx context.Context, job NoteJob, 
 	if outcome.NeedsReview {
 		status = NoteProcessingNeedsReview
 	}
-	processing := NoteProcessing{Status: status, Model: result.Model, RequestID: aiState.Processing.RequestID, UpdatedAt: now}
+	processing := NoteProcessing{Status: status, Model: result.Model, UpdatedAt: now}.carryRequests(aiState.Processing)
 	change := NoteAIChange{Processing: &processing, Result: &result, AddRelations: relations, AddProposals: proposals}
 	after := map[string]any{
 		"title":       result.Title,

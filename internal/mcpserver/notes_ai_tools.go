@@ -80,7 +80,7 @@ func (server *server) addNoteAttachment(ctx context.Context, request *mcp.CallTo
 		kind = state.NoteAttachmentAudio
 		limit = server.state.NoteMediaPolicy().MaxAudioBytes
 	}
-	stored, err := server.notesAI.Media().Put(bytes.NewReader(content), min(limit, maxMCPAttachmentBytes), input.MimeType)
+	stored, err := server.notesAI.Media().Stage(bytes.NewReader(content), min(limit, maxMCPAttachmentBytes), input.MimeType)
 	if err != nil {
 		return nil, nil, state.ErrInvalidInput
 	}
@@ -95,6 +95,10 @@ func (server *server) addNoteAttachment(ctx context.Context, request *mcp.CallTo
 		ClientRequestID: input.ClientRequestID,
 	})
 	if err != nil {
+		stored.Discard()
+		return nil, nil, err
+	}
+	if err := stored.Commit(); err != nil {
 		return nil, nil, err
 	}
 	server.notifySync(ctx, actor.ID)

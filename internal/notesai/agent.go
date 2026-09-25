@@ -107,14 +107,15 @@ func (agent *Agent) Run(ctx context.Context, input AgentInput) (state.NoteAgentO
 		if round == maxAgentRounds-1 {
 			request.ToolChoice = map[string]any{"type": "function", "function": map[string]string{"name": "submit_result"}}
 		}
-		if err := agent.budget.Allow(ctx, agent.estimate(messages)); err != nil {
+		estimate := agent.estimate(messages)
+		if err := agent.budget.Allow(ctx, estimate); err != nil {
 			return state.NoteAgentOutcome{}, err
 		}
 		response, err := agent.client.Chat(ctx, request)
-		if err != nil {
-			return state.NoteAgentOutcome{}, err
+		if spendErr := agent.budget.Spend(ctx, billedCost(response.Usage.Cost, estimate, err)); spendErr != nil {
+			return state.NoteAgentOutcome{}, spendErr
 		}
-		if err := agent.budget.Spend(ctx, response.Usage.Cost); err != nil {
+		if err != nil {
 			return state.NoteAgentOutcome{}, err
 		}
 		message := response.Choices[0].Message
@@ -139,6 +140,19 @@ func (agent *Agent) Run(ctx context.Context, input AgentInput) (state.NoteAgentO
 		}
 	}
 	return state.NoteAgentOutcome{}, ErrNoResult
+}
+
+// billedCost is what a call counts against the budget: the cost OpenRouter
+// reported, or the estimate for a call that was answered but unreadable.
+func billedCost(reported float64, estimate float64, err error) float64 {
+	if reported > 0 {
+		return reported
+	}
+	var providerError *ProviderError
+	if errors.As(err, &providerError) && providerError.Billed {
+		return estimate
+	}
+	return 0
 }
 
 // estimate is a cautious price for the next call: every character of the
