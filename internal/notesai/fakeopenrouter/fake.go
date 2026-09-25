@@ -254,9 +254,12 @@ func (server *Server) serve(writer http.ResponseWriter, request *http.Request) {
 		verbose := bytes.Contains(body, []byte(`"verbose_json"`))
 		write(writer, server.next(&server.transcribeReplies, func() Reply {
 			if verbose {
-				return TranscriptWithSegments("Transkript aus dem Fake. Zweiter Satz aus dem Fake.", []Segment{
-					{Start: 0, End: 2.5, Text: " Transkript aus dem Fake."},
-					{Start: 2.5, End: 5, Text: " Zweiter Satz aus dem Fake."},
+				// The mishearings from the owner's first voice note, so the
+				// dictionary shows in end-to-end runs.
+				return TranscriptWithSegments("Heute war ziemlich nervig. Ich habe meine Cloud.md angepasst. Die Rechnung liegt in ZEVDISK.", []Segment{
+					{Start: 0, End: 2, Text: " Heute war ziemlich nervig."},
+					{Start: 2, End: 4.5, Text: " Ich habe meine Cloud.md angepasst."},
+					{Start: 4.5, End: 7, Text: " Die Rechnung liegt in ZEVDISK."},
 				}, 0.0004)
 			}
 			return Transcript("Transkript aus dem Fake", 0.0004)

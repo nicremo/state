@@ -108,6 +108,10 @@ type submittedResult struct {
 		Index int    `json:"index"`
 		Text  string `json:"text"`
 	} `json:"image_texts"`
+	TranscriptFixes []struct {
+		Heard string `json:"heard"`
+		Meant string `json:"meant"`
+	} `json:"transcript_fixes"`
 }
 
 // Run processes one note and returns what the model produced.
@@ -267,14 +271,17 @@ func (run *agentRun) userContent(ctx context.Context) []ContentPart {
 }
 
 // writeDictionary adds the owner's spelling help: the ambiguous corrections
-// first, since only the model can decide them, then the words, together at
-// most maxDictionaryPrompt entries.
+// first, since only the model can decide them, then the others, whose
+// variants only the model recognises, then the words, together at most
+// maxDictionaryPrompt entries.
 func writeDictionary(builder *strings.Builder, dictionary state.NotesDictionary) {
 	budget := maxDictionaryPrompt
 	corrections := make([]state.DictionaryCorrection, 0)
-	for _, correction := range dictionary.Corrections {
-		if correction.Mode == state.DictionaryModeContext && len(corrections) < budget {
-			corrections = append(corrections, correction)
+	for _, mode := range []state.DictionaryMode{state.DictionaryModeContext, state.DictionaryModeAlways} {
+		for _, correction := range dictionary.Corrections {
+			if correction.Mode == mode && len(corrections) < budget {
+				corrections = append(corrections, correction)
+			}
 		}
 	}
 	budget -= len(corrections)
@@ -290,7 +297,7 @@ func writeDictionary(builder *strings.Builder, dictionary state.NotesDictionary)
 		fmt.Fprintf(builder, "\nOwner's dictionary. Spell these names and terms exactly like this: %s.\n", strings.Join(quoted, ", "))
 	}
 	if len(corrections) > 0 {
-		builder.WriteString("\nSpeech recognition often mishears these words. Correct them in your title, summary and document only where the context shows the owner meant the other word:\n")
+		builder.WriteString("\nSpeech recognition often mishears these words, and it also produces similar-sounding variants of them (other spellings, hyphens, spaces). Correct them in your title, summary and document only where the context shows the owner meant the other word, and list each misheard word of the transcript in transcript_fixes:\n")
 		for _, correction := range corrections {
 			fmt.Fprintf(builder, "- %q may mean %q\n", correction.From, correction.To)
 		}
@@ -493,6 +500,7 @@ func (run *agentRun) outcome() state.NoteAgentOutcome {
 		Relations:    run.relations,
 		Proposals:    run.proposals,
 	}
+	run.applyTranscriptFixes(&outcome)
 	for _, imageText := range result.ImageTexts {
 		index := imageText.Index - 1
 		if index < 0 || index >= len(run.input.Images) || strings.TrimSpace(imageText.Text) == "" {
@@ -504,6 +512,58 @@ func (run *agentRun) outcome() state.NoteAgentOutcome {
 		outcome.AttachmentTexts[run.input.Images[index].AttachmentID] = state.NoteAttachmentText{Text: imageText.Text, Kind: "ocr", Model: run.agent.model}
 	}
 	return outcome
+}
+
+// applyTranscriptFixes corrects a voice note's transcripts with the words
+// the model found misheard. Only fixes to a spelling from the owner's
+// dictionary count, so the model cannot rewrite what was said; the raw
+// transcript stays as it was.
+func (run *agentRun) applyTranscriptFixes(outcome *state.NoteAgentOutcome) {
+	if run.input.Note.Capture != state.NoteCaptureAudio || len(run.result.TranscriptFixes) == 0 {
+		return
+	}
+	known := map[string]bool{}
+	for _, word := range run.input.Dictionary.Words {
+		known[word] = true
+	}
+	for _, correction := range run.input.Dictionary.Corrections {
+		known[correction.To] = true
+	}
+	fixes := make([]state.DictionaryCorrection, 0, len(run.result.TranscriptFixes))
+	for _, fix := range run.result.TranscriptFixes {
+		heard, meant := strings.TrimSpace(fix.Heard), strings.TrimSpace(fix.Meant)
+		if heard == "" || heard == meant || !known[meant] || utf8.RuneCountInString(heard) > 80 {
+			continue
+		}
+		fixes = append(fixes, state.DictionaryCorrection{From: heard, To: meant, Mode: state.DictionaryModeAlways})
+	}
+	if len(fixes) == 0 {
+		return
+	}
+	for _, attachment := range run.input.Note.Attachments {
+		if attachment.Kind != state.NoteAttachmentAudio || attachment.DerivedKind != "transcript" || attachment.DerivedText == "" {
+			continue
+		}
+		text := state.ApplyDictionary(attachment.DerivedText, fixes)
+		segments := make([]state.TranscriptSegment, len(attachment.Segments))
+		changed := text != attachment.DerivedText
+		for index, segment := range attachment.Segments {
+			segment.Text = state.ApplyDictionary(segment.Text, fixes)
+			changed = changed || segment.Text != attachment.Segments[index].Text
+			segments[index] = segment
+		}
+		if !changed {
+			continue
+		}
+		if outcome.AttachmentTexts == nil {
+			outcome.AttachmentTexts = map[string]state.NoteAttachmentText{}
+		}
+		raw := attachment.RawText
+		if raw == "" {
+			raw = attachment.DerivedText
+		}
+		outcome.AttachmentTexts[attachment.ID] = state.NoteAttachmentText{Text: text, Kind: "transcript", Model: attachment.DerivedModel, RawText: raw, Segments: segments}
+	}
 }
 
 // parseResult accepts a submit_result object sent as plain content,
@@ -611,7 +671,7 @@ var agentTools = []Tool{
 	{Type: "function", Function: ToolFunction{
 		Name:        "submit_result",
 		Description: "Submit the final result. Call exactly once, last.",
-		Parameters:  json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"},"summary":{"type":"string"},"document":{"type":"string","description":"Markdown body for photo and voice notes; empty for text notes"},"needs_review":{"type":"boolean"},"image_texts":{"type":"array","items":{"type":"object","properties":{"index":{"type":"integer"},"text":{"type":"string"}},"required":["index","text"]}}},"required":["title","summary"]}`),
+		Parameters:  json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"},"summary":{"type":"string"},"document":{"type":"string","description":"Markdown body for photo and voice notes; empty for text notes"},"needs_review":{"type":"boolean"},"image_texts":{"type":"array","items":{"type":"object","properties":{"index":{"type":"integer"},"text":{"type":"string"}},"required":["index","text"]}},"transcript_fixes":{"type":"array","description":"Voice notes only: words of the transcript speech recognition misheard, each with the spelling from the owner's dictionary it means","items":{"type":"object","properties":{"heard":{"type":"string"},"meant":{"type":"string"}},"required":["heard","meant"]}}},"required":["title","summary"]}`),
 	}},
 }
 

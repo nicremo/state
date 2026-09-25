@@ -148,6 +148,12 @@ func (worker *Worker) run(ctx context.Context, note state.NoteView, settings sta
 	if err != nil {
 		return state.NoteAgentOutcome{}, err
 	}
+	if len(transcripts) > 0 {
+		// The agent sees the stored transcripts, so its fixes apply to them.
+		if note, err = worker.service.GetNoteView(ctx, note.ID); err != nil {
+			return state.NoteAgentOutcome{}, err
+		}
+	}
 	images := make([]AgentImage, 0)
 	for _, attachment := range note.Attachments {
 		if attachment.Kind != state.NoteAttachmentImage {

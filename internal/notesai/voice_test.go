@@ -181,13 +181,12 @@ func TestAgentGetsContextCorrectionsAndWords(t *testing.T) {
 	h.fake.ScriptChat(submit("Node Server", "Node läuft.", "- Node läuft auf dem Server"))
 	h.process(t, note.ID)
 	chat := string(h.fake.Requests("/chat/completions")[0].Body)
-	for _, wanted := range []string{"Supabase", "Wispr Flow", `\"Note\" may mean \"Node\"`} {
+	// Always corrections reach the model too: speech recognition produces
+	// variants ("SafeDisk" for "ZEVDISK") that only the model can match.
+	for _, wanted := range []string{"Supabase", "Wispr Flow", `\"Note\" may mean \"Node\"`, `\"ZEVDISK\" may mean \"sevDesk\"`, "similar-sounding"} {
 		if !strings.Contains(chat, wanted) {
 			t.Fatalf("agent prompt lacks %s", wanted)
 		}
-	}
-	if strings.Contains(chat, "ZEVDISK") {
-		t.Fatal("always corrections are applied by the server and need not reach the model")
 	}
 	if !strings.Contains(chat, "never copy the transcript") {
 		t.Fatal("the system prompt does not forbid copying the transcript")
@@ -203,5 +202,54 @@ func TestPhotoNoteKeepsFaithfulProse(t *testing.T) {
 	view := h.process(t, note.ID)
 	if view.Processing.Status != state.NoteProcessingReady || !strings.Contains(view.Document, "Liebe Karla") || len(h.fake.Requests("/chat/completions")) != 1 {
 		t.Fatalf("photo note = %+v %q", view.Processing, view.Document)
+	}
+}
+
+func TestAgentFixesTranscriptVariantsFromTheDictionary(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, testKey)
+	h.consent(t, 10)
+	h.dictionary(t, []string{"Supabase"}, state.DictionaryCorrection{From: "ZEVDISK", To: "sevDesk", Mode: state.DictionaryModeAlways})
+	note := h.captureNote(t, state.NoteCaptureAudio, "audio", "audio/mp4", m4a)
+	raw := "Die Rechnung liegt in SafeDisk. Daten in Superbase."
+	h.fake.ScriptTranscription(fakeopenrouter.TranscriptWithSegments(raw, []fakeopenrouter.Segment{
+		{Start: 0, End: 3, Text: " Die Rechnung liegt in SafeDisk."},
+		{Start: 3, End: 5, Text: " Daten in Superbase."},
+	}, 0.0004))
+	h.fake.ScriptChat(fakeopenrouter.ToolCall("submit", "submit_result", map[string]any{
+		"title": "Rechnung in sevDesk", "summary": "Rechnung und Daten.", "document": "- Rechnung in sevDesk\n- Daten in Supabase",
+		"transcript_fixes": []map[string]any{
+			{"heard": "SafeDisk", "meant": "sevDesk"},
+			{"heard": "Superbase", "meant": "Supabase"},
+			{"heard": "Rechnung", "meant": "Quittung"},
+		},
+	}, 0.002))
+	view := h.process(t, note.ID)
+	recording := view.Attachments[0]
+	if recording.DerivedText != "Die Rechnung liegt in sevDesk. Daten in Supabase." {
+		t.Fatalf("transcript = %q", recording.DerivedText)
+	}
+	if recording.RawText != raw {
+		t.Fatalf("raw transcript changed: %q", recording.RawText)
+	}
+	if len(recording.Segments) != 2 || recording.Segments[0].Text != "Die Rechnung liegt in sevDesk." || recording.Segments[1].Text != "Daten in Supabase." {
+		t.Fatalf("segments = %+v", recording.Segments)
+	}
+}
+
+func TestPhotoNotesIgnoreTranscriptFixes(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, testKey)
+	h.consent(t, 10)
+	h.dictionary(t, []string{"Supabase"})
+	note := h.captureNote(t, state.NoteCaptureImage, "image", "image/jpeg", jpeg)
+	h.fake.ScriptChat(fakeopenrouter.ToolCall("submit", "submit_result", map[string]any{
+		"title": "Seite", "summary": "Eine Seite.", "document": "Superbase",
+		"image_texts":      []map[string]any{{"index": 1, "text": "Superbase"}},
+		"transcript_fixes": []map[string]any{{"heard": "Superbase", "meant": "Supabase"}},
+	}, 0.002))
+	view := h.process(t, note.ID)
+	if view.Attachments[0].DerivedText != "Superbase" {
+		t.Fatalf("photo text changed: %q", view.Attachments[0].DerivedText)
 	}
 }

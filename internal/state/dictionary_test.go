@@ -44,6 +44,9 @@ func TestApplyDictionaryReplacesWholeWordsOnly(t *testing.T) {
 		{"Wörselchen bleibt", "Wörselchen bleibt"},
 		{"Deploy auf Wörsel", "Deploy auf Vercel"},
 		{"Nimm Fetsien. Dann", "Nimm shad/cn Dann"},
+		{"Meine Cloud-MD ist neu", "Meine CLAUDE.md ist neu"},
+		{"meine cloud md ist neu", "meine CLAUDE.md ist neu"},
+		{"Cloud_Code läuft", "Claude Code läuft"},
 		{"", ""},
 	} {
 		if got := ApplyDictionary(test.input, corrections); got != test.want {

@@ -212,7 +212,8 @@ func ParseDictionaryText(text string) ([]string, []DictionaryCorrection, error) 
 }
 
 // ApplyDictionary replaces the "always" corrections in a transcript: whole
-// words only, ignoring case, the longest entry first, in one pass from left
+// words only, ignoring case and the kind of separator inside an entry, the
+// longest entry first, in one pass from left
 // to right, so a replacement is never replaced again. "Note" becomes "Node"
 // in "die Note ist", but "Schulnote" stays as it is.
 func ApplyDictionary(text string, corrections []DictionaryCorrection) string {
@@ -243,7 +244,7 @@ func ApplyDictionary(text string, corrections []DictionaryCorrection) string {
 			if end > len(runes) ||
 				(candidate.wordStart && index > 0 && isWordRune(runes[index-1])) ||
 				(candidate.wordFinish && end < len(runes) && isWordRune(runes[end])) ||
-				!strings.EqualFold(string(runes[index:end]), string(candidate.from)) {
+				!dictionaryMatch(runes[index:end], candidate.from) {
 				continue
 			}
 			builder.WriteString(candidate.to)
@@ -257,6 +258,26 @@ func ApplyDictionary(text string, corrections []DictionaryCorrection) string {
 		}
 	}
 	return builder.String()
+}
+
+// dictionaryMatch compares ignoring case. Inside an entry, a dot, hyphen,
+// underscore or space matches any of the four, since speech recognition
+// writes "Cloud.md" as "Cloud-MD" or "cloud md".
+func dictionaryMatch(text []rune, entry []rune) bool {
+	for index := range entry {
+		inner := index > 0 && index < len(entry)-1
+		if inner && isDictionarySeparator(entry[index]) && isDictionarySeparator(text[index]) {
+			continue
+		}
+		if !strings.EqualFold(string(text[index]), string(entry[index])) {
+			return false
+		}
+	}
+	return true
+}
+
+func isDictionarySeparator(r rune) bool {
+	return r == '.' || r == '-' || r == '_' || r == ' '
 }
 
 func isWordRune(r rune) bool {
