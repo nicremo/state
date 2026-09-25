@@ -540,6 +540,12 @@ struct AgentRun: Codable, Hashable, Identifiable, Sendable {
     var resultArtifactRef: String?
     var failureCode: String?
     var approvalCapability: String?
+    /// Set on rounds of an agent session.
+    var sessionID: String?
+    var turnKind: AgentTurnKind?
+    var prompt: String?
+    var resultText: String?
+    var harnessSessionID: String?
     var createdByActor: Actor?
     var completedByActor: Actor?
     var revision: Int64

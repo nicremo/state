@@ -35,12 +35,15 @@ final class NotificationService: UNNotificationServiceExtension {
             let plaintext = try envelope.open(recipientPrivateKey: privateKey, routeID: routeID)
             if try decoder.decode(PushKindProbe.self, from: plaintext).kind == "run_finished" {
                 let payload = try decoder.decode(RunPushPayload.self, from: plaintext)
-                content.title = "State"
-                content.body = "\(payload.title) — \(RunPushStatusText.localized(payload.status, language: languageCode))"
+                content.title = payload.sessionId == nil ? "State" : "State Agent"
+                content.body = "\(payload.title): \(RunPushStatusText.localized(payload.status, language: languageCode))"
                 content.userInfo["agent_run_id"] = payload.runId
                 content.userInfo["reminder_id"] = payload.reminderId
+                if let sessionID = payload.sessionId {
+                    content.userInfo["agent_session_id"] = sessionID
+                }
             } else {
-                // Any other kind — present and future — keeps the reminder
+                // Any other kind, present and future, keeps the reminder
                 // shape, which is also what older servers send without a kind.
                 let payload = try decoder.decode(ReminderPushPayload.self, from: plaintext)
                 content.title = payload.title

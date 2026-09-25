@@ -6,8 +6,10 @@ import SwiftUI
 struct SplitRootView: View {
     @Bindable var model: AppModel
 
-    @State private var section: StateTab? = .today
+    @State private var section: StateTab? = .agenda
+    @State private var agendaMode: ReminderCollectionMode = .today
     @State private var selectedReminderID: String?
+    @State private var selectedSessionID: String?
     @State private var selectedNoteID: String?
     /// Identity of the note detail. It changes when the owner picks another
     /// note, not when a note being written gets its first identifier, so the
@@ -23,19 +25,16 @@ struct SplitRootView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: $section) {
-                Label(String(localized: "Today"), systemImage: "sun.max.fill")
-                    .tag(StateTab.today)
-                    .accessibilityIdentifier("sidebar-today")
-                Label(String(localized: "Planned"), systemImage: "calendar")
-                    .tag(StateTab.planned)
-                    .accessibilityIdentifier("sidebar-planned")
+                Label(String(localized: "Agenda"), systemImage: "calendar.day.timeline.left")
+                    .badge(model.conflicts.count)
+                    .tag(StateTab.agenda)
+                    .accessibilityIdentifier("sidebar-agenda")
                 Label(String(localized: "Notes"), systemImage: "note.text")
                     .tag(StateTab.notes)
                     .accessibilityIdentifier("sidebar-notes")
-                Label(String(localized: "Activity"), systemImage: "clock.arrow.circlepath")
-                    .badge(model.conflicts.count)
-                    .tag(StateTab.activity)
-                    .accessibilityIdentifier("sidebar-activity")
+                Label(String(localized: "Agent"), systemImage: "terminal")
+                    .tag(StateTab.agent)
+                    .accessibilityIdentifier("sidebar-agent")
                 Label(String(localized: "Settings"), systemImage: "gearshape")
                     .tag(StateTab.settings)
                     .accessibilityIdentifier("sidebar-settings")
@@ -43,25 +42,19 @@ struct SplitRootView: View {
             .navigationTitle("State")
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } content: {
-            switch section ?? .today {
-            case .today:
+            switch section ?? .agenda {
+            case .agenda:
                 ReminderCollectionView(
                     model: model,
                     mode: .today,
                     selection: $selectedReminderID,
-                    editorPresentation: $opensEditor
-                )
-            case .planned:
-                ReminderCollectionView(
-                    model: model,
-                    mode: .planned,
-                    selection: $selectedReminderID,
-                    editorPresentation: $opensEditor
+                    editorPresentation: $opensEditor,
+                    modeSelection: $agendaMode
                 )
             case .notes:
                 NotesCollectionView(model: model, selection: $selectedNoteID)
-            case .activity:
-                ActivityView(model: model)
+            case .agent:
+                AgentSessionsView(model: model, selection: $selectedSessionID)
             case .settings:
                 SettingsView(model: model, opensNotificationSettings: $opensNotificationSettings)
             }
@@ -84,6 +77,13 @@ struct SplitRootView: View {
         .onChange(of: section) { _, _ in
             selectedReminderID = nil
             selectedNoteID = nil
+            selectedSessionID = nil
+        }
+        .onChange(of: selectedSessionID) { _, selection in revealDetail(for: selection) }
+        .onChange(of: model.requestedTab) { _, tab in
+            guard let tab else { return }
+            section = tab
+            model.requestedTab = nil
         }
         .onReceive(NotificationCenter.default.publisher(for: .stateOpenNotificationSettings)) { _ in
             section = .settings
@@ -104,7 +104,16 @@ struct SplitRootView: View {
                 .noteCapture(model: model, isEnabled: true, onText: { selectedNoteID = NoteRoute.newSelection }) { identifier in
                     selectedNoteID = identifier
                 }
-        } else if let selectedReminderID, section == .today || section == .planned {
+        } else if section == .agent {
+            if let selectedSessionID {
+                NavigationStack {
+                    AgentSessionDetailView(model: model, sessionID: selectedSessionID)
+                }
+                .id(selectedSessionID)
+            } else {
+                ContentUnavailableView(String(localized: "Select a session"), systemImage: "terminal")
+            }
+        } else if let selectedReminderID, section == .agenda {
             NavigationStack {
                 ReminderDetailView(model: model, reminderID: selectedReminderID)
             }
@@ -161,8 +170,8 @@ struct SplitRootView: View {
             selectedNoteID = NoteRoute.newSelection
             return
         }
-        if section != .today && section != .planned {
-            section = .today
+        if section != .agenda {
+            section = .agenda
         }
         opensEditor = true
     }

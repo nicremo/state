@@ -141,6 +141,7 @@ private struct StateLifecycle: ViewModifier {
     private func handle(_ notification: Notification) {
         let occurrenceID = notification.userInfo?["occurrence_id"] as? String ?? ""
         let agentRunID = notification.userInfo?["agent_run_id"] as? String ?? ""
+        let agentSessionID = notification.userInfo?["agent_session_id"] as? String ?? ""
         guard !occurrenceID.isEmpty || !agentRunID.isEmpty else { return }
         let action = notification.userInfo?["action"] as? String
         Task {
@@ -156,10 +157,12 @@ private struct StateLifecycle: ViewModifier {
                     break
                 }
             }
-            // A run notification tap has no action of its own; it refreshes
-            // State so the run and its reminder are current when the owner
-            // opens them. There is no cross-tab navigation path yet.
-            if !agentRunID.isEmpty {
+            // A round of an agent session opens its conversation; any other
+            // run notification refreshes State so the run is current.
+            if !agentSessionID.isEmpty {
+                await model.refreshAgentSession(id: agentSessionID)
+                model.openAgentSession(agentSessionID)
+            } else if !agentRunID.isEmpty {
                 await model.synchronize()
             }
             await notificationCoordinator.refresh(model: model)

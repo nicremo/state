@@ -58,7 +58,7 @@ func (runner *Runner) Run(ctx context.Context, once bool) error {
 			return err
 		}
 		if errors.Is(err, ErrUnauthorized) {
-			return fmt.Errorf("runner credential was rejected — re-run state-runner pair: %w", err)
+			return fmt.Errorf("runner credential was rejected, re-run state-runner pair: %w", err)
 		}
 		if err != nil {
 			runner.note("cycle failed: %v", err)

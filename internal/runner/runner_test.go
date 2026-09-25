@@ -25,7 +25,7 @@ import (
 
 // runnerFixture is a booted State server (REST) with an owner, one project,
 // one policy, one scheduled reminder and one claimed-able manual run, plus a
-// paired runner credential — the whole loop over real HTTP.
+// paired runner credential: the whole loop over real HTTP.
 type runnerFixture struct {
 	server       *httptest.Server
 	state        *state.Service

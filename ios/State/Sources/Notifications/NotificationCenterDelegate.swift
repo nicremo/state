@@ -75,6 +75,7 @@ final class NotificationCenterDelegate: NSObject, @preconcurrency UNUserNotifica
                 "occurrence_id": response.notification.request.content.userInfo["occurrence_id"] as? String ?? "",
                 "reminder_id": response.notification.request.content.userInfo["reminder_id"] as? String ?? "",
                 "agent_run_id": response.notification.request.content.userInfo["agent_run_id"] as? String ?? "",
+                "agent_session_id": response.notification.request.content.userInfo["agent_session_id"] as? String ?? "",
             ]
         )
     }

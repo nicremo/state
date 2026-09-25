@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ActivityView: View {
     @Bindable var model: AppModel
+    /// Set when Activity is shown as a sheet from the Agenda.
+    var onDone: (() -> Void)?
     @State private var showsConflicts = false
 
     var body: some View {
@@ -77,6 +79,13 @@ struct ActivityView: View {
                 }
             }
             .navigationTitle("Activity")
+            .toolbar {
+                if let onDone {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(String(localized: "Done"), action: onDone)
+                    }
+                }
+            }
             .sheet(isPresented: $showsConflicts) {
                 ConflictResolutionView(model: model)
             }

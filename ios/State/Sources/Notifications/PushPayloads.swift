@@ -16,7 +16,8 @@ struct ReminderPushPayload: Codable, Sendable {
 }
 
 /// Payload of a `run_finished` push, mirroring NotifyRunFinished in
-/// internal/push/service.go. `occurrence_id` is absent for manual runs.
+/// internal/push/service.go. `occurrence_id` is absent for manual runs,
+/// `session_id` is present for rounds of an agent session.
 struct RunPushPayload: Codable, Sendable {
     let kind: String
     let runId: String
@@ -25,6 +26,8 @@ struct RunPushPayload: Codable, Sendable {
     let status: String
     let title: String
     let finishedAt: String
+    /// Set when the run is a round of an agent session.
+    let sessionId: String?
 }
 
 /// A probe that reads only the payload kind, so the extension can dispatch

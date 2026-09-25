@@ -71,7 +71,7 @@ func (service *Service) NotifySync(ctx context.Context, excludedActorID string) 
 
 // NotifyRunFinished pushes an encrypted run-lifecycle notification to every
 // registered device route. It fires for succeeded, failed, and
-// needs_approval only; cancelled and expired are skipped — cancellation is
+// needs_approval only; cancelled and expired are skipped: cancellation is
 // owner-initiated and expiry is a quiet housekeeping sweep, which keeps one
 // uniform rule: notify only when a run produced an outcome or awaits a
 // decision. Notification preferences (NotifyOnCompletion/NotifyOnFailure)

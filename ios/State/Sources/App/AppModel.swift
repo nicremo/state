@@ -803,6 +803,113 @@ final class AppModel {
         }
     }
 
+    // MARK: Agent sessions
+
+    /// Sessions with the most recent activity first.
+    private(set) var agentSessions: [AgentSession] = []
+    /// Set by a start, a push tap or the reminder; the Agent tab opens this
+    /// session and clears it.
+    var agentSessionToOpen: String?
+    /// Set when another screen wants a tab shown, for example after starting
+    /// a session from a reminder.
+    var requestedTab: StateTab?
+
+    func loadAgentSessions() async {
+        guard let api, !isDemo else { return }
+        do {
+            agentSessions = try await api.listAgentSessions()
+        } catch StateAPIError.notFound {
+            agentSessions = []
+        } catch {
+            present(error)
+        }
+    }
+
+    /// Reloads one session, for example while its round is running.
+    @discardableResult
+    func refreshAgentSession(id: String) async -> AgentSession? {
+        guard let api, !isDemo else { return nil }
+        do {
+            let session = try await api.agentSession(id: id)
+            replaceAgentSession(session)
+            return session
+        } catch {
+            present(error)
+            return nil
+        }
+    }
+
+    /// Starts an agent on a reminder and opens the new session in the Agent
+    /// tab.
+    func startAgentSession(reminderID: String, policyID: String, instruction: String) async -> AgentSession? {
+        guard let api, !isDemo else { return nil }
+        do {
+            let session = try await api.startAgentSession(reminderID: reminderID, policyID: policyID, instruction: instruction.trimmingCharacters(in: .whitespacesAndNewlines))
+            replaceAgentSession(session)
+            openAgentSession(session.id)
+            return session
+        } catch {
+            present(error)
+            return nil
+        }
+    }
+
+    func openAgentSession(_ id: String) {
+        agentSessionToOpen = id
+        requestedTab = .agent
+    }
+
+    func sendAgentMessage(_ text: String, to session: AgentSession) async -> Bool {
+        guard let api, !isDemo else { return false }
+        do {
+            replaceAgentSession(try await api.sendAgentMessage(sessionID: session.id, text: text.trimmingCharacters(in: .whitespacesAndNewlines)))
+            return true
+        } catch {
+            present(error)
+            return false
+        }
+    }
+
+    func openAgentSessionOnMac(_ session: AgentSession) async {
+        guard let api, !isDemo else { return }
+        do {
+            replaceAgentSession(try await api.openAgentSessionOnMac(sessionID: session.id))
+        } catch {
+            present(error)
+        }
+    }
+
+    func closeAgentSession(_ session: AgentSession) async {
+        guard let api, !isDemo else { return }
+        do {
+            replaceAgentSession(try await api.closeAgentSession(sessionID: session.id))
+        } catch {
+            present(error)
+        }
+    }
+
+    /// Cancels the round in progress; the session stays open.
+    func cancelAgentTurn(in session: AgentSession) async {
+        guard let api, !isDemo, let turn = session.activeTurn else { return }
+        do {
+            _ = try await api.cancelRun(id: turn.id, expectedRevision: turn.revision)
+            await refreshAgentSession(id: session.id)
+        } catch {
+            present(error)
+        }
+    }
+
+    private func replaceAgentSession(_ session: AgentSession) {
+        if let index = agentSessions.firstIndex(where: { $0.id == session.id }) {
+            agentSessions[index] = session
+        } else {
+            agentSessions.insert(session, at: 0)
+        }
+    }
+
+    /// Enabled policies the owner can start a session with.
+    var sessionPolicies: [ExecutionPolicy] { policies.filter(\.enabled) }
+
     func enterDemo() async {
         do {
             isDemo = true
