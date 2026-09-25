@@ -29,7 +29,7 @@ struct NotesCollectionView: View {
                     .navigationDestination(for: NoteRoute.self) { route in
                         switch route {
                         case let .note(identifier):
-                            NoteDetailView(model: model, noteID: identifier)
+                            NoteDetailView(model: model, noteID: identifier, onOpenNote: { path.append(.note($0)) })
                         case .new:
                             NoteDetailView(model: model, noteID: nil)
                         }
@@ -54,8 +54,17 @@ struct NotesCollectionView: View {
                 .stateListStyle()
                 .stateBackground()
                 .animation(StateTheme.contentChange, value: visibleNotes.map(\.id))
-                .refreshable { await model.synchronize() }
+                .refreshable {
+                    // A sync the screen's redraw cancels would stop halfway;
+                    // it runs on its own and the pull waits for it.
+                    await Task { await model.synchronize() }.value
+                }
             }
+        }
+        // On the iPhone the plus sits on the list; the split layout puts it
+        // on the note column (SplitRootView).
+        .noteCapture(model: model, isEnabled: selection == nil && !showsArchive, onText: newNote) { identifier in
+            path = [.note(identifier)]
         }
         .navigationTitle(showsArchive ? String(localized: "Archived notes") : String(localized: "Notes"))
         .searchable(text: $search, prompt: String(localized: "Search notes"))
@@ -69,12 +78,6 @@ struct NotesCollectionView: View {
                         systemImage: showsArchive ? "note.text" : "archivebox"
                     )
                 }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: newNote) {
-                    Label(String(localized: "New note"), systemImage: "square.and.pencil")
-                }
-                .disabled(showsArchive)
             }
         }
         #if DEBUG
@@ -173,11 +176,24 @@ struct NoteRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
-            Text(note.title.isEmpty ? String(localized: "New note") : note.title)
-                .font(.headline)
-                .foregroundStyle(StateTheme.graphite)
-                .lineLimit(1)
-            if !note.summary.isEmpty {
+            HStack(spacing: StateTheme.Space.snug) {
+                if let symbol = captureSymbol {
+                    Image(systemName: symbol)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                Text(note.title.isEmpty ? note.placeholderTitle : note.title)
+                    .font(.headline)
+                    .foregroundStyle(StateTheme.graphite)
+                    .lineLimit(1)
+            }
+            if note.processing?.isWorking == true, note.summary.isEmpty {
+                Text("The notes AI is reading this note")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            } else if !note.summary.isEmpty {
                 Text(note.summary)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -190,5 +206,24 @@ struct NoteRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("note-\(note.id)")
+    }
+
+    private var captureSymbol: String? {
+        switch note.capture {
+        case "image": "photo"
+        case "audio": "waveform"
+        default: nil
+        }
+    }
+}
+
+extension Note {
+    /// What a note without a title is called until the AI names it.
+    var placeholderTitle: String {
+        switch capture {
+        case "image": String(localized: "Photo note")
+        case "audio": String(localized: "Voice note")
+        default: String(localized: "New note")
+        }
     }
 }

@@ -18,7 +18,7 @@ func TestNoteServiceAgainstTheRealServer(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	stored, _, err := service.Create(ctx, "", "# Terminal\nNotiz aus der CLI", "Leg die Notiz an", "")
+	stored, _, err := service.Create(ctx, "", "# Terminal\nNotiz aus der CLI", "", "Leg die Notiz an", "")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -56,10 +56,13 @@ func TestNoteServiceValidatesBeforeCalling(t *testing.T) {
 	t.Parallel()
 
 	service := NewNoteService(nil, func() (string, error) { return "01989f08-3333-7000-8000-000000000099", nil })
-	if _, _, err := service.Create(context.Background(), "", " ", "x", ""); err == nil {
+	if _, _, err := service.Create(context.Background(), "", " ", "", "x", ""); err == nil {
 		t.Fatal("empty note was accepted")
 	}
-	if _, _, err := service.Create(context.Background(), "t", "", "", ""); err == nil {
+	if _, _, err := service.Create(context.Background(), "", "", "video", "x", ""); err == nil {
+		t.Fatal("unknown capture was accepted")
+	}
+	if _, _, err := service.Create(context.Background(), "t", "", "", "", ""); err == nil {
 		t.Fatal("missing source text was accepted")
 	}
 	if _, _, err := service.Update(context.Background(), UpdateNoteOptions{NoteID: "n", SourceText: "x"}); err == nil || !strings.Contains(err.Error(), "nothing") {

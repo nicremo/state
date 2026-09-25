@@ -9,6 +9,8 @@ struct NoteDetailView: View {
     var onCreate: ((String) -> Void)?
     /// Called when the note leaves this screen: archived, or discarded empty.
     var onClose: (() -> Void)?
+    /// Opens a related note the AI linked.
+    var onOpenNote: ((String) -> Void)?
 
     @State private var noteID: String?
     @State private var isEditing: Bool
@@ -20,6 +22,7 @@ struct NoteDetailView: View {
     @State private var pendingSave: PendingSave?
     @State private var isVisible = false
     @State private var selection: TextSelection?
+    @State private var uploads: [NoteUpload] = []
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -31,10 +34,11 @@ struct NoteDetailView: View {
         let isFinal: Bool
     }
 
-    init(model: AppModel, noteID: String?, onCreate: ((String) -> Void)? = nil, onClose: (() -> Void)? = nil) {
+    init(model: AppModel, noteID: String?, onCreate: ((String) -> Void)? = nil, onClose: (() -> Void)? = nil, onOpenNote: ((String) -> Void)? = nil) {
         self.model = model
         self.onCreate = onCreate
         self.onClose = onClose
+        self.onOpenNote = onOpenNote
         _noteID = State(initialValue: noteID)
         _isEditing = State(initialValue: noteID == nil)
     }
@@ -92,7 +96,7 @@ struct NoteDetailView: View {
     private func reader(_ note: Note) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: StateTheme.Space.group) {
-                Text(note.title)
+                Text(note.title.isEmpty ? note.placeholderTitle : note.title)
                     .font(.title2.bold())
                     .foregroundStyle(StateTheme.graphite)
                     .fixedSize(horizontal: false, vertical: true)
@@ -116,16 +120,33 @@ struct NoteDetailView: View {
                         .foregroundStyle(.orange)
                 }
 
-                MarkdownView(Self.body(of: note), style: .document) { line in
+                NoteAIStatusView(model: model, note: note, uploads: uploads, syncError: model.noteSyncError(id: note.id))
+
+                if !(note.attachments ?? []).isEmpty {
+                    NoteMediaView(model: model, note: note)
+                }
+
+                MarkdownView(Self.body(of: note), style: .document, collapsible: true) { line in
                     Task { await model.toggleNoteTask(id: note.id, line: line) }
                 }
                 .padding(.top, StateTheme.Space.tight)
+
+                NoteAISuggestionsView(model: model, note: note, onOpenNote: onOpenNote)
+                    .padding(.top, StateTheme.Space.block)
             }
             .padding(.horizontal, StateTheme.Space.section)
             .padding(.vertical, StateTheme.Space.block)
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .task(id: "\(note.id)-\(note.attachments?.count ?? 0)-\(model.lastSyncAt?.timeIntervalSince1970 ?? 0)") {
+            uploads = await model.noteUploads(for: note.id)
+        }
+        .refreshable {
+                    // A sync the screen's redraw cancels would stop halfway;
+                    // it runs on its own and the pull waits for it.
+                    await Task { await model.synchronize() }.value
+                }
     }
 
     /// A derived title is the document's first line, so the reader shows it
@@ -213,18 +234,52 @@ struct NoteDetailView: View {
                 .frame(height: 1)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
-                    formatButton(String(localized: "Heading"), systemImage: "textformat.size") { prefix("## ") }
+                    paragraphStyleMenu
                     formatButton(String(localized: "Bold"), systemImage: "bold") { wrap("**") }
                     formatButton(String(localized: "Italic"), systemImage: "italic") { wrap("*") }
+                    formatButton(String(localized: "Underline"), systemImage: "underline") { wrap("++") }
+                    formatButton(String(localized: "Strikethrough"), systemImage: "strikethrough") { wrap("~~") }
+                    formatButton(String(localized: "Highlight"), systemImage: "highlighter") { wrap("==") }
                     formatButton(String(localized: "List"), systemImage: "list.bullet") { prefix("- ") }
                     formatButton(String(localized: "Numbered list"), systemImage: "list.number") { prefix("1. ") }
                     formatButton(String(localized: "Checklist"), systemImage: "checklist") { prefix("- [ ] ") }
+                    formatButton(String(localized: "Table"), systemImage: "tablecells") { table() }
                     formatButton(String(localized: "Divider"), systemImage: "minus") { divider() }
                 }
                 .padding(.horizontal, StateTheme.Space.inner)
             }
         }
         .background(StateTheme.ground)
+    }
+
+    /// The "Aa" menu of iPhone Notes: paragraph styles for the cursor's line.
+    private var paragraphStyleMenu: some View {
+        Menu {
+            Button(String(localized: "Title")) { paragraphStyle(1) }
+            Button(String(localized: "Heading")) { paragraphStyle(2) }
+            Button(String(localized: "Subheading")) { paragraphStyle(3) }
+            Button(String(localized: "Body")) { paragraphStyle(0) }
+        } label: {
+            Image(systemName: "textformat")
+                .font(.body.weight(.medium))
+                .frame(width: StateControlMetrics.formatButton, height: StateControlMetrics.formatButton)
+                .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .foregroundStyle(StateTheme.accent)
+        .accessibilityLabel(String(localized: "Text style"))
+        .help(String(localized: "Text style"))
+    }
+
+    private func paragraphStyle(_ level: Int) {
+        let (text, cursor) = NoteEditing.setParagraphStyle(level: level, in: documentDraft, at: currentRange)
+        apply(text, cursor: cursor)
+    }
+
+    private func table() {
+        let columns = [String(localized: "Column 1"), String(localized: "Column 2")]
+        let (text, cursor) = NoteEditing.insertTable(in: documentDraft, at: currentRange, columns: columns)
+        apply(text, cursor: cursor)
     }
 
     private func formatButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
@@ -377,7 +432,7 @@ struct NoteDetailView: View {
         }
         guard let base = editBase else { return }
         let unchanged = document == base.document
-            && (title.isEmpty ? base.titleSource == Note.derivedSource : title == base.title && base.titleSource == Note.userSource)
+            && (title.isEmpty ? base.titleSource != Note.userSource : title == base.title && base.titleSource == Note.userSource)
         guard !unchanged else { return }
         switch await model.saveNote(id: noteID, title: title, document: document, base: base, isFinal: isFinal) {
         case let .saved(note):

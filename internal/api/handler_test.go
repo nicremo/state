@@ -425,6 +425,18 @@ func TestDevicePushRegistrationAndConfirmationAPI(t *testing.T) {
 
 func newTestHandler(t *testing.T) http.Handler {
 	t.Helper()
+	repository, authManager, pushService := newTestBackend(t)
+	return NewHandler(Config{
+		Auth:    authManager,
+		State:   state.NewService(repository),
+		Push:    pushService,
+		Version: "test-version",
+	})
+}
+
+// newTestBackend opens a fresh PocketBase with the State store, auth and push.
+func newTestBackend(t *testing.T) (*store.PocketBaseRepository, *stateauth.Manager, *statepush.Service) {
+	t.Helper()
 
 	app := pocketbase.NewWithConfig(pocketbase.Config{
 		DefaultDataDir:   t.TempDir(),
@@ -458,12 +470,7 @@ func newTestHandler(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatalf("NewRepository(push) error = %v", err)
 	}
-	return NewHandler(Config{
-		Auth:    authManager,
-		State:   state.NewService(repository),
-		Push:    statepush.NewService(pushRepository, statepush.NewHTTPSender(nil)),
-		Version: "test-version",
-	})
+	return repository, authManager, statepush.NewService(pushRepository, statepush.NewHTTPSender(nil))
 }
 
 func bootstrapOwner(t *testing.T, handler http.Handler) stateauth.Credential {

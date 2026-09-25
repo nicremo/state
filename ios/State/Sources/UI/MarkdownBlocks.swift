@@ -15,6 +15,9 @@ enum MarkdownBlock: Equatable {
     /// exactly this line of the document.
     case task(checked: Bool, text: String, line: Int)
     case divider
+    /// A GFM table. Cells keep their inline Markdown; rows may be shorter
+    /// than the header, as people type them.
+    case table(header: [String], rows: [[String]])
 }
 
 enum MarkdownBlocks {
@@ -23,6 +26,9 @@ enum MarkdownBlocks {
         var paragraph: [String] = []
         var code: [String]?
         var codeFence: String?
+        var table: (header: [String], rows: [[String]])?
+        let lines = source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        var skipNext = false
 
         func flushParagraph() {
             let text = paragraph.joined(separator: " ").trimmingCharacters(in: .whitespaces)
@@ -30,8 +36,32 @@ enum MarkdownBlocks {
             paragraph = []
         }
 
-        for (index, rawLine) in source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n").enumerated() {
+        func flushTable() {
+            if let current = table { blocks.append(.table(header: current.header, rows: current.rows)) }
+            table = nil
+        }
+
+        for (index, rawLine) in lines.enumerated() {
+            if skipNext {
+                skipNext = false
+                continue
+            }
             let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if code == nil {
+                if table != nil {
+                    if NoteText.isTableRow(line) {
+                        table?.rows.append(cells(line))
+                        continue
+                    }
+                    flushTable()
+                } else if NoteText.isTableRow(line), index + 1 < lines.count,
+                          isTableSeparator(lines[index + 1].trimmingCharacters(in: .whitespaces)) {
+                    flushParagraph()
+                    table = (cells(line), [])
+                    skipNext = true
+                    continue
+                }
+            }
 
             if let marker = fenceMarker(line), codeFence == nil || codeFence == marker {
                 if let lines = code {
@@ -74,8 +104,20 @@ enum MarkdownBlocks {
         if let lines = code, !lines.isEmpty {
             blocks.append(.code(lines.joined(separator: "\n")))
         }
+        flushTable()
         flushParagraph()
         return blocks
+    }
+
+    /// The row under a table header, such as `|---|:-:|`.
+    static func isTableSeparator(_ line: String) -> Bool {
+        guard line.contains("|") else { return false }
+        return line.wholeMatch(of: /\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?/) != nil
+    }
+
+    private static func cells(_ line: String) -> [String] {
+        line.dropFirst().dropLast().split(separator: "|", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
     }
 
     /// Both fence styles; a block ends only with its own kind of fence.

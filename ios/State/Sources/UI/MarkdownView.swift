@@ -16,10 +16,14 @@ struct MarkdownView: View {
     var style: Style = .compact
     /// When set, checklist items are buttons that report their source line.
     var onToggleTask: ((Int) -> Void)?
+    /// Headings fold their section, as in iPhone Notes. Only for notes.
+    var collapsible = false
+    @State private var collapsed: Set<Int> = []
 
-    init(_ source: String, style: Style = .compact, onToggleTask: ((Int) -> Void)? = nil) {
+    init(_ source: String, style: Style = .compact, collapsible: Bool = false, onToggleTask: ((Int) -> Void)? = nil) {
         blocks = MarkdownBlocks.parse(source)
         self.style = style
+        self.collapsible = collapsible
         self.onToggleTask = onToggleTask
     }
 
@@ -31,12 +35,78 @@ struct MarkdownView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
-                view(for: block)
-                    .padding(.top, topSpacing(for: block, at: index))
+            ForEach(MarkdownSections.visible(blocks, collapsed: collapsible ? collapsed : []), id: \.offset) { index, block in
+                Group {
+                    if collapsible, case let .heading(level, text) = block, MarkdownSections.hasContent(blocks, heading: index) {
+                        foldableHeading(level: level, text: text, index: index)
+                    } else {
+                        view(for: block)
+                    }
+                }
+                .padding(.top, topSpacing(for: block, at: index))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func foldableHeading(level: Int, text: String, index: Int) -> some View {
+        let isCollapsed = collapsed.contains(index)
+        return Button {
+            withAnimation(StateTheme.contentChange) {
+                if isCollapsed { collapsed.remove(index) } else { collapsed.insert(index) }
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: StateTheme.Space.inner) {
+                Text(inlineMarkdown: text)
+                    .font(headingFont(level: level))
+                    .foregroundStyle(StateTheme.graphite)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: StateControlMetrics.tapTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityValue(isCollapsed ? String(localized: "Collapsed") : String(localized: "Expanded"))
+        .accessibilityHint(String(localized: "Folds or unfolds this section"))
+    }
+
+    private func table(header: [String], rows: [[String]]) -> some View {
+        let columns = max(header.count, rows.map(\.count).max() ?? 0)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+                GridRow {
+                    ForEach(0..<columns, id: \.self) { column in
+                        tableCell(header.indices.contains(column) ? header[column] : "", isHeader: true)
+                    }
+                }
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    Divider().gridCellUnsizedAxes(.horizontal)
+                    GridRow {
+                        ForEach(0..<columns, id: \.self) { column in
+                            tableCell(row.indices.contains(column) ? row[column] : "", isHeader: false)
+                        }
+                    }
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(StateTheme.graphite.opacity(0.14)))
+        }
+    }
+
+    private func tableCell(_ text: String, isHeader: Bool) -> some View {
+        Text(inlineMarkdown: text)
+            .font(isHeader ? textFont.weight(.semibold) : textFont)
+            .foregroundStyle(StateTheme.graphite.opacity(isHeader ? 1 : 0.86))
+            .padding(.horizontal, StateTheme.Space.inner)
+            .padding(.vertical, StateTheme.Space.snug)
+            .frame(minWidth: 72, alignment: .leading)
+            .background(isHeader ? StateTheme.accentSoft : Color.clear)
     }
 
     private var textFont: Font { style == .document ? .body : .callout }
@@ -68,6 +138,8 @@ struct MarkdownView: View {
             listItem(marker: marker, text: text)
         case let .task(checked, text, line):
             taskItem(checked: checked, text: text, line: line)
+        case let .table(header, rows):
+            table(header: header, rows: rows)
         case .divider:
             Rectangle()
                 .fill(StateTheme.graphite.opacity(0.12))
@@ -167,16 +239,9 @@ struct CollapsibleMarkdown: View {
 }
 
 extension Text {
-    /// Inline Markdown only: emphasis, links and `code`. Block structure is
-    /// handled by `MarkdownBlocks`.
+    /// Inline Markdown only: emphasis, links, `code`, and the underline and
+    /// highlight marks. Block structure is handled by `MarkdownBlocks`.
     init(inlineMarkdown: String) {
-        let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .inlineOnlyPreservingWhitespace
-        )
-        if let attributed = try? AttributedString(markdown: inlineMarkdown, options: options) {
-            self.init(attributed)
-        } else {
-            self.init(verbatim: inlineMarkdown)
-        }
+        self.init(InlineMarkup.attributed(inlineMarkdown))
     }
 }

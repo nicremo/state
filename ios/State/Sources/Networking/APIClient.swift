@@ -6,11 +6,21 @@ protocol StateAPI: Sendable {
     func getNote(id: String) async throws -> Note
     func send(mutation: PendingMutation) async throws -> Data
     func confirmOccurrences(_ identifiers: [String]) async throws
+    func uploadNoteAttachment(noteID: String, upload: NoteUpload, data: Data) async throws -> Note
+    func requestNoteProcessing(noteID: String, requestID: String) async throws -> Note
 }
 
 extension StateAPI {
     /// Clients that predate notes, and test doubles, have no notes to serve.
     func getNote(id: String) async throws -> Note {
+        throw StateAPIError.notFound
+    }
+
+    func uploadNoteAttachment(noteID: String, upload: NoteUpload, data: Data) async throws -> Note {
+        throw StateAPIError.notFound
+    }
+
+    func requestNoteProcessing(noteID: String, requestID: String) async throws -> Note {
         throw StateAPIError.notFound
     }
 }
@@ -78,6 +88,67 @@ actor APIClient: StateAPI {
 
     func send(mutation: PendingMutation) async throws -> Data {
         try await request(path: mutation.path, method: mutation.method, body: mutation.body)
+    }
+
+    // MARK: Notes AI
+
+    /// Sends one photo or recording as the raw body. The server checks the
+    /// hash before it attaches anything, so a damaged upload is refused.
+    func uploadNoteAttachment(noteID: String, upload: NoteUpload, data: Data) async throws -> Note {
+        var headers = [
+            "X-State-Client-Request-Id": upload.requestID,
+            "X-State-Ordinal": String(upload.ordinal),
+            "X-State-Content-SHA256": upload.sha256,
+        ]
+        if let duration = upload.durationMs {
+            headers["X-State-Duration-Ms"] = String(duration)
+        }
+        let response = try await request(path: "/api/v1/notes/\(noteID)/attachments", method: "POST", body: data,
+                                         contentType: upload.mimeType, headers: headers, timeout: 300)
+        return try StateJSON.decoder.decode(Note.self, from: response)
+    }
+
+    func requestNoteProcessing(noteID: String, requestID: String) async throws -> Note {
+        let body = try JSONSerialization.data(withJSONObject: ["client_request_id": requestID], options: [.sortedKeys])
+        let response = try await request(path: "/api/v1/notes/\(noteID)/processing", method: "POST", body: body)
+        return try StateJSON.decoder.decode(Note.self, from: response)
+    }
+
+    func downloadNoteAttachment(noteID: String, attachmentID: String) async throws -> Data {
+        try await request(path: "/api/v1/notes/\(noteID)/attachments/\(attachmentID)", accept: "*/*", timeout: 120)
+    }
+
+    func noteCapabilities() async throws -> NoteCapabilities {
+        try StateJSON.decoder.decode(NoteCapabilities.self, from: try await request(path: "/api/v1/note-capabilities"))
+    }
+
+    func notesAISettings() async throws -> NotesAISettings {
+        try StateJSON.decoder.decode(NotesAISettings.self, from: try await request(path: "/api/v1/notes-ai/settings"))
+    }
+
+    func updateNotesAISettings(consent: Bool?, monthlyLimitUSD: Double?) async throws -> NotesAISettings {
+        var payload: [String: Any] = [:]
+        if let consent { payload["consent"] = consent }
+        if let monthlyLimitUSD { payload["monthly_limit_usd"] = monthlyLimitUSD }
+        let body = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        return try StateJSON.decoder.decode(NotesAISettings.self, from: try await request(path: "/api/v1/notes-ai/settings", method: "PATCH", body: body))
+    }
+
+    func acceptReminderProposal(noteID: String, proposalID: String, timeZone: String, requestID: String) async throws -> Reminder {
+        let body = try JSONSerialization.data(withJSONObject: ["time_zone": timeZone, "client_request_id": requestID], options: [.sortedKeys])
+        let data = try await request(path: "/api/v1/notes/\(noteID)/reminder-proposals/\(proposalID)/accept", method: "POST", body: body)
+        return try StateJSON.decoder.decode(Reminder.self, from: data)
+    }
+
+    func dismissReminderProposal(noteID: String, proposalID: String) async throws -> Note {
+        let data = try await request(path: "/api/v1/notes/\(noteID)/reminder-proposals/\(proposalID)/dismiss", method: "POST", body: Data("{}".utf8))
+        return try StateJSON.decoder.decode(Note.self, from: data)
+    }
+
+    func dismissNoteRelation(noteID: String, relationID: String) async throws -> Note {
+        let body = try JSONSerialization.data(withJSONObject: ["archived": true], options: [.sortedKeys])
+        let data = try await request(path: "/api/v1/notes/\(noteID)/relations/\(relationID)", method: "PATCH", body: body)
+        return try StateJSON.decoder.decode(Note.self, from: data)
     }
 
     func confirmOccurrences(_ identifiers: [String]) async throws {
@@ -312,7 +383,11 @@ actor APIClient: StateAPI {
         path: String,
         method: String = "GET",
         query: [URLQueryItem] = [],
-        body: Data? = nil
+        body: Data? = nil,
+        contentType: String = "application/json",
+        headers: [String: String] = [:],
+        accept: String = "application/json",
+        timeout: TimeInterval? = nil
     ) async throws -> Data {
         var components = URLComponents(url: Self.endpoint(base: serverURL, path: path), resolvingAgainstBaseURL: false)
         components?.queryItems = query.isEmpty ? nil : query
@@ -320,10 +395,14 @@ actor APIClient: StateAPI {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
+        if let timeout { request.timeoutInterval = timeout }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(accept, forHTTPHeaderField: "Accept")
         if body != nil {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        }
+        for (name, value) in headers {
+            request.setValue(value, forHTTPHeaderField: name)
         }
         let (data, response) = try await session.data(for: request)
         try Self.validate(response: response, data: data)

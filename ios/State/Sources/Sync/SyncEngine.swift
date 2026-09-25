@@ -13,6 +13,70 @@ actor SyncEngine {
         try await pushPendingMutations()
         try await pushDirtyNotes()
         try await pullChanges()
+        // Media goes last: a slow or failing upload never holds up the
+        // reminders or the other notes.
+        try await pushNoteMedia()
+    }
+
+    /// Uploads photos and recordings of notes the server already knows, then
+    /// asks for processing once a note's files are all in. A file the server
+    /// refuses for good is marked and skipped, like a rejected note.
+    private func pushNoteMedia() async throws {
+        for upload in try await database.readyNoteUploads() {
+            guard let data = NoteMediaFiles.uploadData(upload) else {
+                try await database.markNoteUploadFailed(id: upload.id, message: String(localized: "The file is missing on this device."))
+                continue
+            }
+            do {
+                let note = try await api.uploadNoteAttachment(noteID: upload.noteID, upload: upload, data: data)
+                try await database.applyServer(note: note)
+                // Marked first, moved second: a stop in between leaves a
+                // finished upload whose file is still found in the queue.
+                try await database.markNoteUploadDone(id: upload.id)
+                NoteMediaFiles.keepUploaded(upload)
+            } catch StateAPIError.unauthorized {
+                throw StateAPIError.unauthorized
+            } catch let error where Self.isTransient(error) {
+                // Offline or a busy server: the rest waits for the next sync.
+                return
+            } catch let StateAPIError.server(_, code) {
+                try await database.markNoteUploadFailed(id: upload.id, message: Self.uploadFailure(code: code))
+            } catch {
+                try await database.markNoteUploadFailed(id: upload.id, message: String(localized: "The upload failed."))
+            }
+        }
+        for request in try await database.readyProcessRequests() {
+            do {
+                let note = try await api.requestNoteProcessing(noteID: request.noteID, requestID: request.requestID)
+                try await database.applyServer(note: note)
+                try await database.markProcessRequestSent(noteID: request.noteID, requestID: request.requestID)
+            } catch StateAPIError.unauthorized {
+                throw StateAPIError.unauthorized
+            } catch let error where Self.isTransient(error) {
+                return
+            } catch {
+                // Refused for good: the note shows its state from the server.
+                try await database.markProcessRequestSent(noteID: request.noteID, requestID: request.requestID)
+            }
+        }
+    }
+
+    /// Worth another try later: no connection, a timeout, rate limiting or
+    /// a server error.
+    private static func isTransient(_ error: Error) -> Bool {
+        if error is URLError { return true }
+        if case let StateAPIError.server(status, _) = error {
+            return status >= 500 || status == 408 || status == 429
+        }
+        return false
+    }
+
+    private static func uploadFailure(code: String) -> String {
+        switch code {
+        case "invalid_input": String(localized: "The server did not accept this file.")
+        case "forbidden": String(localized: "This device may not add files.")
+        default: String(localized: "The upload failed.")
+        }
     }
 
     private func pushPendingMutations() async throws {
@@ -95,6 +159,7 @@ actor SyncEngine {
             let request = CreateNoteRequest(
                 title: note.titleSource == Note.userSource ? note.title : nil,
                 document: note.document,
+                capture: note.capture,
                 clientTime: note.updatedAt,
                 source: "ios",
                 clientRequestID: record.createRequestID ?? UUIDv7.generate().uuidString.lowercased()

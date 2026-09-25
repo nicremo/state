@@ -81,6 +81,16 @@
         }
       }
     },
+    "A file was not uploaded" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Datei wurde nicht hochgeladen"
+          }
+        }
+      }
+    },
     "A reminder is due." : {
       "localizations" : {
         "de" : {
@@ -187,6 +197,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kontext hinzufügen"
+          }
+        }
+      }
+    },
+    "Add to note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In die Notiz übernehmen"
           }
         }
       }
@@ -321,6 +341,16 @@
         }
       }
     },
+    "Allow State to use the microphone in Settings to record voice notes." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erlaube State in den Einstellungen den Zugriff auf das Mikrofon, um Sprachnotizen aufzunehmen."
+          }
+        }
+      }
+    },
     "Allow notifications" : {
       "localizations" : {
         "de" : {
@@ -427,6 +457,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zurück"
+          }
+        }
+      }
+    },
+    "Body" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
           }
         }
       }
@@ -571,6 +611,16 @@
         }
       }
     },
+    "Choose from library" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus Mediathek wählen"
+          }
+        }
+      }
+    },
     "Claimed" : {
       "localizations" : {
         "de" : {
@@ -607,6 +657,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Codex, Claude Code und OpenCode schreiben Erinnerungen nach State. Du siehst jede einzelne auf deinem iPhone, mit dem Wortlaut, der sie ausgelöst hat."
+          }
+        }
+      }
+    },
+    "Collapsed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eingeklappt"
+          }
+        }
+      }
+    },
+    "Column 1" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spalte 1"
+          }
+        }
+      }
+    },
+    "Column 2" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spalte 2"
           }
         }
       }
@@ -861,6 +941,16 @@
         }
       }
     },
+    "Create reminder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erinnerung anlegen"
+          }
+        }
+      }
+    },
     "Created in State on an already paired device, under Settings." : {
       "localizations" : {
         "de" : {
@@ -1041,6 +1131,16 @@
         }
       }
     },
+    "Dismiss" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwerfen"
+          }
+        }
+      }
+    },
     "Divider" : {
       "localizations" : {
         "de" : {
@@ -1201,6 +1301,16 @@
         }
       }
     },
+    "Expanded" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausgeklappt"
+          }
+        }
+      }
+    },
     "Expired" : {
       "localizations" : {
         "de" : {
@@ -1311,12 +1421,32 @@
         }
       }
     },
+    "Folds or unfolds this section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klappt diesen Abschnitt ein oder aus"
+          }
+        }
+      }
+    },
     "Frequency" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Häufigkeit"
+          }
+        }
+      }
+    },
+    "From the note: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus der Notiz: %@"
           }
         }
       }
@@ -1357,6 +1487,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hilfe"
+          }
+        }
+      }
+    },
+    "Highlight" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hervorheben"
           }
         }
       }
@@ -1571,6 +1711,16 @@
         }
       }
     },
+    "Missing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fehlt"
+          }
+        }
+      }
+    },
     "Mode" : {
       "localizations" : {
         "de" : {
@@ -1581,12 +1731,42 @@
         }
       }
     },
+    "Models" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelle"
+          }
+        }
+      }
+    },
     "Monthly" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Monatlich"
+          }
+        }
+      }
+    },
+    "Monthly AI limit reached" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monatliches KI-Limit erreicht"
+          }
+        }
+      }
+    },
+    "Monthly limit" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monatslimit"
           }
         }
       }
@@ -1681,6 +1861,16 @@
         }
       }
     },
+    "No OpenRouter key on your server" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein OpenRouter-Schlüssel auf deinem Server"
+          }
+        }
+      }
+    },
     "No activity yet" : {
       "localizations" : {
         "de" : {
@@ -1717,6 +1907,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Noch keine Ereignisse"
+          }
+        }
+      }
+    },
+    "No microphone access" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Zugriff auf das Mikrofon"
           }
         }
       }
@@ -1801,6 +2001,16 @@
         }
       }
     },
+    "No text read yet." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch kein Text erkannt."
+          }
+        }
+      }
+    },
     "None" : {
       "localizations" : {
         "de" : {
@@ -1827,6 +2037,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Noch keine erstellt"
+          }
+        }
+      }
+    },
+    "Not available on this server" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf diesem Server nicht verfügbar"
           }
         }
       }
@@ -1871,12 +2091,42 @@
         }
       }
     },
+    "Note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz"
+          }
+        }
+      }
+    },
     "Notes" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Notizen"
+          }
+        }
+      }
+    },
+    "Notes AI" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz-KI"
+          }
+        }
+      }
+    },
+    "Notes agent" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiz-Agent"
           }
         }
       }
@@ -2041,6 +2291,16 @@
         }
       }
     },
+    "Once the limit is reached, notes stay usable and wait for next month or a higher limit." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ist das Limit erreicht, bleiben Notizen nutzbar und warten auf den nächsten Monat oder ein höheres Limit."
+          }
+        }
+      }
+    },
     "One binary on a machine you control. It keeps the audit chain." : {
       "localizations" : {
         "de" : {
@@ -2077,6 +2337,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "iOS-Benachrichtigungseinstellungen öffnen"
+          }
+        }
+      }
+    },
+    "OpenRouter key on the server" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenRouter-Schlüssel auf dem Server"
           }
         }
       }
@@ -2131,6 +2401,16 @@
         }
       }
     },
+    "Part %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teil %lld"
+          }
+        }
+      }
+    },
     "Paste pairing link" : {
       "localizations" : {
         "de" : {
@@ -2171,6 +2451,26 @@
         }
       }
     },
+    "Pause" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause"
+          }
+        }
+      }
+    },
+    "Paused by a call or another app. What was recorded is kept." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausiert durch einen Anruf oder eine andere App. Das Aufgenommene bleibt erhalten."
+          }
+        }
+      }
+    },
     "Pending" : {
       "localizations" : {
         "de" : {
@@ -2181,12 +2481,82 @@
         }
       }
     },
+    "Photo" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bild"
+          }
+        }
+      }
+    },
+    "Photo %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto %lld"
+          }
+        }
+      }
+    },
+    "Photo note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotonotiz"
+          }
+        }
+      }
+    },
+    "Photos per note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos pro Notiz"
+          }
+        }
+      }
+    },
+    "Photos, recordings and note text are sent through OpenRouter to the selected model provider for processing. The OpenRouter key stays on your server; this device never sees it. Originals are always kept." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos, Sprachaufnahmen und Notiztext werden zur Verarbeitung über OpenRouter an den gewählten Modellanbieter gesendet. Der OpenRouter-Schlüssel bleibt auf deinem Server, dieses Gerät sieht ihn nie. Die Originale bleiben immer erhalten."
+          }
+        }
+      }
+    },
     "Planned" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Geplant"
+          }
+        }
+      }
+    },
+    "Play recording" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahme abspielen"
+          }
+        }
+      }
+    },
+    "Please check the text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bitte den Text prüfen"
           }
         }
       }
@@ -2261,6 +2631,16 @@
         }
       }
     },
+    "Preparing photos" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos werden vorbereitet"
+          }
+        }
+      }
+    },
     "Print the bootstrap token" : {
       "localizations" : {
         "de" : {
@@ -2277,6 +2657,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dein Server gibt ihn einmal mit state-server bootstrap-token aus. Er macht %@ zum Besitzer."
+          }
+        }
+      }
+    },
+    "Process notes with AI" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notizen mit KI verarbeiten"
           }
         }
       }
@@ -2311,6 +2701,16 @@
         }
       }
     },
+    "Proposed reminders" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorgeschlagene Erinnerungen"
+          }
+        }
+      }
+    },
     "Push registration is not available on this device." : {
       "localizations" : {
         "de" : {
@@ -2327,6 +2727,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Push-Relay"
+          }
+        }
+      }
+    },
+    "Raise the limit in Settings or wait for next month." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erhöhe das Limit in den Einstellungen oder warte auf den nächsten Monat."
           }
         }
       }
@@ -2367,6 +2777,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Liest offline, reiht deine Änderungen ein und meldet sich, wenn etwas fällig ist."
+          }
+        }
+      }
+    },
+    "Recording" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahme"
+          }
+        }
+      }
+    },
+    "Recording failed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahme fehlgeschlagen"
+          }
+        }
+      }
+    },
+    "Recording, part %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahme, Teil %lld"
+          }
+        }
+      }
+    },
+    "Related notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwandte Notizen"
           }
         }
       }
@@ -2477,6 +2927,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Entfernen"
+          }
+        }
+      }
+    },
+    "Remove link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verknüpfung entfernen"
           }
         }
       }
@@ -2931,6 +3391,16 @@
         }
       }
     },
+    "Set up" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eingerichtet"
+          }
+        }
+      }
+    },
     "Set up the server, pair %@, connect your agents." : {
       "localizations" : {
         "de" : {
@@ -2977,6 +3447,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Weniger anzeigen"
+          }
+        }
+      }
+    },
+    "Shows the photo and the text read from it" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeigt das Foto und den daraus erkannten Text"
           }
         }
       }
@@ -3041,6 +3521,16 @@
         }
       }
     },
+    "Some words could not be read with certainty and are marked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige Wörter waren nicht sicher lesbar und sind markiert."
+          }
+        }
+      }
+    },
     "Source code" : {
       "localizations" : {
         "de" : {
@@ -3067,6 +3557,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bestimmte Uhrzeit"
+          }
+        }
+      }
+    },
+    "Spent this month" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbrauch in diesem Monat"
           }
         }
       }
@@ -3191,12 +3691,62 @@
         }
       }
     },
+    "Stop and save" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stoppen und sichern"
+          }
+        }
+      }
+    },
+    "Strikethrough" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchgestrichen"
+          }
+        }
+      }
+    },
+    "Subheading" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterüberschrift"
+          }
+        }
+      }
+    },
     "Succeeded" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Erfolgreich"
+          }
+        }
+      }
+    },
+    "Suggested by the notes AI" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorschlag der Notiz-KI"
+          }
+        }
+      }
+    },
+    "Summary by the notes AI (%@)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zusammenfassung von der Notiz-KI (%@)"
           }
         }
       }
@@ -3261,12 +3811,72 @@
         }
       }
     },
+    "Table" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tabelle"
+          }
+        }
+      }
+    },
+    "Take photos" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos aufnehmen"
+          }
+        }
+      }
+    },
+    "Text" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        }
+      }
+    },
+    "Text read by the notes AI" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von der Notiz-KI erkannter Text"
+          }
+        }
+      }
+    },
+    "Text style" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Textstil"
+          }
+        }
+      }
+    },
     "The QR code is a shortcut for the same two values. Anything that prints a State pairing QR code, your server's setup output for instance, can be scanned instead of typing." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der QR-Code ist eine Abkürzung für dieselben zwei Werte. Alles, was einen State-Kopplungscode als QR ausgibt, etwa die Einrichtungsausgabe deines Servers, kann gescannt statt getippt werden."
+          }
+        }
+      }
+    },
+    "The file is missing on this device." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Datei fehlt auf diesem Gerät."
           }
         }
       }
@@ -3287,6 +3897,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die vollständige Anleitung behandelt Betrieb, Backups, Zustellung von Benachrichtigungen und den Entzug eines Agenten."
+          }
+        }
+      }
+    },
+    "The longest recording is reached." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die maximale Aufnahmelänge ist erreicht."
+          }
+        }
+      }
+    },
+    "The model %@ cannot read photos. Choose a model that reads images in the server settings." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Modell %@ kann keine Fotos lesen. Wähle in den Servereinstellungen ein Modell, das Bilder liest."
+          }
+        }
+      }
+    },
+    "The note is kept. It is processed once a key is set up." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Notiz bleibt erhalten. Sie wird verarbeitet, sobald ein Schlüssel eingerichtet ist."
+          }
+        }
+      }
+    },
+    "The notes AI could not process this note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Notiz-KI konnte diese Notiz nicht verarbeiten"
+          }
+        }
+      }
+    },
+    "The notes AI is off" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Notiz-KI ist aus"
+          }
+        }
+      }
+    },
+    "The notes AI is reading this note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Notiz-KI liest diese Notiz"
+          }
+        }
+      }
+    },
+    "The recording could not start." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Aufnahme konnte nicht starten."
           }
         }
       }
@@ -3351,12 +4031,42 @@
         }
       }
     },
+    "The server did not accept this file." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Server hat diese Datei nicht angenommen."
+          }
+        }
+      }
+    },
     "The shared relay never sees your reminder text." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Das geteilte Relay sieht deinen Erinnerungstext nie."
+          }
+        }
+      }
+    },
+    "The upload failed." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Hochladen ist fehlgeschlagen."
+          }
+        }
+      }
+    },
+    "These photos could not be read." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Fotos konnten nicht gelesen werden."
           }
         }
       }
@@ -3377,6 +4087,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dieses Gerät"
+          }
+        }
+      }
+    },
+    "This device may not add files." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät darf keine Dateien hinzufügen."
           }
         }
       }
@@ -3481,6 +4201,26 @@
         }
       }
     },
+    "Title and summary by the notes AI (%@)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titel und Zusammenfassung von der Notiz-KI (%@)"
+          }
+        }
+      }
+    },
+    "Title by the notes AI (%@)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titel von der Notiz-KI (%@)"
+          }
+        }
+      }
+    },
     "Today" : {
       "localizations" : {
         "de" : {
@@ -3511,12 +4251,42 @@
         }
       }
     },
+    "Transcript" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transkript"
+          }
+        }
+      }
+    },
+    "Transcription" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transkription"
+          }
+        }
+      }
+    },
     "Try a different search term." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Versuche einen anderen Suchbegriff."
+          }
+        }
+      }
+    },
+    "Try again" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erneut versuchen"
           }
         }
       }
@@ -3531,12 +4301,32 @@
         }
       }
     },
+    "Turn it on in Settings, Notes AI. The original is kept." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schalte sie in den Einstellungen unter Notiz-KI ein. Das Original bleibt erhalten."
+          }
+        }
+      }
+    },
     "Unattended (low risk)" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unbeaufsichtigt (geringes Risiko)"
+          }
+        }
+      }
+    },
+    "Underline" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterstrichen"
           }
         }
       }
@@ -3551,12 +4341,52 @@
         }
       }
     },
+    "Up to %lld photo per note while the notes AI is not available. The photo is kept and processed later." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bis zu %lld Foto pro Notiz, solange die Notiz-KI nicht verfügbar ist. Das Foto bleibt erhalten und wird später verarbeitet."
+          }
+        }
+      }
+    },
+    "Up to %lld photos per note, the limit of %@. Handwritten pages become text." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bis zu %lld Fotos pro Notiz, die Grenze von %@. Handschriftliche Seiten werden zu Text."
+          }
+        }
+      }
+    },
     "Upcoming reminders are secured locally on this iPhone." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Anstehende Erinnerungen werden lokal auf diesem iPhone abgesichert."
+          }
+        }
+      }
+    },
+    "Update the State server to use the notes AI. Notes work without it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisiere den State-Server, um die Notiz-KI zu nutzen. Notizen funktionieren auch ohne sie."
+          }
+        }
+      }
+    },
+    "Uploading %lld files" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld Dateien werden hochgeladen"
           }
         }
       }
@@ -3617,6 +4447,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Version"
+          }
+        }
+      }
+    },
+    "Voice" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprache"
+          }
+        }
+      }
+    },
+    "Voice note" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprachnotiz"
+          }
+        }
+      }
+    },
+    "Waiting for the notes AI" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet auf die Notiz-KI"
           }
         }
       }

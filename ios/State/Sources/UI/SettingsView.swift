@@ -95,6 +95,15 @@ struct SettingsView: View {
                     NotificationSettingsView()
                 }
 
+                Section("Notes") {
+                    NavigationLink {
+                        NoteAISettingsView(model: model)
+                    } label: {
+                        Label("Notes AI", systemImage: "sparkles")
+                    }
+                    .accessibilityIdentifier("settings-notes-ai")
+                }
+
                 Section("Help") {
                     NavigationLink {
                         DocumentationView()

@@ -19,7 +19,8 @@ type getNoteInput struct {
 
 type createNoteInput struct {
 	Title           string `json:"title,omitempty" jsonschema:"Optional title. Leave empty to use the first line of the document."`
-	Document        string `json:"document,omitempty" jsonschema:"Note content as Markdown: headings, lists, - [ ] checklists, --- dividers. Never include secrets."`
+	Document        string `json:"document,omitempty" jsonschema:"Note content as Markdown: headings (#, ##, ###), **bold**, *italic*, ++underline++, ~~strike~~, ==highlight==, lists, - [ ] checklists, | tables |, --- dividers. Never include secrets."`
+	Capture         string `json:"capture,omitempty" jsonschema:"Leave empty for a text note. image or audio starts an empty photo or voice note for add_note_attachment."`
 	ClientRequestID string `json:"client_request_id" jsonschema:"Stable UUIDv7 for idempotent retries."`
 	SourceText      string `json:"source_text" jsonschema:"Relevant original user wording that caused this write."`
 	CorrelationID   string `json:"correlation_id,omitempty" jsonschema:"Optional UUIDv7 shared by related actions."`
@@ -56,7 +57,7 @@ func (server *server) registerNoteTools(readOnly *mcp.ToolAnnotations, mutating 
 	}, server.searchNotes)
 	mcp.AddTool(server.mcp, &mcp.Tool{
 		Name:        "get_note",
-		Description: "Get one note with its Markdown document, revision and complete audit history.",
+		Description: "Get one note with its Markdown document, revision, attachments with OCR text or transcripts, AI processing status, related notes, reminder proposals and audit history.",
 		Annotations: readOnly,
 	}, server.getNote)
 	mcp.AddTool(server.mcp, &mcp.Tool{
@@ -79,7 +80,7 @@ func (server *server) searchNotes(ctx context.Context, request *mcp.CallToolRequ
 	if limit <= 0 || limit > 50 {
 		limit = 50
 	}
-	notes, err := server.state.ListNotes(ctx, state.NoteListOptions{Query: input.Query, Limit: limit})
+	notes, err := server.state.ListNoteViews(ctx, state.NoteListOptions{Query: input.Query, Limit: limit})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -103,7 +104,7 @@ func (server *server) getNote(ctx context.Context, request *mcp.CallToolRequest,
 	if _, err := server.reminderActor(ctx, request); err != nil {
 		return nil, nil, err
 	}
-	note, err := server.state.GetNote(ctx, input.NoteID)
+	note, err := server.state.GetNoteView(ctx, input.NoteID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -120,6 +121,7 @@ func (server *server) createNote(ctx context.Context, request *mcp.CallToolReque
 		return nil, nil, err
 	}
 	note, err := server.state.CreateNote(ctx, actor, state.CreateNoteInput{
+		Capture:         state.NoteCapture(input.Capture),
 		Title:           input.Title,
 		Document:        input.Document,
 		Source:          "mcp",

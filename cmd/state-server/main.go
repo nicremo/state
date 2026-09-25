@@ -17,6 +17,7 @@ import (
 	"github.com/nicremo/state/internal/api"
 	stateauth "github.com/nicremo/state/internal/auth"
 	"github.com/nicremo/state/internal/mcpserver"
+	"github.com/nicremo/state/internal/notesai"
 	statepush "github.com/nicremo/state/internal/push"
 	"github.com/nicremo/state/internal/securefile"
 	"github.com/nicremo/state/internal/state"
@@ -38,6 +39,7 @@ type application struct {
 	repository *store.PocketBaseRepository
 	push       *statepush.Service
 	state      *state.Service
+	notesAI    *notesai.Runtime
 }
 
 func main() {
@@ -96,9 +98,10 @@ func runServe(args []string, stderr io.Writer, logger *slog.Logger) error {
 	defer stop()
 	go runPushScheduler(ctx, app.push, logger)
 	go runExecutionScheduler(ctx, app.state, logger)
+	go app.notesAI.Worker.Run(ctx)
 	serverError := make(chan error, 1)
 	go func() {
-		logger.Info("state-server listening", "address", *httpAddress, "version", version)
+		logger.Info("state-server listening", "address", *httpAddress, "version", version, "notes_ai_configured", app.notesAI.Gateway.Configured())
 		serverError <- server.ListenAndServe()
 	}()
 
@@ -190,18 +193,37 @@ func newApplication(config applicationConfig) (*application, error) {
 		return nil, err
 	}
 	pushService := statepush.NewService(pushRepository, statepush.NewHTTPSender(nil))
-	stateService := state.NewService(repository, state.WithRunNotifier(pushService.NotifyRunFinished))
+	// The OpenRouter key lives only on this server. Without the file the
+	// notes work as before and AI processing reports not_configured.
+	openRouterKey, err := notesai.LoadKey(environmentOrDefault("STATE_OPENROUTER_API_KEY_FILE", filepath.Join(secretDirectory, "openrouter.key")))
+	if err != nil {
+		_ = pb.ResetBootstrapState()
+		return nil, err
+	}
+	gateway := notesai.NewGateway(notesai.NewClient(os.Getenv("STATE_OPENROUTER_BASE_URL"), openRouterKey, nil), state.DefaultNoteMediaPolicy())
+	mediaStore, err := notesai.NewMediaStore(filepath.Join(config.dataDirectory, "media"))
+	if err != nil {
+		_ = pb.ResetBootstrapState()
+		return nil, err
+	}
+	stateService := state.NewService(repository,
+		state.WithRunNotifier(pushService.NotifyRunFinished),
+		state.WithNoteAI(gateway.Configured, gateway.MediaPolicy),
+	)
+	notesAI := &notesai.Runtime{Gateway: gateway, Store: mediaStore, Worker: notesai.NewWorker(stateService, gateway, mediaStore, slog.Default())}
 	restHandler := api.NewHandler(api.Config{
 		Auth:    authManager,
 		State:   stateService,
 		Push:    pushService,
 		Version: config.version,
+		NotesAI: notesAI,
 	})
 	mcpHandler := mcpserver.NewHandler(mcpserver.Config{
 		Auth:    authManager,
 		State:   stateService,
 		Push:    pushService,
 		Version: config.version,
+		NotesAI: notesAI,
 	})
 	handler := http.NewServeMux()
 	handler.Handle("/mcp", mcpHandler)
@@ -213,6 +235,7 @@ func newApplication(config applicationConfig) (*application, error) {
 		repository: repository,
 		push:       pushService,
 		state:      stateService,
+		notesAI:    notesAI,
 	}, nil
 }
 

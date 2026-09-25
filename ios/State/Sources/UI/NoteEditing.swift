@@ -67,4 +67,41 @@ enum NoteEditing {
         let offset = text.distance(from: text.startIndex, to: lineEnd) + insertion.count
         return (result, result.index(result.startIndex, offsetBy: offset))
     }
+
+    /// Sets the paragraph style of the cursor's line: 0 is body text, 1 the
+    /// title, 2 a heading, 3 a subheading, as the "Aa" menu of iPhone Notes.
+    /// An existing heading marker is replaced, not stacked.
+    static func setParagraphStyle(level: Int, in text: String, at range: Range<String.Index>) -> (String, String.Index) {
+        let lineStart = text[..<range.lowerBound].lastIndex(where: \.isNewline).map { text.index(after: $0) } ?? text.startIndex
+        let cursorOffset = text.distance(from: text.startIndex, to: range.lowerBound)
+        let lineStartOffset = text.distance(from: text.startIndex, to: lineStart)
+        let line = text[lineStart...]
+        let hashes = line.prefix { $0 == "#" }.count
+        var oldMarker = 0
+        if (1...6).contains(hashes) {
+            let rest = line.dropFirst(hashes)
+            if rest.first == " " { oldMarker = hashes + 1 } else if rest.isEmpty || rest.first?.isNewline == true { oldMarker = hashes }
+        }
+        let newMarker = level > 0 ? String(repeating: "#", count: level) + " " : ""
+        var result = text
+        let markerEnd = text.index(lineStart, offsetBy: oldMarker)
+        result.replaceSubrange(lineStart..<markerEnd, with: newMarker)
+        let offset = max(lineStartOffset + newMarker.count, cursorOffset - oldMarker + newMarker.count)
+        return (result, result.index(result.startIndex, offsetBy: min(offset, result.count)))
+    }
+
+    /// Inserts a two column table after the cursor's line, with the cursor
+    /// in its first body cell.
+    static func insertTable(in text: String, at range: Range<String.Index>, columns: [String]) -> (String, String.Index) {
+        let header = "| " + columns.joined(separator: " | ") + " |"
+        let separator = "| " + columns.map { _ in "---" }.joined(separator: " | ") + " |"
+        let body = "|" + columns.map { _ in "  |" }.joined()
+        let lineEnd = text[range.upperBound...].firstIndex(where: \.isNewline) ?? text.endIndex
+        let lead = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : "\n\n"
+        let insertion = lead + header + "\n" + separator + "\n" + body + "\n"
+        var result = text
+        result.insert(contentsOf: insertion, at: lineEnd)
+        let offset = text.distance(from: text.startIndex, to: lineEnd) + lead.count + header.count + separator.count + 2 + 2
+        return (result, result.index(result.startIndex, offsetBy: offset))
+    }
 }

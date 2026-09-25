@@ -19,13 +19,15 @@ type Config struct {
 	State   *state.Service
 	Push    *statepush.Service
 	Version string
+	NotesAI NotesAI
 }
 
 type server struct {
-	auth  *stateauth.Manager
-	state *state.Service
-	push  *statepush.Service
-	mcp   *mcp.Server
+	auth    *stateauth.Manager
+	state   *state.Service
+	push    *statepush.Service
+	notesAI NotesAI
+	mcp     *mcp.Server
 }
 
 type getBriefingInput struct {
@@ -132,19 +134,20 @@ type requestAgentApprovalInput struct {
 }
 
 func NewHandler(config Config) http.Handler {
-	instance := &server{auth: config.Auth, state: config.State, push: config.Push}
+	instance := &server{auth: config.Auth, state: config.State, push: config.Push, notesAI: config.NotesAI}
 	instance.mcp = mcp.NewServer(&mcp.Implementation{
 		Name:    "state",
 		Version: config.Version,
 	}, &mcp.ServerOptions{
-		Instructions: "At session start, call get_briefing with the last known cursor. When the user explicitly asks to be reminded, call create_reminder. Include the relevant original user wording in source_text and use a stable client_request_id. Report success only after the tool confirms storage. Use expected_revision for edits. Fetch get_reminder when full comments, occurrences, or history are needed. Notes hold the owner's unstructured knowledge: search_notes and get_note read them when relevant, create_note and update_note only on explicit request.",
+		Instructions: "At session start, call get_briefing with the last known cursor. When the user explicitly asks to be reminded, call create_reminder. Include the relevant original user wording in source_text and use a stable client_request_id. Report success only after the tool confirms storage. Use expected_revision for edits. Fetch get_reminder when full comments, occurrences, or history are needed. Notes hold the owner's unstructured knowledge: search_notes and get_note read them when relevant, create_note and update_note only on explicit request. Photos and recordings the owner gives you go through add_note_attachment and process_note; State's own notes AI reads and organizes them.",
 	})
 	instance.registerTools()
 	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return instance.mcp
 	}, &mcp.StreamableHTTPOptions{
-		Stateless:                    true,
-		MaxRequestBodyBytes:          1 << 20,
+		Stateless: true,
+		// Room for one base64 attachment of add_note_attachment.
+		MaxRequestBodyBytes:          12 << 20,
 		PropagateRequestCancellation: true,
 	})
 	protected := http.NewCrossOriginProtection().Handler(streamable)
@@ -237,6 +240,7 @@ func (server *server) registerTools() {
 		Annotations: mutating,
 	}, server.requestAgentApproval)
 	server.registerNoteTools(readOnly, mutating)
+	server.registerNoteAITools(readOnly, mutating)
 }
 
 func (server *server) getBriefing(ctx context.Context, request *mcp.CallToolRequest, input getBriefingInput) (*mcp.CallToolResult, any, error) {

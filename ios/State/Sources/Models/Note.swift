@@ -16,9 +16,19 @@ struct Note: Codable, Hashable, Identifiable, Sendable {
     var revision: Int64
     var createdAt: Date
     var updatedAt: Date
+    /// "image" or "audio" for a photo or voice note, nil for text.
+    var capture: String? = nil
+    var attachments: [NoteAttachment]? = nil
+    var processing: NoteProcessing? = nil
+    var ai: NoteAIResult? = nil
+    var relations: [NoteRelation]? = nil
+    var reminderProposals: [ReminderProposal]? = nil
 
     static let userSource = "user"
     static let derivedSource = "derived"
+    /// Title or summary made by the notes AI. It never replaces a written
+    /// one, and an edit does not throw it away: the AI refreshes it later.
+    static let aiSource = "ai"
 
     /// Builds a local note the way the server would store it.
     static func local(id: String, title: String, document: String, at date: Date) -> Note {
@@ -42,17 +52,30 @@ struct Note: Codable, Hashable, Identifiable, Sendable {
     /// Applies an edit: a written title stays, a derived one follows the text.
     mutating func apply(title: String?, document: String) {
         self.document = document
+        let previousText = plainText
         plainText = NoteText.plainText(document)
+        // An AI title and summary belong to the text they were made from, as
+        // on the server; ticking a checkbox keeps the text and keeps them.
+        if plainText != previousText {
+            if titleSource == Self.aiSource { titleSource = Self.derivedSource }
+            if summarySource == Self.aiSource { summarySource = Self.derivedSource }
+        }
         if let title {
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            titleSource = trimmed.isEmpty ? Self.derivedSource : Self.userSource
-            self.title = trimmed
+            if !trimmed.isEmpty {
+                titleSource = Self.userSource
+                self.title = trimmed
+            } else if titleSource == Self.userSource {
+                titleSource = Self.derivedSource
+            }
         }
         if titleSource == Self.derivedSource {
             self.title = NoteText.title(document)
         }
         if summarySource == Self.derivedSource {
-            summary = titleSource == Self.derivedSource
+            // The server stores an AI title as derived and shows the AI's
+            // on top, so its derived summary also skips the first line.
+            summary = titleSource != Self.userSource
                 ? NoteText.summary(document)
                 : NoteText.summarize(NoteText.lines(plainText))
         }
@@ -83,6 +106,7 @@ enum NoteText {
 
     private static let headingMarker = regex(#"^#{1,6}([ \t]+|$)"#)
     private static let orderedListMarker = regex(#"^[0-9]{1,3}[.)][ \t]+"#)
+    private static let tableSeparator = regex(#"^\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?$"#)
     private static let emptyTaskMarkers: Set<String> = ["- [ ]", "- [x]", "- [X]", "* [ ]", "* [x]", "* [X]"]
     private static let linePrefixes = ["- [ ] ", "- [x] ", "- [X] ", "* [ ] ", "* [x] ", "* [X] ", "- ", "* ", "+ ", "> "]
     private static let emphasis: [(NSRegularExpression, String)] = [
@@ -90,6 +114,8 @@ enum NoteText {
         (regex(#"\*\*([^ \t*](?:[^*]*[^ \t*])?)\*\*"#), "$1"),
         (regex(#"(^|[^A-Za-z0-9_])__([^ \t_](?:[^_]*[^ \t_])?)__([^A-Za-z0-9_]|$)"#), "$1$2$3"),
         (regex(#"~~([^ \t~](?:[^~]*[^ \t~])?)~~"#), "$1"),
+        (regex(#"\+\+([^ \t+](?:[^+]*[^ \t+])?)\+\+"#), "$1"),
+        (regex(#"==([^ \t=](?:[^=]*[^ \t=])?)=="#), "$1"),
         (regex(#"\*([^ \t*](?:[^*]*[^ \t*])?)\*"#), "$1"),
         (regex(#"(^|[^A-Za-z0-9_])_([^ \t_](?:[^_]*[^ \t_])?)_([^A-Za-z0-9_]|$)"#), "$1$2$3"),
     ]
@@ -108,6 +134,11 @@ enum NoteText {
                 continue
             }
             if ["---", "***", "___"].contains(line) { continue }
+            if line.unicodeScalars.contains("|"), matches(tableSeparator, line) { continue }
+            if isTableRow(line) {
+                line = tableRowText(line)
+                if line.isEmpty { continue }
+            }
             line = replace(headingMarker, in: line, with: "")
             if emptyTaskMarkers.contains(line) { continue }
             for prefix in linePrefixes where hasScalarPrefix(line, prefix) {
@@ -191,6 +222,24 @@ enum NoteText {
         return trimSpace(String(scalars)) + "…"
     }
 
+    /// Go's isNoteTableRow: a trimmed line framed by pipes.
+    static func isTableRow(_ line: String) -> Bool {
+        let scalars = line.unicodeScalars
+        return scalars.count >= 2 && scalars.first == "|" && scalars.last == "|"
+    }
+
+    /// Go's tableRowText: the non-empty cells, joined with a space.
+    private static func tableRowText(_ line: String) -> String {
+        // Split on scalars: a pipe followed by a combining mark is still a
+        // separator for Go, but not for a character-based split.
+        let cells = line.unicodeScalars.dropFirst().dropLast().split(separator: "|", omittingEmptySubsequences: false)
+        return cells.map { trimSpace(String(String.UnicodeScalarView($0))) }.filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
+    private static func matches(_ pattern: NSRegularExpression, _ text: String) -> Bool {
+        pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
+
     private static func codeFence(_ line: String) -> String? {
         if hasScalarPrefix(line, "```") { return "```" }
         if hasScalarPrefix(line, "~~~") { return "~~~" }
@@ -242,6 +291,7 @@ struct NoteListResponse: Decodable, Sendable {
 struct CreateNoteRequest: Encodable, Sendable {
     let title: String?
     let document: String
+    var capture: String? = nil
     let clientTime: Date
     let source: String
     let clientRequestID: String

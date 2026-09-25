@@ -1,6 +1,6 @@
 # AI-managed notes
 
-**Status:** Product and architecture specification. Stage A (notes core without media and AI) is implemented; see [the review](ai-managed-notes-review.md) for the binding deviations.
+**Status:** Product and architecture specification. Stage A (notes core) and Stage B (photos, voice, OpenRouter notes agent) are implemented; see [the review](ai-managed-notes-review.md) for the binding deviations and [the Stage B plan](superpowers/plans/2026-09-25-notes-ai.md).
 
 **Source:** [`ai-managed-notes-transcript.md`](ai-managed-notes-transcript.md)
 

@@ -1,9 +1,12 @@
 package mcpserver
 
 import (
+	"path/filepath"
+
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"github.com/nicremo/state/internal/notesai"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -53,6 +56,7 @@ func TestMCPServerNegotiatesListsToolsAndCreatesAuditedReminder(t *testing.T) {
 	sort.Strings(names)
 	want := []string{
 		"add_comment",
+		"add_note_attachment",
 		"claim_agent_run",
 		"complete_agent_run",
 		"complete_occurrence",
@@ -62,7 +66,10 @@ func TestMCPServerNegotiatesListsToolsAndCreatesAuditedReminder(t *testing.T) {
 		"get_changes",
 		"get_execution_context",
 		"get_note",
+		"get_note_processing",
 		"get_reminder",
+		"list_related_notes",
+		"process_note",
 		"report_agent_run_event",
 		"request_agent_approval",
 		"search_notes",
@@ -250,11 +257,17 @@ func newTestMCPFixture(t *testing.T) testMCPFixture {
 	if err != nil {
 		t.Fatalf("Authenticate(owner) error = %v", err)
 	}
-	stateService := state.NewService(repository)
+	gateway := notesai.NewGateway(notesai.NewClient("http://127.0.0.1:1", "", nil), state.DefaultNoteMediaPolicy())
+	media, err := notesai.NewMediaStore(filepath.Join(t.TempDir(), "media"))
+	if err != nil {
+		t.Fatalf("NewMediaStore() error = %v", err)
+	}
+	stateService := state.NewService(repository, state.WithNoteAI(gateway.Configured, gateway.MediaPolicy))
 	handler := NewHandler(Config{
 		Auth:    authManager,
 		State:   stateService,
 		Version: "test-version",
+		NotesAI: &notesai.Runtime{Gateway: gateway, Store: media, Worker: notesai.NewWorker(stateService, gateway, media, nil)},
 	})
 	return testMCPFixture{handler: handler, auth: authManager, state: stateService, owner: owner, ownerToken: ownerCredential.Token}
 }

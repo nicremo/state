@@ -39,6 +39,9 @@ enum StateTheme {
 
     /// The yellow dot of the icon. Used once per screen at most, never for text.
     static let signal = Color(red: 0.878, green: 0.867, blue: 0.157)
+    /// The highlight mark in notes: the signal yellow, soft enough to read
+    /// ink through in both appearances.
+    static let highlight = signal.opacity(0.42)
 
     /// The primary text color.
     static let graphite = Color(

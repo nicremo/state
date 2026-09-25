@@ -51,7 +51,7 @@ struct StoredConflict: Identifiable, Sendable {
 }
 
 final class StateDatabase: Sendable {
-    private let pool: DatabasePool
+    let pool: DatabasePool
 
     init(path: String) throws {
         var configuration = Configuration()
@@ -195,6 +195,8 @@ final class StateDatabase: Sendable {
                 try database.execute(sql: "DELETE FROM pending_mutations")
                 try database.execute(sql: "DELETE FROM note_cache")
                 try database.execute(sql: "DELETE FROM note_alias")
+                try database.execute(sql: "DELETE FROM note_upload")
+                try database.execute(sql: "DELETE FROM note_process_request")
             }
         }
     }
@@ -478,12 +480,21 @@ final class StateDatabase: Sendable {
                                 createRequestID: nil, patchRequestID: nil, syncError: nil, inflight: nil, latest: nil,
                                 conflictOf: conflictOf)
         } else {
+            // The server version with the local edits on top: what the
+            // editor can change comes from here, everything else (capture,
+            // attachments, AI data) from the server.
             let pending = record.note
+            var merged = server
+            merged.title = pending.title
+            merged.titleSource = pending.titleSource
+            merged.document = pending.document
+            merged.plainText = pending.plainText
+            merged.summary = pending.summary
+            merged.summarySource = pending.summarySource
+            merged.archived = pending.archived
+            merged.updatedAt = pending.updatedAt
             record = NoteRecord(
-                note: Note(id: server.id, title: pending.title, titleSource: pending.titleSource,
-                           document: pending.document, plainText: pending.plainText, summary: pending.summary,
-                           summarySource: pending.summarySource, archived: pending.archived,
-                           revision: server.revision, createdAt: server.createdAt, updatedAt: pending.updatedAt),
+                note: merged,
                 dirty: true, localVersion: record.localVersion, base: server,
                 createRequestID: nil, patchRequestID: nil, syncError: nil, inflight: nil, latest: nil,
                 conflictOf: conflictOf
@@ -566,9 +577,15 @@ final class StateDatabase: Sendable {
 
     /// Removes a note the server never saw, such as one archived offline.
     func deleteLocalNote(id: String) async throws {
-        try await pool.write { database in
+        let files = try await pool.write { database -> [String] in
             try database.execute(sql: "DELETE FROM note_cache WHERE id = ?", arguments: [id])
+            // Files of a note that never reached the server go with it.
+            let files = try String.fetchAll(database, sql: "SELECT file_name FROM note_upload WHERE note_id = ? AND status != ?", arguments: [id, NoteUpload.done])
+            try database.execute(sql: "DELETE FROM note_upload WHERE note_id = ?", arguments: [id])
+            try database.execute(sql: "DELETE FROM note_process_request WHERE note_id = ?", arguments: [id])
+            return files
         }
+        NoteMediaFiles.removePending(files)
     }
 
     /// A create whose response was lost comes back through the pull under its
@@ -581,7 +598,10 @@ final class StateDatabase: Sendable {
         for record in waiting {
             guard let inflight = record.inflight,
                   let body = try? JSONSerialization.jsonObject(with: inflight.body) as? [String: Any],
-                  body["document"] as? String == note.document else { continue }
+                  body["document"] as? String == note.document,
+                  // An empty photo or voice note looks like any other one;
+                  // its own create replay finds it instead.
+                  !note.document.isEmpty else { continue }
             let sentTitle = body["title"] as? String
             guard sentTitle == nil ? note.titleSource == Note.derivedSource : note.title == sentTitle else { continue }
             try completePush(record, sentVersion: inflight.version, server: note, in: database)
@@ -590,7 +610,7 @@ final class StateDatabase: Sendable {
         return false
     }
 
-    private static func noteRecord(id: String, in database: Database) throws -> NoteRecord? {
+    static func noteRecord(id: String, in database: Database) throws -> NoteRecord? {
         let resolved = try String.fetchOne(database, sql: "SELECT server_id FROM note_alias WHERE provisional_id = ?", arguments: [id]) ?? id
         return try Row.fetchOne(database, sql: "SELECT * FROM note_cache WHERE id = ?", arguments: [resolved]).map(noteRecord(row:))
     }
@@ -615,7 +635,7 @@ final class StateDatabase: Sendable {
         )
     }
 
-    private static func write(_ record: NoteRecord, in database: Database) throws {
+    static func write(_ record: NoteRecord, in database: Database) throws {
         let json = try StateJSON.encoder.encode(record.note)
         let base = try record.base.map { try StateJSON.encoder.encode($0) }
         let latest = try record.latest.map { try StateJSON.encoder.encode($0) }
@@ -888,6 +908,30 @@ final class StateDatabase: Sendable {
         migrator.registerMigration("v6-note-conflict-origin") { database in
             try database.alter(table: "note_cache") { table in
                 table.add(column: "conflict_of", .text)
+            }
+        }
+        migrator.registerMigration("v7-note-media") { database in
+            // Photos and recordings wait here until their note exists on the
+            // server; the file itself lives in Application Support.
+            try database.create(table: "note_upload") { table in
+                table.column("id", .text).primaryKey()
+                table.column("note_id", .text).notNull()
+                table.column("ordinal", .integer).notNull()
+                table.column("kind", .text).notNull()
+                table.column("mime_type", .text).notNull()
+                table.column("file_name", .text).notNull()
+                table.column("sha256", .text).notNull()
+                table.column("byte_size", .integer).notNull()
+                table.column("duration_ms", .integer)
+                table.column("request_id", .text).notNull()
+                table.column("status", .text).notNull()
+                table.column("error", .text)
+                table.column("created_at", .datetime).notNull()
+            }
+            try database.create(table: "note_process_request") { table in
+                table.column("note_id", .text).primaryKey()
+                table.column("request_id", .text).notNull()
+                table.column("sent", .boolean).notNull().defaults(to: false)
             }
         }
         return migrator
