@@ -113,3 +113,37 @@ Kopie auf die neue Serverfassung übertragen.
 **Bekannt und nicht Teil dieser Stufe:** Die Mutations-Warteschlange für
 Erinnerungen blockiert weiterhin bei dauerhaften 4xx-Antworten. Notizen sind
 davon entkoppelt; für Erinnerungen ist das ein eigener Fix.
+
+## 7. Verifikationsrunden (24. und 25.09.2026)
+
+Zwei weitere unabhängige Reviews haben die Fixes angegriffen und jeden Befund
+mit einem fehlschlagenden Test belegt. Alle Beweistests sind als
+Regressionstests übernommen (`ios/StateTests/NoteSyncTests.swift`,
+`internal/mcpserver/notes_runner_test.go`, `internal/state/notes_control_test.go`).
+
+- **Laufende Anfrage wird exakt wiederholt:** Jede Notiz speichert die gesendete,
+  noch unbeantwortete Anfrage (Methode, Pfad, Body, Version). Ein Retry sendet
+  genau diesen Body; erst nach der Antwort geht der Rest der Änderung unter
+  einer neuen Request-ID raus. So kann die Idempotenz des Servers nie einen
+  anderen Inhalt beantworten.
+- **Neueste Serverfassung:** Ein Pull, der eine Notiz mit ungesendeten
+  Änderungen nicht anwenden darf, merkt sich die Fassung. Sie greift, wenn die
+  lokale Änderung zurückgenommen wurde oder eine wiederholte Anfrage eine ältere
+  Fassung zurückliefert.
+- **Konfliktkopien:** entstehen in derselben Transaktion aus dem aktuellen Text,
+  auch aus Text, der während des Uploads getippt wurde. Ein offener Editor
+  schreibt in die bereits angelegte Kopie weiter, statt eine zweite anzulegen.
+- **Editor:** Titel und Text, die der Editor nicht verändert hat, behalten den
+  gespeicherten Wert (Agenten-Änderungen bleiben). Leere Notizen werden nur beim
+  Abschließen archiviert. Speichervorgänge werden verkettet, "Fertig" wartet auf
+  das laufende Speichern.
+- **Runner:** sehen Notiz-Ereignisse weder über `/changes` und `/briefing` noch
+  über `get_execution_context`; die Regel steht zentral in `state.VisibleChanges`.
+- **Parität:** Die Golden-Datei enthält zusätzlich 3000 zufällige, aber
+  deterministische Dokumente mit Markern, allen Leerzeichenarten, kombinierenden
+  Zeichen, Emoji und Steuerzeichen; Go und Swift vergleichen auf Ebene der
+  Unicode-Skalare.
+
+Bekannt und nicht Teil dieser Stufe: `TestDesktopLogsAddressAndVersion` in
+`cmd/state-server` scheitert selten beim Aufräumen des Testordners (Race beim
+Beenden des Desktop-Servers, unveränderter Code).
