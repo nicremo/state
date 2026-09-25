@@ -22,6 +22,7 @@ enum MarkdownBlocks {
         var blocks: [MarkdownBlock] = []
         var paragraph: [String] = []
         var code: [String]?
+        var codeFence: String?
 
         func flushParagraph() {
             let text = paragraph.joined(separator: " ").trimmingCharacters(in: .whitespaces)
@@ -32,13 +33,15 @@ enum MarkdownBlocks {
         for (index, rawLine) in source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n").enumerated() {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
 
-            if line.hasPrefix("```") {
+            if let marker = fenceMarker(line), codeFence == nil || codeFence == marker {
                 if let lines = code {
                     blocks.append(.code(lines.joined(separator: "\n")))
                     code = nil
+                    codeFence = nil
                 } else {
                     flushParagraph()
                     code = []
+                    codeFence = marker
                 }
                 continue
             }
@@ -75,6 +78,13 @@ enum MarkdownBlocks {
         return blocks
     }
 
+    /// Both fence styles; a block ends only with its own kind of fence.
+    private static func fenceMarker(_ line: String) -> String? {
+        if line.hasPrefix("```") { return "```" }
+        if line.hasPrefix("~~~") { return "~~~" }
+        return nil
+    }
+
     private static func heading(_ line: String) -> MarkdownBlock? {
         let hashes = line.prefix { $0 == "#" }.count
         guard (1...6).contains(hashes) else { return nil }
@@ -84,9 +94,15 @@ enum MarkdownBlocks {
         return text.isEmpty ? nil : .heading(level: hashes, text: text)
     }
 
+    private static let taskMarkers: [(String, Bool)] = [
+        ("- [ ]", false), ("- [x]", true), ("- [X]", true),
+        ("* [ ]", false), ("* [x]", true), ("* [X]", true),
+    ]
+
+    /// A checklist item, also an empty one: the format bar inserts "- [ ] "
+    /// and the trailing space is gone once the line is trimmed.
     private static func task(_ line: String, index: Int) -> MarkdownBlock? {
-        for (marker, checked) in [("- [ ] ", false), ("- [x] ", true), ("- [X] ", true), ("* [ ] ", false), ("* [x] ", true)]
-            where line.hasPrefix(marker) {
+        for (marker, checked) in taskMarkers where line == marker || line.hasPrefix(marker + " ") {
             let text = line.dropFirst(marker.count).trimmingCharacters(in: .whitespaces)
             return .task(checked: checked, text: text, line: index)
         }

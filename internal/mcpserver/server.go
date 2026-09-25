@@ -431,7 +431,8 @@ func (server *server) snoozeOccurrence(ctx context.Context, request *mcp.CallToo
 }
 
 func (server *server) getExecutionContext(ctx context.Context, request *mcp.CallToolRequest, input getExecutionContextInput) (*mcp.CallToolResult, any, error) {
-	if _, err := server.runnerOrOwnerActor(ctx, request); err != nil {
+	actor, err := server.runnerOrOwnerActor(ctx, request)
+	if err != nil {
 		return nil, nil, err
 	}
 	run, err := server.state.GetAgentRun(ctx, input.RunID)
@@ -456,7 +457,7 @@ func (server *server) getExecutionContext(ctx context.Context, request *mcp.Call
 	}
 	detail["run"] = run
 	detail["policy"] = policy
-	detail["changes"] = changes
+	detail["changes"] = state.VisibleChanges(actor, changes)
 	detail["cursor"] = cursor
 	return nil, detail, nil
 }

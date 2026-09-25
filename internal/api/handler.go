@@ -1069,7 +1069,8 @@ func (handler *Handler) notifySync(parent context.Context, excludedActorID strin
 }
 
 func (handler *Handler) getChanges(writer http.ResponseWriter, request *http.Request) {
-	if _, ok := handler.authenticate(writer, request); !ok {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
 		return
 	}
 	after, err := queryInteger64(request, "after", 0)
@@ -1092,13 +1093,14 @@ func (handler *Handler) getChanges(writer http.ResponseWriter, request *http.Req
 		cursor = changes[len(changes)-1].Cursor
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{
-		"changes": changes,
+		"changes": state.VisibleChanges(actor, changes),
 		"cursor":  cursor,
 	})
 }
 
 func (handler *Handler) getBriefing(writer http.ResponseWriter, request *http.Request) {
-	if _, ok := handler.authenticate(writer, request); !ok {
+	actor, ok := handler.authenticate(writer, request)
+	if !ok {
 		return
 	}
 	after, err := queryInteger64(request, "after", 0)
@@ -1114,6 +1116,7 @@ func (handler *Handler) getBriefing(writer http.ResponseWriter, request *http.Re
 	briefing, err := handler.state.GetBriefing(request.Context(), state.BriefingOptions{
 		AfterCursor: after,
 		Limit:       limit,
+		Viewer:      actor,
 	})
 	if err != nil {
 		writeError(writer, err, nil)

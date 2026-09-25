@@ -11,6 +11,7 @@ actor SyncEngine {
 
     func sync() async throws {
         try await pushPendingMutations()
+        try await pushDirtyNotes()
         try await pullChanges()
     }
 
@@ -22,15 +23,6 @@ actor SyncEngine {
                 if mutation.method == "POST", mutation.path == "/api/v1/reminders" {
                     try await applyCreatedReminder(response: response, provisionalID: mutation.entityID)
                 }
-                if mutation.method == "POST", mutation.path == Self.notesPath {
-                    try await applyStoredNote(response: response, provisionalID: mutation.entityID)
-                }
-                if mutation.method == "PATCH", mutation.path.hasPrefix(Self.notesPath + "/") {
-                    try await applyStoredNote(response: response, provisionalID: nil)
-                }
-                try await database.removeMutation(id: mutation.id)
-            } catch let StateAPIError.revisionConflict(serverSnapshot) where mutation.path.hasPrefix(Self.notesPath + "/") {
-                try await keepConflictingNote(mutation: mutation, serverSnapshot: serverSnapshot)
                 try await database.removeMutation(id: mutation.id)
             } catch let StateAPIError.revisionConflict(serverSnapshot) {
                 try await recordConflict(mutation: mutation, serverSnapshot: serverSnapshot)
@@ -55,57 +47,119 @@ actor SyncEngine {
 
     static let notesPath = "/api/v1/notes"
 
-    /// Replaces a provisional note with the one the server stored.
-    private func applyStoredNote(response: Data, provisionalID: String?) async throws {
-        guard let note = try? StateJSON.decoder.decode(Note.self, from: response) else { return }
-        try await database.apply(note: note)
-        if let provisionalID, provisionalID != note.id {
-            try await database.deleteNote(id: provisionalID)
+    /// Notes do not queue one request per edit. Each note carries a dirty
+    /// flag and the server version its edits are based on; a push sends the
+    /// difference. A note the server rejects for good is marked and skipped,
+    /// so it can never hold up other notes or the reminder queue.
+    private func pushDirtyNotes() async throws {
+        for record in try await database.dirtyNoteRecords() {
+            do {
+                try await push(record)
+            } catch let error as URLError {
+                throw error
+            } catch StateAPIError.unauthorized {
+                throw StateAPIError.unauthorized
+            } catch StateAPIError.server(let status, _) where Self.isTransient(status) {
+                // The server could not answer this time; the stored request
+                // goes out unchanged with the next sync.
+                continue
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as StateAPIError {
+                try await database.markNoteSyncError(id: record.note.id, message: error.localizedDescription)
+            } catch is DecodingError {
+                try await database.markNoteSyncError(id: record.note.id, message: StateAPIError.invalidResponse.localizedDescription)
+            }
         }
     }
 
-    /// A note edited on two devices keeps both texts: the server version stays
-    /// the note, the local text becomes a new note, as a conflicted copy. No
-    /// merge dialog, and nothing typed offline is lost.
-    private func keepConflictingNote(mutation: PendingMutation, serverSnapshot: Data) async throws {
-        guard let entityID = mutation.entityID,
-              let local = try await database.note(id: entityID),
-              let server = try? StateJSON.decoder.decode(Note.self, from: Self.serverObject(in: serverSnapshot))
-        else { return }
-        try await database.apply(note: server)
-        guard local.document != server.document else { return }
-        let now = Date()
-        let copyID = UUIDv7.generate().uuidString.lowercased()
-        let copyTitle = String(localized: "\(local.title) (conflict copy)")
-        let copy = Note.local(id: copyID, title: copyTitle, document: local.document, at: now)
-        try await database.apply(note: copy)
-        let requestID = UUIDv7.generate().uuidString.lowercased()
-        let request = CreateNoteRequest(
-            title: copyTitle,
-            document: local.document,
-            clientTime: now,
+    private static func isTransient(_ status: Int) -> Bool {
+        status == 408 || status == 409 || status == 425 || status == 429 || status >= 500
+    }
+
+    /// One note, one request at a time. A request that was sent but not
+    /// answered is replayed byte for byte; only after its answer is the rest
+    /// of the local edit sent as a new request with a new ID.
+    private func push(_ record: NoteRecord) async throws {
+        if let inflight = record.inflight {
+            try await send(inflight, for: record.note.id)
+            return
+        }
+        let note = record.note
+        guard let base = record.base else {
+            if note.archived {
+                // Never sent, so the server has never seen it.
+                try await database.deleteLocalNote(id: note.id)
+                return
+            }
+            let request = CreateNoteRequest(
+                title: note.titleSource == Note.userSource ? note.title : nil,
+                document: note.document,
+                clientTime: note.updatedAt,
+                source: "ios",
+                clientRequestID: record.createRequestID ?? UUIDv7.generate().uuidString.lowercased()
+            )
+            try await begin(NoteInflight(method: "POST", path: Self.notesPath, body: try StateJSON.encoder.encode(request), version: record.localVersion), for: note.id)
+            return
+        }
+
+        var title: String?
+        if note.titleSource == Note.userSource, base.titleSource != Note.userSource || base.title != note.title {
+            title = note.title
+        } else if note.titleSource == Note.derivedSource, base.titleSource == Note.userSource {
+            title = ""
+        }
+        let document = note.document == base.document ? nil : note.document
+        let archived = note.archived == base.archived ? nil : note.archived
+        guard title != nil || document != nil || archived != nil else {
+            // Nothing left to send (an edit that was undone). A newer server
+            // version seen meanwhile becomes the note.
+            try await database.completeNotePush(localID: note.id, sentVersion: record.localVersion, server: record.latest ?? base)
+            return
+        }
+        let request = UpdateNoteRequest(
+            title: title,
+            document: document,
+            archived: archived,
+            expectedRevision: base.revision,
+            clientTime: note.updatedAt,
             source: "ios",
-            clientRequestID: requestID
+            clientRequestID: UUIDv7.generate().uuidString.lowercased()
         )
-        _ = try await database.enqueue(
-            method: "POST",
-            path: Self.notesPath,
-            body: StateJSON.encoder.encode(request),
-            entityID: copyID
+        try await begin(
+            NoteInflight(method: "PATCH", path: "\(Self.notesPath)/\(note.id)", body: try StateJSON.encoder.encode(request), version: record.localVersion),
+            for: note.id
         )
     }
 
-    /// The REST error body wraps the current object as details.server; a bare
-    /// object is accepted too.
-    private static func serverObject(in snapshot: Data) -> Data {
-        guard
-            let object = (try? JSONSerialization.jsonObject(with: snapshot)) as? [String: Any],
-            let details = object["details"] as? [String: Any],
-            let server = details["server"],
-            let data = try? JSONSerialization.data(withJSONObject: server)
-        else { return snapshot }
-        return data
+    private func begin(_ inflight: NoteInflight, for noteID: String) async throws {
+        // Send what is stored, never a body the database did not keep.
+        guard let stored = try await database.beginNotePush(id: noteID, inflight: inflight) else { return }
+        try await send(stored, for: noteID)
     }
+
+    private func send(_ inflight: NoteInflight, for noteID: String) async throws {
+        let mutation = PendingMutation(
+            id: UUIDv7.generate().uuidString.lowercased(),
+            method: inflight.method,
+            path: inflight.path,
+            body: inflight.body,
+            entityID: noteID,
+            createdAt: Date(),
+            attempts: 0
+        )
+        do {
+            let response = try await api.send(mutation: mutation)
+            let stored = try StateJSON.decoder.decode(Note.self, from: response)
+            try await database.completeNotePush(localID: noteID, sentVersion: inflight.version, server: stored)
+        } catch let StateAPIError.revisionConflict(snapshot) where inflight.method == "PATCH" {
+            let server = try StateJSON.decoder.decode(Note.self, from: snapshot)
+            try await database.resolveNoteConflict(localID: noteID, server: server) { title in
+                NoteText.conflictCopyTitle(for: title)
+            }
+        }
+    }
+
 
     private func pullChanges() async throws {
         var currentCursor = try await database.cursor()
@@ -118,7 +172,7 @@ actor SyncEngine {
             let noteIDs = Array(Set(response.changes.compactMap(\.event.noteID))).sorted()
             for identifier in noteIDs {
                 do {
-                    try await database.apply(note: try await api.getNote(id: identifier))
+                    try await database.applyServer(note: try await api.getNote(id: identifier))
                 } catch StateAPIError.notFound {
                     // A server without notes, or a note this client may not read.
                 }

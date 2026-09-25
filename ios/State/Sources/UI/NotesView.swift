@@ -19,7 +19,6 @@ struct NotesCollectionView: View {
     @State private var search = ""
     @State private var path: [NoteRoute] = []
     @State private var showsArchive = false
-    @State private var archivedNotes: [Note] = []
 
     var body: some View {
         if let selection {
@@ -66,7 +65,7 @@ struct NotesCollectionView: View {
                     withAnimation(StateTheme.stateChange) { showsArchive.toggle() }
                 } label: {
                     Label(
-                        showsArchive ? String(localized: "Show notes") : String(localized: "Archived notes"),
+                        showsArchive ? String(localized: "Show all notes") : String(localized: "Archived notes"),
                         systemImage: showsArchive ? "note.text" : "archivebox"
                     )
                 }
@@ -78,7 +77,6 @@ struct NotesCollectionView: View {
                 .disabled(showsArchive)
             }
         }
-        .task(id: showsArchive) { await reloadArchive() }
         #if DEBUG
         .task(id: model.notes.first?.id) {
             guard selection == nil, path.isEmpty else { return }
@@ -89,7 +87,6 @@ struct NotesCollectionView: View {
             }
         }
         #endif
-        .onChange(of: model.notes) { _, _ in Task { await reloadArchive() } }
     }
 
     @ViewBuilder
@@ -155,12 +152,8 @@ struct NotesCollectionView: View {
         }
     }
 
-    private func reloadArchive() async {
-        archivedNotes = showsArchive ? await model.archivedNotes() : []
-    }
-
     private var visibleNotes: [Note] {
-        let source = showsArchive ? archivedNotes : model.notes
+        let source = showsArchive ? model.archivedNotes : model.notes
         let query = search.trimmingCharacters(in: .whitespaces)
         return query.isEmpty ? source : source.filter { $0.matches(query) }
     }
@@ -192,7 +185,7 @@ struct NoteRow: View {
             }
             Text(note.updatedAt, format: .relative(presentation: .named))
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)

@@ -275,8 +275,8 @@ struct StatePillButtonStyle: ButtonStyle {
         configuration.label
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(StateTheme.onAccent)
-            .padding(.horizontal, StateTheme.Space.block)
-            .frame(minHeight: 36)
+            .padding(.horizontal, StateTheme.Space.section)
+            .frame(minHeight: StateControlMetrics.tapTarget)
             .background(StateTheme.accent, in: Capsule())
             .contentShape(Capsule())
             .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.25)
@@ -290,9 +290,14 @@ enum StateControlMetrics {
     #if os(macOS)
     static let height: CGFloat = 40
     static let radius: CGFloat = 10
+    static let formatButton: CGFloat = 32
+    /// Minimum height of a tappable row inside rendered text.
+    static let tapTarget: CGFloat = 24
     #else
     static let height: CGFloat = 54
     static let radius: CGFloat = 16
+    static let formatButton: CGFloat = 44
+    static let tapTarget: CGFloat = 44
     #endif
 }
 

@@ -68,11 +68,39 @@ final class NoteMarkdownTests: XCTestCase {
         XCTAssertEqual(NoteEditing.toggleTask(atLine: 9, in: document), document)
     }
 
-    func testLinePrefixGoesToTheStartOfTheCurrentLine() {
+    func testLinePrefixGoesToTheStartOfTheCurrentLineAndToggles() {
         let text = "Erste\nZweite Zeile"
         let cursor = text.range(of: "Zeile")!.lowerBound
-        let (result, _) = NoteEditing.insertLinePrefix("- [ ] ", in: text, at: cursor..<cursor)
-        XCTAssertEqual(result, "Erste\n- [ ] Zweite Zeile")
+        let (added, addedCursor) = NoteEditing.toggleLinePrefix("- [ ] ", in: text, at: cursor..<cursor)
+        XCTAssertEqual(added, "Erste\n- [ ] Zweite Zeile")
+        let (removed, _) = NoteEditing.toggleLinePrefix("- [ ] ", in: added, at: addedCursor..<addedCursor)
+        XCTAssertEqual(removed, text)
+    }
+
+    func testLinePrefixFindsCRLFLineStarts() {
+        let text = "Erste\r\nZweite"
+        let cursor = text.range(of: "Zweite")!.lowerBound
+        let (result, _) = NoteEditing.toggleLinePrefix("- ", in: text, at: cursor..<cursor)
+        XCTAssertEqual(result, "Erste\r\n- Zweite")
+    }
+
+    func testEmptyChecklistItemIsATask() {
+        XCTAssertEqual(MarkdownBlocks.parse("- [ ] \n* [X] fertig"), [
+            .task(checked: false, text: "", line: 0),
+            .task(checked: true, text: "fertig", line: 1),
+        ])
+    }
+
+    func testDividerInAnEmptyNoteIsTheFirstLine() {
+        let (result, _) = NoteEditing.insertDivider(in: "", at: "".startIndex..<"".endIndex)
+        XCTAssertEqual(result, "---\n")
+    }
+
+    func testReaderBlanksOnlyATitleLine() {
+        let fenced = Note.local(id: "n", title: "", document: "```\nlet a = 1\n```\n- [ ] echt", at: Date())
+        XCTAssertEqual(NoteDetailView.body(of: fenced), fenced.document, "a fence is structure, not the title")
+        let titled = Note.local(id: "t", title: "", document: "# Einkauf\n- [ ] Milch", at: Date())
+        XCTAssertEqual(NoteDetailView.body(of: titled), "\n- [ ] Milch")
     }
 
     func testWrapSurroundsTheSelection() {
@@ -80,5 +108,15 @@ final class NoteMarkdownTests: XCTestCase {
         let range = text.range(of: "wichtiges")!
         let (result, _) = NoteEditing.wrap("**", in: text, range: range)
         XCTAssertEqual(result, "ein **wichtiges** Wort")
+    }
+
+    func testAnEmptyChecklistItemCanBeTicked() {
+        XCTAssertEqual(NoteEditing.toggleTask(atLine: 1, in: "Liste\n- [ ]"), "Liste\n- [x]")
+        XCTAssertEqual(NoteEditing.toggleTask(atLine: 0, in: "- [X] fertig"), "- [ ] fertig")
+        XCTAssertEqual(NoteEditing.toggleTask(atLine: 0, in: "- [ ] a\r\nb"), "- [x] a\r\nb")
+    }
+
+    func testTildeFencesKeepChecklistsInsideAsCode() {
+        XCTAssertEqual(MarkdownBlocks.parse("~~~\n- [ ] kein Häkchen\n~~~"), [.code("- [ ] kein Häkchen")])
     }
 }

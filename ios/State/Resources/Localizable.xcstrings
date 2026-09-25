@@ -1,22 +1,22 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@ (conflict copy)" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ (Konfliktkopie)"
-          }
-        }
-      }
-    },
     "%@ Agent" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ Agent"
+          }
+        }
+      }
+    },
+    "(conflict copy)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(Konfliktkopie)"
           }
         }
       }
@@ -517,6 +517,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Prüfe das MCP-Ergebnis und ergänze die abschließenden Notizen."
+          }
+        }
+      }
+    },
+    "Checked" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erledigt"
           }
         }
       }
@@ -1821,6 +1831,16 @@
         }
       }
     },
+    "Not checked" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offen"
+          }
+        }
+      }
+    },
     "Not now" : {
       "localizations" : {
         "de" : {
@@ -1837,6 +1857,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nicht angefragt"
+          }
+        }
+      }
+    },
+    "Not synced: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht synchronisiert: %@"
           }
         }
       }
@@ -2931,22 +2961,22 @@
         }
       }
     },
+    "Show all notes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Notizen anzeigen"
+          }
+        }
+      }
+    },
     "Show less" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Weniger anzeigen"
-          }
-        }
-      }
-    },
-    "Show notes" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notizen zeigen"
           }
         }
       }
@@ -3367,6 +3397,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dies ist kein gültiger State-Kopplungscode."
+          }
+        }
+      }
+    },
+    "This note is too long to sync." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Notiz ist zu lang zum Synchronisieren."
           }
         }
       }

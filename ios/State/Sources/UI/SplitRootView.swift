@@ -9,9 +9,16 @@ struct SplitRootView: View {
     @State private var section: StateTab? = .today
     @State private var selectedReminderID: String?
     @State private var selectedNoteID: String?
+    /// Identity of the note detail. It changes when the owner picks another
+    /// note, not when a note being written gets its first identifier, so the
+    /// open editor survives that moment.
+    @State private var noteDetailKey = UUID()
+    /// The note an open editor just created; selecting it keeps that editor.
+    @State private var revealedNoteID: String?
     @State private var opensNotificationSettings = false
     @State private var opensEditor = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var windowWidth: CGFloat = 0
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -61,6 +68,19 @@ struct SplitRootView: View {
         } detail: {
             detail
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.width } action: { width in
+            windowWidth = width
+        }
+        .onChange(of: selectedReminderID) { _, selection in revealDetail(for: selection) }
+        .onChange(of: selectedNoteID) { _, selection in
+            if let revealed = revealedNoteID, selection == revealed {
+                revealedNoteID = nil
+            } else {
+                revealedNoteID = nil
+                noteDetailKey = UUID()
+                revealDetail(for: selection)
+            }
+        }
         .onChange(of: section) { _, _ in
             selectedReminderID = nil
             selectedNoteID = nil
@@ -102,20 +122,41 @@ struct SplitRootView: View {
             NavigationStack {
                 NoteDetailView(
                     model: model,
-                    noteID: selectedNoteID == NoteRoute.newSelection ? nil : selectedNoteID
-                ) { created in
-                    self.selectedNoteID = created
-                }
+                    noteID: selectedNoteID == NoteRoute.newSelection ? nil : selectedNoteID,
+                    onCreate: { created in
+                        guard selectedNoteID != created else { return }
+                        revealedNoteID = created
+                        self.selectedNoteID = created
+                    },
+                    onClose: { self.selectedNoteID = nil }
+                )
             }
-            .id(selectedNoteID)
+            .id(noteDetailKey)
         } else {
             ContentUnavailableView(String(localized: "Select a note"), systemImage: "note.text")
         }
     }
 
+    /// Too narrow for three columns, as an iPad in portrait, the sidebar and
+    /// the list float over the detail. After a selection the detail is what
+    /// the owner wants to see, so the floating columns step aside, as in
+    /// Apple Notes. Wide windows keep all three columns.
+    private func revealDetail(for selection: String?) {
+        guard windowWidth > 0, windowWidth < Self.threeColumnWidth else { return }
+        // Nothing selected any more (the note was archived): bring the list back.
+        withAnimation(StateTheme.stateChange) { columnVisibility = selection == nil ? .all : .detailOnly }
+    }
+
+    private static let threeColumnWidth: CGFloat = 1000
+
     /// The editor lives inside the reminder list, so the menu command has to
     /// make sure such a list is on screen before the sheet can open.
     private func createReminder() {
+        // In the notes section the same command writes a new note.
+        if section == .notes {
+            selectedNoteID = NoteRoute.newSelection
+            return
+        }
         if section != .today && section != .planned {
             section = .today
         }
