@@ -1480,7 +1480,7 @@ final class AppModel {
             notesAISettings = nil
             serverHasNotesAI = false
         } catch {
-            presentedError = error.localizedDescription
+            present(error)
         }
     }
 
@@ -1490,7 +1490,7 @@ final class AppModel {
             notesAISettings = try await api.updateNotesAISettings(consent: consent, monthlyLimitUSD: monthlyLimitUSD)
             await refreshNoteCapabilities()
         } catch {
-            presentedError = error.localizedDescription
+            present(error)
         }
     }
 
@@ -1507,7 +1507,7 @@ final class AppModel {
             )
             await synchronize()
         } catch {
-            presentedError = error.localizedDescription
+            present(error)
         }
     }
 
@@ -1517,7 +1517,7 @@ final class AppModel {
             try await database.applyServer(note: try await api.dismissReminderProposal(noteID: noteAliases[noteID] ?? noteID, proposalID: proposal.id))
             await reloadCache()
         } catch {
-            presentedError = error.localizedDescription
+            present(error)
         }
     }
 
@@ -1527,7 +1527,7 @@ final class AppModel {
             try await database.applyServer(note: try await api.dismissNoteRelation(noteID: noteAliases[noteID] ?? noteID, relationID: relation.id))
             await reloadCache()
         } catch {
-            presentedError = error.localizedDescription
+            present(error)
         }
     }
 
@@ -1538,7 +1538,7 @@ final class AppModel {
             try await database.requestNoteProcessingAgain(noteID: noteAliases[noteID] ?? noteID)
             await afterNoteEdit()
         } catch {
-            presentedError = error.localizedDescription
+            present(error)
         }
     }
 
@@ -1576,8 +1576,21 @@ final class AppModel {
             devices = try await loadedDevices
         } catch StateAPIError.unauthorized {
         } catch {
-            presentedError = error.localizedDescription
+            present(error)
         }
+    }
+
+    /// Shows an error, but not a cancellation: SwiftUI cancels a pull to
+    /// refresh when the screen redraws, and that is no failure of the owner's.
+    func present(_ error: Error) {
+        guard !Self.isCancellation(error) else { return }
+        presentedError = error.localizedDescription
+    }
+
+    nonisolated static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        return false
     }
 
     private func mutateOccurrence(id: String, snoozeUntil: Date?) async {

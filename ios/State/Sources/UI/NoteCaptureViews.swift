@@ -39,6 +39,70 @@ struct NoteCaptureButton: View {
     }
 }
 
+/// The plus button with its photo and voice sheets. The iPhone puts it on
+/// the notes list; the iPad and the Mac put it bottom right of the note
+/// column, which stays on screen where a list column may be folded away.
+struct NoteCaptureHost: ViewModifier {
+    @Bindable var model: AppModel
+    var isEnabled: Bool
+    var onText: () -> Void
+    /// Receives the identifier of a new photo or voice note to open it.
+    var onCreated: (String) -> Void
+
+    @State private var capturesPhoto = false
+    @State private var capturesVoice = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .bottomTrailing) {
+                if isEnabled {
+                    NoteCaptureButton(
+                        onText: onText,
+                        onPhoto: { capturesPhoto = true },
+                        onVoice: { capturesVoice = true }
+                    )
+                }
+            }
+            .sheet(isPresented: $capturesPhoto) {
+                PhotoCaptureSheet(capabilities: model.noteCapabilities) { media in
+                    create(kind: "image", media: media)
+                }
+                .task { await model.refreshNoteCapabilities() }
+            }
+            .sheet(isPresented: $capturesVoice) {
+                VoiceCaptureSheet(capabilities: model.noteCapabilities) { media in
+                    create(kind: "audio", media: media)
+                }
+            }
+            #if DEBUG
+            .task {
+                guard isEnabled else { return }
+                switch StateLaunch.initialCapture {
+                case "image": capturesPhoto = true
+                case "audio": capturesVoice = true
+                default: break
+                }
+            }
+            #endif
+    }
+
+    /// Stores a photo or voice note and opens it, so the owner sees the
+    /// upload and the AI at work.
+    private func create(kind: String, media: [AppModel.CapturedMedia]) {
+        Task {
+            if let identifier = await model.createCaptureNote(kind: kind, media: media) {
+                onCreated(identifier)
+            }
+        }
+    }
+}
+
+extension View {
+    func noteCapture(model: AppModel, isEnabled: Bool, onText: @escaping () -> Void, onCreated: @escaping (String) -> Void) -> some View {
+        modifier(NoteCaptureHost(model: model, isEnabled: isEnabled, onText: onText, onCreated: onCreated))
+    }
+}
+
 /// Photos for a note: take them with the document camera, which handles
 /// several notebook pages in one go, or pick them from the library. The
 /// most the picker allows comes from the server.

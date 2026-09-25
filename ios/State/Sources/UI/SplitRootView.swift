@@ -101,6 +101,9 @@ struct SplitRootView: View {
     private var detail: some View {
         if section == .notes {
             noteDetail
+                .noteCapture(model: model, isEnabled: true, onText: { selectedNoteID = NoteRoute.newSelection }) { identifier in
+                    selectedNoteID = identifier
+                }
         } else if let selectedReminderID, section == .today || section == .planned {
             NavigationStack {
                 ReminderDetailView(model: model, reminderID: selectedReminderID)

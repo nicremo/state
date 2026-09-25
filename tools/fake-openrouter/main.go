@@ -47,8 +47,9 @@ func reply(body map[string]any) fakeopenrouter.Reply {
 		encoded, _ := json.Marshal(message["content"])
 		content += string(encoded)
 	}
-	if !usedTool {
-		if match := candidatePattern.FindStringSubmatch(strings.ReplaceAll(content, `\n`, "\n")); match != nil {
+	linked := strings.Contains(content, "The link is stored")
+	if !usedTool || !linked {
+		if match := candidatePattern.FindStringSubmatch(strings.ReplaceAll(content, `\n`, "\n")); match != nil && !linked {
 			return fakeopenrouter.ToolCall("link-1", "link_related_note", map[string]any{
 				"note_id": match[1], "reason": "Beide Notizen behandeln dasselbe Thema.", "confidence": 0.8,
 			}, 0.0004)
@@ -62,7 +63,12 @@ func reply(body map[string]any) fakeopenrouter.Reply {
 			"document":    "## Notizbuchseite\n- [ ] Monatsreport an Karla\n- [ ] Zahlen prüfen\n- [x] Termin bestätigt\n\n==Wichtig:== Report bis **Freitag**.",
 			"image_texts": []map[string]any{{"index": 1, "text": "Monatsreport an Karla, Zahlen prüfen, Termin bestätigt. Wichtig: Report bis Freitag."}},
 		}, 0.0021)
-	case strings.Contains(content, "<transcript>"):
+	case strings.Contains(content, "Transcript of recording") && !strings.Contains(content, "Nothing was created"):
+		return fakeopenrouter.ToolCall("propose-1", "propose_reminder", map[string]any{
+			"title": "Karla anrufen", "local_date": "2026-09-26", "local_time": "10:00",
+			"reason": "In der Aufnahme: am Freitag Karla anrufen",
+		}, 0.0005)
+	case strings.Contains(content, "Transcript of recording"):
 		return fakeopenrouter.ToolCall("submit", "submit_result", map[string]any{
 			"title":    "Sprachnotiz Einkauf",
 			"summary":  "Einkauf und ein Anruf bei Karla.",

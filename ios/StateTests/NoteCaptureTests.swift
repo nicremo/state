@@ -38,11 +38,12 @@ final class NoteCaptureTests: XCTestCase {
 
     func testCaptureNotesHaveTheirOwnPlaceholderTitle() {
         var note = Note.local(id: "n", title: "", document: "", at: Date())
-        XCTAssertEqual(note.placeholderTitle, String(localized: "New note"))
+        let app = Bundle(for: AppModel.self)
+        XCTAssertEqual(note.placeholderTitle, String(localized: "New note", bundle: app))
         note.capture = "image"
-        XCTAssertEqual(note.placeholderTitle, String(localized: "Photo note"))
+        XCTAssertEqual(note.placeholderTitle, String(localized: "Photo note", bundle: app))
         note.capture = "audio"
-        XCTAssertEqual(note.placeholderTitle, String(localized: "Voice note"))
+        XCTAssertEqual(note.placeholderTitle, String(localized: "Voice note", bundle: app))
     }
 
     private func pngData(width: Int, height: Int) throws -> Data {
@@ -56,5 +57,28 @@ final class NoteCaptureTests: XCTestCase {
         CGImageDestinationAddImage(destination, image, nil)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
         return data as Data
+    }
+}
+
+/// A pull to refresh that SwiftUI cancels is not an error for the owner.
+final class CancellationPresentationTests: XCTestCase {
+    func testCancellationsAreNotShownAsErrors() {
+        XCTAssertTrue(AppModel.isCancellation(CancellationError()))
+        XCTAssertTrue(AppModel.isCancellation(URLError(.cancelled)))
+        XCTAssertFalse(AppModel.isCancellation(URLError(.notConnectedToInternet)))
+        XCTAssertFalse(AppModel.isCancellation(StateAPIError.unauthorized))
+    }
+}
+
+/// The note says exactly which part the AI wrote.
+final class NoteProvenanceTests: XCTestCase {
+    @MainActor
+    func testProvenanceNamesOnlyWhatTheAIWrote() {
+        var note = Note.local(id: "n", title: "Mein Titel", document: "Text", at: Date())
+        XCTAssertNil(NoteAISuggestionsView.provenance(note, model: "m"))
+        note.summarySource = Note.aiSource
+        XCTAssertEqual(NoteAISuggestionsView.provenance(note, model: "m"), String(localized: "Summary by the notes AI (\("m"))", bundle: Bundle(for: AppModel.self)))
+        note.titleSource = Note.aiSource
+        XCTAssertEqual(NoteAISuggestionsView.provenance(note, model: "m"), String(localized: "Title and summary by the notes AI (\("m"))", bundle: Bundle(for: AppModel.self)))
     }
 }

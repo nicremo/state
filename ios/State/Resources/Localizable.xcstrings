@@ -3741,6 +3741,16 @@
         }
       }
     },
+    "Summary by the notes AI (%@)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zusammenfassung von der Notiz-KI (%@)"
+          }
+        }
+      }
+    },
     "Supervised" : {
       "localizations" : {
         "de" : {
@@ -4197,6 +4207,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Titel und Zusammenfassung von der Notiz-KI (%@)"
+          }
+        }
+      }
+    },
+    "Title by the notes AI (%@)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titel von der Notiz-KI (%@)"
           }
         }
       }

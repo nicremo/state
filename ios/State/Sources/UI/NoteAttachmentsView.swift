@@ -285,12 +285,22 @@ struct NoteAISuggestionsView: View {
                     }
                 }
             }
-            if let ai = note.ai, note.titleSource == Note.aiSource || note.summarySource == Note.aiSource {
-                Label(String(localized: "Title and summary by the notes AI (\(ai.model))"), systemImage: "sparkles")
+            if let ai = note.ai, let provenance = Self.provenance(note, model: ai.model) {
+                Label(provenance, systemImage: "sparkles")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("note-ai-provenance")
             }
+        }
+    }
+
+    /// Names exactly what the AI wrote: a written title stays the owner's.
+    static func provenance(_ note: Note, model: String) -> String? {
+        switch (note.titleSource == Note.aiSource, note.summarySource == Note.aiSource) {
+        case (true, true): String(localized: "Title and summary by the notes AI (\(model))")
+        case (true, false): String(localized: "Title by the notes AI (\(model))")
+        case (false, true): String(localized: "Summary by the notes AI (\(model))")
+        case (false, false): nil
         }
     }
 

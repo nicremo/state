@@ -373,6 +373,19 @@ func (service *Service) ListNoteViews(ctx context.Context, options NoteListOptio
 	return views, nil
 }
 
+// visibleTitle is the title the owner sees for a note: a written one, the
+// AI's for the current text, or the derived one.
+func (service *Service) visibleTitle(ctx context.Context, note Note) string {
+	if note.TitleSource != NoteFieldSourceDerived {
+		return note.Title
+	}
+	aiState, err := service.repository.GetNoteAIState(ctx, note.ID)
+	if err != nil || aiState.Result == nil || aiState.Result.Title == "" || aiState.Result.SourceHash != plainTextHash(note.PlainText) {
+		return note.Title
+	}
+	return aiState.Result.Title
+}
+
 // NoteViewOf wraps a note that a mutation just returned.
 func (service *Service) NoteViewOf(ctx context.Context, note Note) (NoteView, error) {
 	return service.noteView(ctx, note)
@@ -424,7 +437,7 @@ func (service *Service) noteView(ctx context.Context, note Note) (NoteView, erro
 		if err != nil || related.Archived {
 			continue
 		}
-		relation.RelatedTitle = related.Title
+		relation.RelatedTitle = service.visibleTitle(ctx, related)
 		view.Relations = append(view.Relations, relation)
 	}
 	return view, nil
@@ -901,9 +914,10 @@ func (service *Service) AcceptReminderProposal(ctx context.Context, actor Actor,
 		}
 		schedule = &Schedule{LocalDate: proposal.LocalDate, LocalTime: proposal.LocalTime, TimeZone: input.TimeZone, Mode: TimeZoneModeFloating}
 	}
+	// The reminder names its note as the owner sees it, AI title included.
 	description := proposal.Description
-	if title := strings.TrimSpace(note.Title); title != "" {
-		description = strings.TrimSpace(description + "\n\n" + "Note: " + title)
+	if view, err := service.noteView(ctx, note); err == nil && strings.TrimSpace(view.Title) != "" {
+		description = strings.TrimSpace(description + "\n\n📝 " + view.Title)
 	}
 	reminder, err := service.CreateReminder(ctx, actor, CreateReminderInput{
 		Title:           proposal.Title,

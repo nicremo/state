@@ -203,3 +203,14 @@ belegt und als Regressionstest übernommen (`internal/notesai/review_regression_
 | App | Bilder wurden auf dem Main Thread und in voller Größe dekodiert | Vorbereitung, Hashen und Vorschaubilder laufen im Hintergrund in Anzeigegröße |
 | App | Die App bot ein Foto an, wenn das Servermodell keine Bilder liest | Foto-Aufnahme wird dann gesperrt und erklärt |
 | App | Verwaiste Dateien und endloses Laden bei alten Servern | Aufräumen beim Verwerfen, Hinweis "Auf diesem Server nicht verfügbar" |
+| MobAI | Wischen zum Aktualisieren meldete "CancellationError" (auch in der Liste aus Stufe A) | Abbrüche sind keine Fehler, der Sync läuft vom Wischen entkoppelt |
+| MobAI | Auf dem iPad im Hochformat war der Plus-Button bei eingeblendeter Listenspalte unsichtbar | Auf iPad und Mac sitzt der Plus-Button unten rechts an der Notizspalte |
+| MobAI | Verwandte Notizen zeigten die erste Textzeile statt des KI-Titels, eine angenommene Erinnerung nannte die Notiz mit englischem Präfix | Sichtbarer Titel in Verknüpfungen, Erinnerung nennt die Notiz mit 📝 und ihrem Titel |
+
+**End-to-End per MobAI** (iPhone 16 Pro mit iOS 18.5, iPad Pro 11) gegen einen lokalen
+State-Server mit Fake-OpenRouter (`tools/fake-openrouter`): Plus-Menü, Text mit
+Überschrift, Checkliste, Unterstreichen, Hervorheben, Tabelle, Trennlinie und
+Einklappen, Foto aus der Mediathek mit Handschrift, OCR und verwandter Notiz,
+Sprachaufnahme mit Transkript, Wiedergabe und Erinnerungsvorschlag, der nach
+Bestätigung als Erinnerung unter "Geplant" erscheint, Einstellungen mit
+Einwilligung, Limit, Modellen und Fotogrenze.

@@ -142,7 +142,11 @@ struct NoteDetailView: View {
         .task(id: "\(note.id)-\(note.attachments?.count ?? 0)-\(model.lastSyncAt?.timeIntervalSince1970 ?? 0)") {
             uploads = await model.noteUploads(for: note.id)
         }
-        .refreshable { await model.synchronize() }
+        .refreshable {
+                    // A sync the screen's redraw cancels would stop halfway;
+                    // it runs on its own and the pull waits for it.
+                    await Task { await model.synchronize() }.value
+                }
     }
 
     /// A derived title is the document's first line, so the reader shows it

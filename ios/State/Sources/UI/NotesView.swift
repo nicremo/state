@@ -19,8 +19,6 @@ struct NotesCollectionView: View {
     @State private var search = ""
     @State private var path: [NoteRoute] = []
     @State private var showsArchive = false
-    @State private var capturesPhoto = false
-    @State private var capturesVoice = false
 
     var body: some View {
         if let selection {
@@ -56,28 +54,17 @@ struct NotesCollectionView: View {
                 .stateListStyle()
                 .stateBackground()
                 .animation(StateTheme.contentChange, value: visibleNotes.map(\.id))
-                .refreshable { await model.synchronize() }
+                .refreshable {
+                    // A sync the screen's redraw cancels would stop halfway;
+                    // it runs on its own and the pull waits for it.
+                    await Task { await model.synchronize() }.value
+                }
             }
         }
-        .overlay(alignment: .bottomTrailing) {
-            if !showsArchive {
-                NoteCaptureButton(
-                    onText: newNote,
-                    onPhoto: { capturesPhoto = true },
-                    onVoice: { capturesVoice = true }
-                )
-            }
-        }
-        .sheet(isPresented: $capturesPhoto) {
-            PhotoCaptureSheet(capabilities: model.noteCapabilities) { media in
-                createCaptureNote(kind: "image", media: media)
-            }
-            .task { await model.refreshNoteCapabilities() }
-        }
-        .sheet(isPresented: $capturesVoice) {
-            VoiceCaptureSheet(capabilities: model.noteCapabilities) { media in
-                createCaptureNote(kind: "audio", media: media)
-            }
+        // On the iPhone the plus sits on the list; the split layout puts it
+        // on the note column (SplitRootView).
+        .noteCapture(model: model, isEnabled: selection == nil && !showsArchive, onText: newNote) { identifier in
+            path = [.note(identifier)]
         }
         .navigationTitle(showsArchive ? String(localized: "Archived notes") : String(localized: "Notes"))
         .searchable(text: $search, prompt: String(localized: "Search notes"))
@@ -99,13 +86,6 @@ struct NotesCollectionView: View {
             switch StateLaunch.initialNote {
             case "first": if let first = model.notes.first { path = [.note(first.id)] }
             case "new": path = [.new]
-            default: break
-            }
-        }
-        .task {
-            switch StateLaunch.initialCapture {
-            case "image": capturesPhoto = true
-            case "audio": capturesVoice = true
             default: break
             }
         }
@@ -163,19 +143,6 @@ struct NotesCollectionView: View {
                     Text("New note")
                 }
                 .buttonStyle(.statePill)
-            }
-        }
-    }
-
-    /// Stores a photo or voice note and opens it, so the owner sees the
-    /// upload and the AI at work.
-    private func createCaptureNote(kind: String, media: [AppModel.CapturedMedia]) {
-        Task {
-            guard let identifier = await model.createCaptureNote(kind: kind, media: media) else { return }
-            if let selection {
-                selection.wrappedValue = identifier
-            } else {
-                path = [.note(identifier)]
             }
         }
     }

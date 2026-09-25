@@ -255,6 +255,9 @@ func TestAgentRelationsAndProposalsAreBounded(t *testing.T) {
 	if len(otherView.Relations) != 1 || otherView.Relations[0].RelatedNoteID != note.ID {
 		t.Fatalf("relation not visible from the other note: %#v", otherView.Relations)
 	}
+	if otherView.Relations[0].RelatedTitle != "Report" {
+		t.Fatalf("related note shows %q, not the AI title the owner sees", otherView.Relations[0].RelatedTitle)
+	}
 	if len(view.Proposals) != 1 || view.Proposals[0].Status != ReminderProposalPending {
 		t.Fatalf("proposals = %#v", view.Proposals)
 	}
@@ -279,6 +282,9 @@ func TestAcceptProposalCreatesReminderOnlyForOwnerOrDevice(t *testing.T) {
 	reminder, err := service.AcceptReminderProposal(ctx, noteDevice, note.ID, proposal.ID, input)
 	if err != nil || reminder.Title != "Report schicken" {
 		t.Fatalf("accept = %#v, %v", reminder, err)
+	}
+	if !strings.Contains(reminder.Description, "📝 R") {
+		t.Fatalf("reminder does not name its note by the title the owner sees: %q", reminder.Description)
 	}
 	again, err := service.AcceptReminderProposal(ctx, noteDevice, note.ID, proposal.ID, input)
 	if err != nil || again.ID != reminder.ID {
