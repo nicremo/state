@@ -735,7 +735,7 @@ func (service *Service) ApplyNoteAgentOutcomeFrom(ctx context.Context, job NoteJ
 			return err
 		}
 	}
-	document := strings.TrimSpace(strings.ToValidUTF8(outcome.Document, ""))
+	document := strings.TrimSpace(RemoveDashes(strings.ToValidUTF8(outcome.Document, ""), false))
 	proposedDocument := ""
 	if isMediaCapture(note.Capture) && document != "" && len(document) <= MaxNoteDocumentBytes {
 		if strings.TrimSpace(note.Document) == "" && note.Revision == startRevision {
@@ -769,8 +769,8 @@ func (service *Service) ApplyNoteAgentOutcomeFrom(ctx context.Context, job NoteJ
 	}
 	now := service.clock().UTC()
 	result := NoteAIResult{
-		Title:            truncateRunes(singleLine(outcome.Title), MaxNoteTitleRunes),
-		Summary:          truncateRunes(singleLine(outcome.Summary), MaxNoteSummaryRunes),
+		Title:            truncateRunes(singleLine(RemoveDashes(outcome.Title, true)), MaxNoteTitleRunes),
+		Summary:          truncateRunes(singleLine(RemoveDashes(outcome.Summary, false)), MaxNoteSummaryRunes),
 		Model:            singleLine(outcome.Model),
 		SourceHash:       plainTextHash(sourceText),
 		ProposedDocument: proposedDocument,
@@ -836,7 +836,7 @@ func (service *Service) acceptedRelations(ctx context.Context, note Note, existi
 			ID:            id,
 			NoteID:        note.ID,
 			RelatedNoteID: relation.RelatedNoteID,
-			Reason:        truncateRunes(singleLine(relation.Reason), maxRelationReasonRunes),
+			Reason:        truncateRunes(singleLine(RemoveDashes(relation.Reason, false)), maxRelationReasonRunes),
 			Confidence:    math.Max(0, math.Min(1, relation.Confidence)),
 			CreatedBy:     NotesAgentActor().ID,
 			CreatedAt:     now,
@@ -855,7 +855,7 @@ var (
 func (service *Service) acceptedProposals(note Note, proposed []ReminderProposal, now time.Time) ([]ReminderProposal, error) {
 	accepted := make([]ReminderProposal, 0)
 	for _, proposal := range proposed {
-		title := truncateRunes(singleLine(proposal.Title), MaxNoteTitleRunes)
+		title := truncateRunes(singleLine(RemoveDashes(proposal.Title, true)), MaxNoteTitleRunes)
 		if len(accepted) >= maxReminderProposalsPerJob || title == "" {
 			continue
 		}
@@ -877,10 +877,10 @@ func (service *Service) acceptedProposals(note Note, proposed []ReminderProposal
 			ID:          id,
 			NoteID:      note.ID,
 			Title:       title,
-			Description: truncateRunes(strings.TrimSpace(strings.ToValidUTF8(proposal.Description, "")), 2000),
+			Description: truncateRunes(strings.TrimSpace(RemoveDashes(strings.ToValidUTF8(proposal.Description, ""), false)), 2000),
 			LocalDate:   proposal.LocalDate,
 			LocalTime:   proposal.LocalTime,
-			Reason:      truncateRunes(singleLine(proposal.Reason), maxRelationReasonRunes),
+			Reason:      truncateRunes(singleLine(RemoveDashes(proposal.Reason, false)), maxRelationReasonRunes),
 			Status:      ReminderProposalPending,
 			CreatedAt:   now,
 			UpdatedAt:   now,
