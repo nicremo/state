@@ -148,6 +148,12 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("POST /api/v1/runs", handler.createManualRun)
 	handler.router.HandleFunc("POST /api/v1/runs/{id}/cancel", handler.cancelRun)
 	handler.router.HandleFunc("POST /api/v1/runs/{id}/approval", handler.approveRun)
+	handler.router.HandleFunc("GET /api/v1/agent-sessions", handler.listAgentSessions)
+	handler.router.HandleFunc("POST /api/v1/agent-sessions", handler.startAgentSession)
+	handler.router.HandleFunc("GET /api/v1/agent-sessions/{id}", handler.getAgentSession)
+	handler.router.HandleFunc("POST /api/v1/agent-sessions/{id}/messages", handler.sendAgentSessionMessage)
+	handler.router.HandleFunc("POST /api/v1/agent-sessions/{id}/open", handler.openAgentSessionOnMac)
+	handler.router.HandleFunc("POST /api/v1/agent-sessions/{id}/close", handler.closeAgentSession)
 }
 
 func (handler *Handler) healthLive(writer http.ResponseWriter, _ *http.Request) {
