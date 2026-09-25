@@ -128,7 +128,8 @@ struct SplitRootView: View {
                         revealedNoteID = created
                         self.selectedNoteID = created
                     },
-                    onClose: { self.selectedNoteID = nil }
+                    onClose: { self.selectedNoteID = nil },
+                    onOpenNote: { self.selectedNoteID = $0 }
                 )
             }
             .id(noteDetailKey)

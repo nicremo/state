@@ -25,6 +25,11 @@ struct StateRootView: View {
                 completedOnboarding = true
                 await model.enterDemo()
             }
+            if let bootstrap = StateLaunch.bootstrap, model.session == nil {
+                completedOnboarding = true
+                await model.connect(serverURL: bootstrap.url, bootstrapToken: bootstrap.token, pairingCode: nil,
+                                    displayName: "Owner", deviceName: "Simulator")
+            }
             #endif
             guard showsSplash else { return }
             try? await Task.sleep(for: .milliseconds(reduceMotion ? 350 : 900))

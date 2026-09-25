@@ -19,6 +19,8 @@ struct NotesCollectionView: View {
     @State private var search = ""
     @State private var path: [NoteRoute] = []
     @State private var showsArchive = false
+    @State private var capturesPhoto = false
+    @State private var capturesVoice = false
 
     var body: some View {
         if let selection {
@@ -29,7 +31,7 @@ struct NotesCollectionView: View {
                     .navigationDestination(for: NoteRoute.self) { route in
                         switch route {
                         case let .note(identifier):
-                            NoteDetailView(model: model, noteID: identifier)
+                            NoteDetailView(model: model, noteID: identifier, onOpenNote: { path.append(.note($0)) })
                         case .new:
                             NoteDetailView(model: model, noteID: nil)
                         }
@@ -57,6 +59,26 @@ struct NotesCollectionView: View {
                 .refreshable { await model.synchronize() }
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if !showsArchive {
+                NoteCaptureButton(
+                    onText: newNote,
+                    onPhoto: { capturesPhoto = true },
+                    onVoice: { capturesVoice = true }
+                )
+            }
+        }
+        .sheet(isPresented: $capturesPhoto) {
+            PhotoCaptureSheet(capabilities: model.noteCapabilities) { media in
+                createCaptureNote(kind: "image", media: media)
+            }
+            .task { await model.refreshNoteCapabilities() }
+        }
+        .sheet(isPresented: $capturesVoice) {
+            VoiceCaptureSheet(capabilities: model.noteCapabilities) { media in
+                createCaptureNote(kind: "audio", media: media)
+            }
+        }
         .navigationTitle(showsArchive ? String(localized: "Archived notes") : String(localized: "Notes"))
         .searchable(text: $search, prompt: String(localized: "Search notes"))
         .toolbar {
@@ -70,12 +92,6 @@ struct NotesCollectionView: View {
                     )
                 }
             }
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: newNote) {
-                    Label(String(localized: "New note"), systemImage: "square.and.pencil")
-                }
-                .disabled(showsArchive)
-            }
         }
         #if DEBUG
         .task(id: model.notes.first?.id) {
@@ -83,6 +99,13 @@ struct NotesCollectionView: View {
             switch StateLaunch.initialNote {
             case "first": if let first = model.notes.first { path = [.note(first.id)] }
             case "new": path = [.new]
+            default: break
+            }
+        }
+        .task {
+            switch StateLaunch.initialCapture {
+            case "image": capturesPhoto = true
+            case "audio": capturesVoice = true
             default: break
             }
         }
@@ -144,6 +167,19 @@ struct NotesCollectionView: View {
         }
     }
 
+    /// Stores a photo or voice note and opens it, so the owner sees the
+    /// upload and the AI at work.
+    private func createCaptureNote(kind: String, media: [AppModel.CapturedMedia]) {
+        Task {
+            guard let identifier = await model.createCaptureNote(kind: kind, media: media) else { return }
+            if let selection {
+                selection.wrappedValue = identifier
+            } else {
+                path = [.note(identifier)]
+            }
+        }
+    }
+
     private func newNote() {
         if let selection {
             selection.wrappedValue = NoteRoute.newSelection
@@ -173,11 +209,24 @@ struct NoteRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
-            Text(note.title.isEmpty ? String(localized: "New note") : note.title)
-                .font(.headline)
-                .foregroundStyle(StateTheme.graphite)
-                .lineLimit(1)
-            if !note.summary.isEmpty {
+            HStack(spacing: StateTheme.Space.snug) {
+                if let symbol = captureSymbol {
+                    Image(systemName: symbol)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                Text(note.title.isEmpty ? note.placeholderTitle : note.title)
+                    .font(.headline)
+                    .foregroundStyle(StateTheme.graphite)
+                    .lineLimit(1)
+            }
+            if note.processing?.isWorking == true, note.summary.isEmpty {
+                Text("The notes AI is reading this note")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            } else if !note.summary.isEmpty {
                 Text(note.summary)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -190,5 +239,24 @@ struct NoteRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("note-\(note.id)")
+    }
+
+    private var captureSymbol: String? {
+        switch note.capture {
+        case "image": "photo"
+        case "audio": "waveform"
+        default: nil
+        }
+    }
+}
+
+extension Note {
+    /// What a note without a title is called until the AI names it.
+    var placeholderTitle: String {
+        switch capture {
+        case "image": String(localized: "Photo note")
+        case "audio": String(localized: "Voice note")
+        default: String(localized: "New note")
+        }
     }
 }

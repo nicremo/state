@@ -9,6 +9,8 @@ struct NoteDetailView: View {
     var onCreate: ((String) -> Void)?
     /// Called when the note leaves this screen: archived, or discarded empty.
     var onClose: (() -> Void)?
+    /// Opens a related note the AI linked.
+    var onOpenNote: ((String) -> Void)?
 
     @State private var noteID: String?
     @State private var isEditing: Bool
@@ -20,6 +22,7 @@ struct NoteDetailView: View {
     @State private var pendingSave: PendingSave?
     @State private var isVisible = false
     @State private var selection: TextSelection?
+    @State private var uploads: [NoteUpload] = []
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -31,10 +34,11 @@ struct NoteDetailView: View {
         let isFinal: Bool
     }
 
-    init(model: AppModel, noteID: String?, onCreate: ((String) -> Void)? = nil, onClose: (() -> Void)? = nil) {
+    init(model: AppModel, noteID: String?, onCreate: ((String) -> Void)? = nil, onClose: (() -> Void)? = nil, onOpenNote: ((String) -> Void)? = nil) {
         self.model = model
         self.onCreate = onCreate
         self.onClose = onClose
+        self.onOpenNote = onOpenNote
         _noteID = State(initialValue: noteID)
         _isEditing = State(initialValue: noteID == nil)
     }
@@ -92,7 +96,7 @@ struct NoteDetailView: View {
     private func reader(_ note: Note) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: StateTheme.Space.group) {
-                Text(note.title)
+                Text(note.title.isEmpty ? note.placeholderTitle : note.title)
                     .font(.title2.bold())
                     .foregroundStyle(StateTheme.graphite)
                     .fixedSize(horizontal: false, vertical: true)
@@ -116,16 +120,29 @@ struct NoteDetailView: View {
                         .foregroundStyle(.orange)
                 }
 
+                NoteAIStatusView(model: model, note: note, uploads: uploads)
+
+                if !(note.attachments ?? []).isEmpty {
+                    NoteMediaView(model: model, note: note)
+                }
+
                 MarkdownView(Self.body(of: note), style: .document, collapsible: true) { line in
                     Task { await model.toggleNoteTask(id: note.id, line: line) }
                 }
                 .padding(.top, StateTheme.Space.tight)
+
+                NoteAISuggestionsView(model: model, note: note, onOpenNote: onOpenNote)
+                    .padding(.top, StateTheme.Space.block)
             }
             .padding(.horizontal, StateTheme.Space.section)
             .padding(.vertical, StateTheme.Space.block)
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .task(id: "\(note.id)-\(note.attachments?.count ?? 0)-\(model.lastSyncAt?.timeIntervalSince1970 ?? 0)") {
+            uploads = await model.noteUploads(for: note.id)
+        }
+        .refreshable { await model.synchronize() }
     }
 
     /// A derived title is the document's first line, so the reader shows it
@@ -411,7 +428,7 @@ struct NoteDetailView: View {
         }
         guard let base = editBase else { return }
         let unchanged = document == base.document
-            && (title.isEmpty ? base.titleSource == Note.derivedSource : title == base.title && base.titleSource == Note.userSource)
+            && (title.isEmpty ? base.titleSource != Note.userSource : title == base.title && base.titleSource == Note.userSource)
         guard !unchanged else { return }
         switch await model.saveNote(id: noteID, title: title, document: document, base: base, isFinal: isFinal) {
         case let .saved(note):

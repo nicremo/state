@@ -366,6 +366,10 @@ The MCP endpoint is `/mcp`, Streamable HTTP. It exposes these tools to agents:
 | `get_note` | One note with its Markdown document and full history |
 | `create_note` | Store a note the owner explicitly asked for |
 | `update_note` | Change a note with an optimistic revision check |
+| `add_note_attachment` | Attach a photo or recording the owner gave you (at most 8 MB) |
+| `process_note` | Ask State's notes AI to transcribe, read and organize a note |
+| `get_note_processing` | Processing status, AI title and summary, OCR text and transcripts |
+| `list_related_notes` | Notes the notes AI linked, each with its reason |
 
 Paired runners additionally see the five runner tools described in
 [Scheduled agent execution](README.md#scheduled-agent-execution).
@@ -385,19 +389,84 @@ The HTTP contract is in [`openapi/state-v1.yaml`](openapi/state-v1.yaml).
 Notes are the owner's unstructured knowledge next to reminders: one flat list,
 newest change first, no folders, tags or categories. Search is the only way to
 narrow it. The iPhone shows them in the Notes tab, the iPad and the Mac in the
-sidebar.
+sidebar. The large plus at the bottom right offers exactly three ways to start
+a note: **Text**, **Photo** and **Voice**.
 
-A note is a Markdown document: headings, lists, `- [ ]` checklists and `---`
-dividers. Without a written title the first line becomes the title, and the
-summary in the list is derived from the text below it. A title or summary that
-someone writes is never overwritten automatically. Tapping a checklist item in
-the app ticks it in the document.
+### Text and formatting
+
+A note is a Markdown document, so every agent can read and write it. The editor
+offers the formatting of iPhone Notes:
+
+| iPhone Notes | Markdown |
+| --- | --- |
+| Title, heading, subheading | `#`, `##`, `###` (the "Aa" menu) |
+| Bold, italic, strikethrough | `**x**`, `*x*`, `~~x~~` |
+| Underline, highlight | `++x++`, `==x==` |
+| Bulleted, dashed and numbered lists | `- `, `1. ` |
+| Checklist | `- [ ] ` and `- [x] ` |
+| Table | a pipe table with a `--- ` separator row |
+| Divider | `---` |
+| Collapsible section | every heading; tap it in the note to fold its section |
+
+Without a written title the first line becomes the title, and the summary in
+the list is derived from the text below it. A title or summary that someone
+writes is never overwritten automatically. Tapping a checklist item ticks it.
+
+### Photos, voice and the notes AI
+
+**Photo** takes pages with the document camera or picks them from the library,
+for example handwritten notebook pages. **Voice** records a voice note; long
+recordings are split into segments the transcription can handle. The originals
+are stored on the owner's server and stay attached to the note.
+
+The server then processes the note with its own OpenRouter agent:
+
+1. Recordings go to OpenRouter's speech-to-text endpoint
+   (default `openai/whisper-large-v3-turbo`).
+2. The notes agent (default `deepseek/deepseek-v4.1-flash`, which reads text
+   and images and calls tools) reads photos and handwriting, writes the note
+   body for a photo or voice note, and gives every note an AI title and
+   summary. Its tools are limited to State: search and read other notes, look
+   up reminders, link related notes, and propose reminders.
+3. A proposed reminder appears on the note and becomes a reminder only when the
+   owner taps **Create reminder**. Related notes appear with the reason.
+
+What the AI produces is stored next to the note with its model, never in place
+of what the owner wrote: a written title always wins, typed text is never
+replaced (the AI's text is then offered as a suggestion), and every AI write is
+a signed audit event by the `notes-agent` actor. Text notes are organized again
+after an edit, 45 seconds after typing stops, unless only a checkbox changed.
+
+The number of photos per note comes from the server: OpenRouter publishes the
+model's modalities and context window but no image count, so the server allows
+the smaller of its own limit (10 photos, 8 MB each, 40 MB in total) and what
+the model's context leaves room for. The app never builds in a limit.
+
+### Setting it up
+
+The OpenRouter key lives only on the server, never in the app or the
+repository. Create a key with a spending limit on openrouter.ai and store it,
+readable only by the server user, as `state_secrets/openrouter.key` in the
+server's data directory:
+
+- Mac Server: `~/Library/Application Support/State Server/state_secrets/openrouter.key`
+- VPS or container: `$STATE_DATA_DIR/state_secrets/openrouter.key`, or point
+  `STATE_OPENROUTER_API_KEY_FILE` at a secret file.
+
+Restart the server afterwards; its log then says `notes_ai_configured=true`.
+Turn on **Settings, Notes AI, Process notes with AI** in the app. That switch
+is the owner's consent; without it nothing is sent. The same screen sets the
+monthly limit (default 10 USD) and shows this month's spending. Every call is
+checked against the limit before it is made and counted with the cost
+OpenRouter reports. Without a key, without consent or over the limit, notes
+stay fully usable and show why they were not processed.
+
+### Notes from agents and the terminal
 
 Notes share the audit chain with reminders: every create, edit, archive and
 restore is a signed event with its author and original wording. Agents read and
 write notes through the MCP tools above or `statectl note`; only the owner and
-devices archive them. Photo and audio capture with AI processing are the second
-stage, see [the review](docs/ai-managed-notes-review.md).
+devices archive them, change the AI settings or confirm proposed reminders.
 
 ```bash
 statectl note list   --profile codex --query "ideen"
@@ -405,6 +474,13 @@ statectl note show   --profile codex --id NOTE_ID
 printf '# Ideen\nNotizen mit Fotos' | \
   statectl note create --profile codex --document-file - --source-text "Leg eine Notiz an"
 statectl note update --profile codex --id NOTE_ID --title "State Ideen" --source-text "Benenn sie um"
+
+# A photo note from a file the owner named
+statectl note create     --profile codex --capture image --source-text "Nimm die Seite als Notiz"
+statectl note attach     --profile codex --id NOTE_ID --file seite.jpg --source-text "Nimm die Seite als Notiz"
+statectl note process    --profile codex --id NOTE_ID
+statectl note processing --profile codex --id NOTE_ID
+statectl note related    --profile codex --id NOTE_ID
 ```
 
 ## Notifications
