@@ -25,6 +25,10 @@ const defaultHeartbeatInterval = 30 * time.Second
 // maxResultSummaryLength mirrors the server-side bound on result summaries.
 const maxResultSummaryLength = 2000
 
+// maxResultTextLength mirrors the server-side bound on an agent's final
+// message.
+const maxResultTextLength = 20000
+
 // secretLinePattern matches credential-looking output lines. The runner
 // strips them before any summary crosses the wire; the server redacts again.
 var secretLinePattern = regexp.MustCompile(`(?i)(key|token|secret|password)\s*[:=]\s*\S+`)
@@ -39,6 +43,9 @@ type Runner struct {
 	HeartbeatInterval time.Duration
 	// Log receives human-readable status notes (stderr in the binary).
 	Log io.Writer
+	// OpenTerminal opens a command file in a terminal on this Mac; nil uses
+	// /usr/bin/open. Tests replace it.
+	OpenTerminal func(path string) error
 }
 
 // Run polls for work until the context ends. With once=true it performs one
@@ -118,6 +125,10 @@ func (runner *Runner) execute(ctx context.Context, run state.AgentRun) error {
 	}
 	revision = updated.Revision
 
+	if state.TurnKind(run.TaskContract.TurnKind) == state.TurnKindOpenTerminal {
+		return runner.openOnMac(ctx, run, revision, checkoutDir)
+	}
+
 	adapter := runner.Adapters[run.Adapter]
 	if adapter == nil {
 		return runner.failUnavailable(ctx, run, revision, fmt.Sprintf("adapter %q is not registered in this runner", run.Adapter))
@@ -154,6 +165,11 @@ func (runner *Runner) execute(ctx context.Context, run state.AgentRun) error {
 
 	finalStatus := "succeeded"
 	detail := ""
+	if result.AgentFailed && result.ExitCode == 0 {
+		// The CLI exited cleanly but reported the round as failed.
+		result.ExitCode = 1
+		detail = "the agent reported an error"
+	}
 	if shared.Cancelled() {
 		finalStatus = "cancelled"
 		detail = "cancelled by owner"
@@ -175,6 +191,8 @@ func (runner *Runner) execute(ctx context.Context, run state.AgentRun) error {
 		Outcome:           outcome,
 		ResultSummary:     summary,
 		ResultArtifactRef: filepath.Join(".state", "runs", run.ID),
+		ResultText:        redactText(result.Text, maxResultTextLength),
+		HarnessSessionID:  result.HarnessSessionID,
 		ExitCode:          result.ExitCode,
 		ExpectedRevision:  shared.Revision(),
 		MutationMetadata: state.MutationMetadata{
@@ -420,7 +438,11 @@ func writeStatusFile(runDir string, run state.AgentRun, status string, detail st
 // summarizeResult builds the redacted one-line completion summary from the
 // bounded output tail and the exit code.
 func summarizeResult(result Result) string {
-	line := firstLine(redactSummary(result.Tail))
+	source := result.Tail
+	if strings.TrimSpace(result.Text) != "" {
+		source = result.Text
+	}
+	line := firstLine(redactSummary(source))
 	summary := fmt.Sprintf("exit %d: %s", result.ExitCode, strings.TrimSpace(line))
 	return redactSummary(summary)
 }
@@ -428,6 +450,11 @@ func summarizeResult(result Result) string {
 // redactSummary drops secret-looking lines and bounds the text, mirroring the
 // server-side rule so a summary is clean before it leaves the workstation.
 func redactSummary(text string) string {
+	return redactText(text, maxResultSummaryLength)
+}
+
+// redactText drops secret-looking lines and bounds the text to limit runes.
+func redactText(text string, limit int) string {
 	lines := strings.Split(text, "\n")
 	kept := make([]string, 0, len(lines))
 	for _, line := range lines {
@@ -438,8 +465,8 @@ func redactSummary(text string) string {
 	}
 	redacted := strings.Join(kept, "\n")
 	runes := []rune(redacted)
-	if len(runes) > maxResultSummaryLength {
-		redacted = string(runes[:maxResultSummaryLength])
+	if len(runes) > limit {
+		redacted = string(runes[:limit])
 	}
 	return redacted
 }
