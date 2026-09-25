@@ -138,3 +138,43 @@ func TestNoteJobsAreClaimedOnceAndDebounced(t *testing.T) {
 		t.Fatal("a job left running by a crash was not requeued")
 	}
 }
+
+func TestNotesDictionaryPersistsWithRevisionAndAudit(t *testing.T) {
+	t.Parallel()
+	service, repository, dataDirectory, _ := newStoreAIService(t)
+	ctx := context.Background()
+
+	seeded, err := service.SeedNotesDictionary(ctx, "word: Supabase\nalways: ZEVDISK -> sevDesk\ncontext: Note -> Node\n")
+	if err != nil || !seeded {
+		t.Fatalf("SeedNotesDictionary() = %v, %v", seeded, err)
+	}
+	revision := int64(1)
+	updated, err := service.UpdateNotesDictionary(ctx, storeNoteOwner, state.UpdateNotesDictionaryInput{
+		Words:            []string{"Supabase", "Vercel"},
+		Corrections:      []state.DictionaryCorrection{{From: "ZEVDISK", To: "sevDesk", Mode: state.DictionaryModeAlways}},
+		ExpectedRevision: &revision,
+	})
+	if err != nil || updated.Revision != 2 {
+		t.Fatalf("UpdateNotesDictionary() = %#v, %v", updated, err)
+	}
+	stale := state.NotesDictionary{Words: []string{"x"}, Revision: 2}
+	if err := repository.SaveNotesDictionary(ctx, stale, state.AuditEvent{}); err != state.ErrRevisionConflict {
+		t.Fatalf("stale save error = %v, want revision conflict", err)
+	}
+	if err := repository.VerifyAuditChain(ctx); err != nil {
+		t.Fatalf("audit chain: %v", err)
+	}
+
+	reopened, err := NewPocketBaseRepository(bootstrappedApp(t, dataDirectory), deterministicSigningKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted := state.NewService(reopened)
+	dictionary, err := restarted.GetNotesDictionary(ctx)
+	if err != nil || dictionary.Revision != 2 || strings.Join(dictionary.Words, "|") != "Supabase|Vercel" || len(dictionary.Corrections) != 1 {
+		t.Fatalf("after restart = %#v, %v", dictionary, err)
+	}
+	if again, err := restarted.SeedNotesDictionary(ctx, "word: Anderes"); err != nil || again {
+		t.Fatalf("seed after save = %v, %v", again, err)
+	}
+}

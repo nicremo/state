@@ -145,6 +145,17 @@ actor APIClient: StateAPI {
         try StateJSON.decoder.decode(NotesAISettings.self, from: try await request(path: "/api/v1/notes-ai/key", method: "DELETE"))
     }
 
+    func notesDictionary() async throws -> NotesDictionary {
+        try StateJSON.decoder.decode(NotesDictionary.self, from: try await request(path: "/api/v1/notes-ai/dictionary"))
+    }
+
+    /// Replaces the dictionary on the server. A newer version saved from
+    /// another device makes this fail with a conflict.
+    func updateNotesDictionary(_ dictionary: NotesDictionary) async throws -> NotesDictionary {
+        let body = try dictionary.updatePayload()
+        return try StateJSON.decoder.decode(NotesDictionary.self, from: try await request(path: "/api/v1/notes-ai/dictionary", method: "PUT", body: body))
+    }
+
     func acceptReminderProposal(noteID: String, proposalID: String, timeZone: String, requestID: String) async throws -> Reminder {
         let body = try JSONSerialization.data(withJSONObject: ["time_zone": timeZone, "client_request_id": requestID], options: [.sortedKeys])
         let data = try await request(path: "/api/v1/notes/\(noteID)/reminder-proposals/\(proposalID)/accept", method: "POST", body: body)

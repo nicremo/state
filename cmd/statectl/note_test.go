@@ -103,3 +103,33 @@ func TestProcessingOutputIsReadableAndSafe(t *testing.T) {
 		t.Fatalf("output = %q", output)
 	}
 }
+
+func TestProcessingOutputCountsSegments(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`{"processing":{"status":"ready"},"attachments":[{"id":"a1","kind":"audio","derived_kind":"transcript","derived_text":"CLAUDE.md angepasst","raw_text":"Cloud.md angepasst","segments":[{"start_ms":0,"end_ms":1200,"text":"CLAUDE.md angepasst"}]}]}`)
+	var stdout bytes.Buffer
+	if err := writeProcessing(&stdout, raw); err != nil {
+		t.Fatal(err)
+	}
+	if output := stdout.String(); !strings.Contains(output, "a1 audio transcript (1 segments): CLAUDE.md angepasst") || !strings.Contains(output, "raw: Cloud.md angepasst") {
+		t.Fatalf("output = %q", output)
+	}
+}
+
+func TestDictionaryOutputIsReadableAndSafe(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`{"words":["Supabase","Wispr\u001b[31m Flow"],"corrections":[{"from":"ZEVDISK","to":"sevDesk","mode":"always"},{"from":"Note","to":"Node","mode":"context"}],"revision":3}`)
+	var stdout bytes.Buffer
+	if err := writeDictionary(&stdout, raw); err != nil {
+		t.Fatal(err)
+	}
+	output := stdout.String()
+	for _, wanted := range []string{"revision 3", "word Supabase", "always ZEVDISK -> sevDesk", "context Note -> Node"} {
+		if !strings.Contains(output, wanted) {
+			t.Fatalf("output lacks %q: %q", wanted, output)
+		}
+	}
+	if strings.Contains(output, "\x1b") {
+		t.Fatalf("control character in output: %q", output)
+	}
+}

@@ -57,6 +57,10 @@ var notesAISchemaStatements = []string{
 		id INTEGER PRIMARY KEY CHECK(id = 1),
 		data_json TEXT NOT NULL CHECK(json_valid(data_json))
 	) STRICT`,
+	`CREATE TABLE IF NOT EXISTS state_notes_dictionary (
+		id INTEGER PRIMARY KEY CHECK(id = 1),
+		data_json TEXT NOT NULL CHECK(json_valid(data_json))
+	) STRICT`,
 	`CREATE TABLE IF NOT EXISTS state_ai_usage (
 		month TEXT PRIMARY KEY,
 		cost_usd REAL NOT NULL,
@@ -230,6 +234,7 @@ func (repository *PocketBaseRepository) SaveNoteAIChange(_ context.Context, note
 					continue
 				}
 				attachment.DerivedText, attachment.DerivedKind, attachment.DerivedModel = text.Text, text.Kind, text.Model
+				attachment.RawText, attachment.Segments = text.RawText, text.Segments
 				if err := updateDataJSON(txApp, "state_note_attachments", attachment.ID, attachment); err != nil {
 					return err
 				}
@@ -487,4 +492,62 @@ func (repository *PocketBaseRepository) NoteAIUsage(_ context.Context, month str
 		return 0, fmt.Errorf("read AI usage: %w", err)
 	}
 	return row.CostUSD, nil
+}
+
+func (repository *PocketBaseRepository) GetNotesDictionary(_ context.Context) (state.NotesDictionary, bool, error) {
+	row := struct {
+		DataJSON string `db:"data_json"`
+	}{}
+	err := repository.app.DB().NewQuery(`SELECT data_json FROM state_notes_dictionary WHERE id = 1`).One(&row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return state.NotesDictionary{}, false, nil
+	}
+	if err != nil {
+		return state.NotesDictionary{}, false, fmt.Errorf("read notes dictionary: %w", err)
+	}
+	var dictionary state.NotesDictionary
+	if err := json.Unmarshal([]byte(row.DataJSON), &dictionary); err != nil {
+		return state.NotesDictionary{}, false, fmt.Errorf("decode notes dictionary: %w", err)
+	}
+	return dictionary, true, nil
+}
+
+// SaveNotesDictionary stores the dictionary with its audit event. The
+// revision check runs inside the transaction, so two devices saving at once
+// cannot both win.
+func (repository *PocketBaseRepository) SaveNotesDictionary(_ context.Context, dictionary state.NotesDictionary, event state.AuditEvent) error {
+	return repository.app.RunInTransaction(func(txApp core.App) error {
+		row := struct {
+			DataJSON string `db:"data_json"`
+		}{}
+		var stored state.NotesDictionary
+		err := txApp.DB().NewQuery(`SELECT data_json FROM state_notes_dictionary WHERE id = 1`).One(&row)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return fmt.Errorf("read notes dictionary: %w", err)
+		default:
+			if err := json.Unmarshal([]byte(row.DataJSON), &stored); err != nil {
+				return fmt.Errorf("decode notes dictionary: %w", err)
+			}
+		}
+		if stored.Revision != dictionary.Revision-1 {
+			return state.ErrRevisionConflict
+		}
+		encoded, err := json.Marshal(dictionary)
+		if err != nil {
+			return fmt.Errorf("encode notes dictionary: %w", err)
+		}
+		if _, err := txApp.DB().NewQuery(`
+			INSERT INTO state_notes_dictionary (id, data_json) VALUES (1, {:data_json})
+			ON CONFLICT(id) DO UPDATE SET data_json = excluded.data_json
+		`).Bind(dbx.Params{"data_json": string(encoded)}).Execute(); err != nil {
+			return fmt.Errorf("store notes dictionary: %w", err)
+		}
+		sealed, err := repository.sealAuditEvent(txApp, event)
+		if err != nil {
+			return err
+		}
+		return insertAuditEvent(txApp, sealed)
+	})
 }

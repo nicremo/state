@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -139,9 +140,19 @@ func (worker *Worker) process(ctx context.Context, job state.NoteJob) error {
 }
 
 func (worker *Worker) run(ctx context.Context, note state.NoteView, settings state.NoteAISettings, capabilities Capabilities, budget *monthlyBudget) (state.NoteAgentOutcome, error) {
-	transcripts, err := worker.transcribe(ctx, note, settings, capabilities, budget)
+	dictionary, err := worker.service.GetNotesDictionary(ctx)
 	if err != nil {
 		return state.NoteAgentOutcome{}, err
+	}
+	transcripts, err := worker.transcribe(ctx, note, settings, capabilities, budget, dictionary)
+	if err != nil {
+		return state.NoteAgentOutcome{}, err
+	}
+	if len(transcripts) > 0 {
+		// The agent sees the stored transcripts, so its fixes apply to them.
+		if note, err = worker.service.GetNoteView(ctx, note.ID); err != nil {
+			return state.NoteAgentOutcome{}, err
+		}
 	}
 	images := make([]AgentImage, 0)
 	for _, attachment := range note.Attachments {
@@ -165,13 +176,13 @@ func (worker *Worker) run(ctx context.Context, note state.NoteView, settings sta
 	}
 	pricing, _ := worker.gateway.Model(settings.AgentModel)
 	agent := NewAgent(worker.gateway.Client(), settings.AgentModel, worker.service, budget, pricing)
-	return agent.Run(ctx, AgentInput{Note: note, Images: images, Transcripts: transcripts})
+	return agent.Run(ctx, AgentInput{Note: note, Images: images, Transcripts: transcripts, Dictionary: dictionary})
 }
 
 // transcribe turns every recording into text on the dedicated speech-to-text
 // endpoint. Each transcript is stored at once, so a later failure does not
 // pay for the same audio twice.
-func (worker *Worker) transcribe(ctx context.Context, note state.NoteView, settings state.NoteAISettings, capabilities Capabilities, budget *monthlyBudget) ([]string, error) {
+func (worker *Worker) transcribe(ctx context.Context, note state.NoteView, settings state.NoteAISettings, capabilities Capabilities, budget *monthlyBudget, dictionary state.NotesDictionary) ([]string, error) {
 	transcripts := make([]string, 0)
 	for _, attachment := range note.Attachments {
 		if attachment.Kind != state.NoteAttachmentAudio {
@@ -199,22 +210,40 @@ func (worker *Worker) transcribe(ctx context.Context, note state.NoteView, setti
 		if err := budget.Allow(ctx, estimate); err != nil {
 			return nil, err
 		}
-		transcript, err := worker.gateway.Client().Transcribe(ctx, TranscribeRequest{Model: settings.TranscriptionModel, Audio: audio, Format: audioFormat(attachment.MimeType)})
+		transcript, err := worker.gateway.Client().Transcribe(ctx, TranscribeRequest{Model: settings.TranscriptionModel, Audio: audio, Format: audioFormat(attachment.MimeType), Segments: true})
 		if spendErr := budget.Spend(ctx, billedCost(transcript.Usage.Cost, estimate, err)); spendErr != nil {
 			return nil, spendErr
 		}
 		if err != nil {
 			return nil, err
 		}
-		text := strings.TrimSpace(transcript.Text)
+		raw := strings.TrimSpace(transcript.Text)
+		text := state.ApplyDictionary(raw, dictionary.Corrections)
 		if err := worker.service.RecordAttachmentTexts(ctx, note.ID, map[string]state.NoteAttachmentText{
-			attachment.ID: {Text: text, Kind: "transcript", Model: settings.TranscriptionModel},
+			attachment.ID: {Text: text, Kind: "transcript", Model: settings.TranscriptionModel, RawText: raw, Segments: correctedSegments(transcript.Segments, dictionary.Corrections)},
 		}); err != nil {
 			return nil, err
 		}
 		transcripts = append(transcripts, text)
 	}
 	return transcripts, nil
+}
+
+// correctedSegments turns the provider's seconds into milliseconds and
+// applies the same dictionary corrections as the full transcript.
+func correctedSegments(segments []TranscriptionSegment, corrections []state.DictionaryCorrection) []state.TranscriptSegment {
+	if len(segments) == 0 {
+		return nil
+	}
+	converted := make([]state.TranscriptSegment, 0, len(segments))
+	for _, segment := range segments {
+		converted = append(converted, state.TranscriptSegment{
+			StartMS: int64(math.Round(segment.Start * 1000)),
+			EndMS:   int64(math.Round(segment.End * 1000)),
+			Text:    state.ApplyDictionary(strings.TrimSpace(segment.Text), corrections),
+		})
+	}
+	return converted
 }
 
 func transcriptionPrice(gateway *Gateway, model string) float64 {

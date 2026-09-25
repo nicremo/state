@@ -124,6 +124,8 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("PATCH /api/v1/notes-ai/settings", handler.updateNotesAISettings)
 	handler.router.HandleFunc("PUT /api/v1/notes-ai/key", handler.setNotesAIKey)
 	handler.router.HandleFunc("DELETE /api/v1/notes-ai/key", handler.removeNotesAIKey)
+	handler.router.HandleFunc("GET /api/v1/notes-ai/dictionary", handler.getNotesDictionary)
+	handler.router.HandleFunc("PUT /api/v1/notes-ai/dictionary", handler.updateNotesDictionary)
 	handler.router.HandleFunc("GET /api/v1/briefing", handler.getBriefing)
 	handler.router.HandleFunc("GET /api/v1/export", handler.exportState)
 	handler.router.HandleFunc("POST /api/v1/projects", handler.createProject)

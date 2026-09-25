@@ -362,6 +362,41 @@ func (handler *Handler) updateNotesAISettings(writer http.ResponseWriter, reques
 	writeJSON(writer, http.StatusOK, handler.settingsResponse(settings))
 }
 
+// getNotesDictionary returns the owner's dictionary to the owner, devices
+// and agents. Runners never see it.
+func (handler *Handler) getNotesDictionary(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticateKind(writer, request, noteActorKinds...); !ok {
+		return
+	}
+	dictionary, err := handler.state.GetNotesDictionary(request.Context())
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	writeJSON(writer, http.StatusOK, dictionary)
+}
+
+// updateNotesDictionary replaces the dictionary; only the owner and the
+// owner's devices may, which the service checks.
+func (handler *Handler) updateNotesDictionary(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, noteActorKinds...)
+	if !ok {
+		return
+	}
+	var input state.UpdateNotesDictionaryInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	dictionary, err := handler.state.UpdateNotesDictionary(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, dictionary)
+}
+
 // settingsResponse adds whether the server holds a key. The key itself is
 // never part of any response.
 func (handler *Handler) settingsResponse(settings state.NoteAISettings) map[string]any {

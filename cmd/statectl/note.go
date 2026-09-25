@@ -13,7 +13,7 @@ import (
 	"github.com/nicremo/state/internal/statectl"
 )
 
-const noteUsage = "usage: statectl note <list|show|create|update|attach|process|processing|related>"
+const noteUsage = "usage: statectl note <list|show|create|update|attach|process|processing|related|dictionary>"
 
 // maxNoteDocumentBytes is the server's limit, not the smaller reminder one.
 const maxNoteDocumentBytes = state.MaxNoteDocumentBytes
@@ -39,6 +39,8 @@ func runNote(args []string, stdout io.Writer, stderr io.Writer) error {
 		return runNoteProcessing(args[1:], stdout, stderr)
 	case "related":
 		return runNoteRelated(args[1:], stdout, stderr)
+	case "dictionary":
+		return runNoteDictionary(args[1:], stdout, stderr)
 	default:
 		return errors.New(noteUsage)
 	}

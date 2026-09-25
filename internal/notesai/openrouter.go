@@ -266,18 +266,41 @@ type TranscribeRequest struct {
 	Audio    []byte
 	Format   string
 	Language string
+	// Segments asks for the transcript's sentences with their times, for
+	// the highlighting on the recording screen.
+	Segments bool
+}
+
+// TranscriptionSegment is one passage with its start and end in seconds.
+type TranscriptionSegment struct {
+	Start float64 `json:"start"`
+	End   float64 `json:"end"`
+	Text  string  `json:"text"`
 }
 
 type Transcript struct {
-	Text  string `json:"text"`
-	Usage Usage  `json:"usage"`
+	Text     string                 `json:"text"`
+	Segments []TranscriptionSegment `json:"segments,omitempty"`
+	Usage    Usage                  `json:"usage"`
 }
 
 // Transcribe uses the dedicated speech-to-text endpoint with base64 JSON.
+// Not every provider returns segments: when one refuses the verbose format,
+// the same audio is sent once more for the plain transcript.
 func (client *Client) Transcribe(ctx context.Context, request TranscribeRequest) (Transcript, error) {
 	if !client.Configured() {
 		return Transcript{}, ErrNotConfigured
 	}
+	transcript, err := client.transcribe(ctx, request)
+	var providerError *ProviderError
+	if request.Segments && errors.As(err, &providerError) && providerError.Status == http.StatusBadRequest {
+		request.Segments = false
+		return client.transcribe(ctx, request)
+	}
+	return transcript, err
+}
+
+func (client *Client) transcribe(ctx context.Context, request TranscribeRequest) (Transcript, error) {
 	body := map[string]any{
 		"model": request.Model,
 		"input_audio": map[string]string{
@@ -287,6 +310,10 @@ func (client *Client) Transcribe(ctx context.Context, request TranscribeRequest)
 	}
 	if request.Language != "" {
 		body["language"] = request.Language
+	}
+	if request.Segments {
+		body["response_format"] = "verbose_json"
+		body["timestamp_granularities"] = []string{"segment"}
 	}
 	var transcript Transcript
 	if err := client.do(ctx, http.MethodPost, "/audio/transcriptions", body, &transcript, true); err != nil {

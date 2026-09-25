@@ -14,10 +14,22 @@ struct NoteAttachment: Codable, Hashable, Identifiable, Sendable {
     var derivedText: String?
     var derivedKind: String?
     var derivedModel: String?
+    /// The transcript as speech recognition returned it, before the owner's
+    /// dictionary corrected it into `derivedText`.
+    var rawText: String?
+    /// Timed passages of the transcript, when the provider returned them.
+    var segments: [TranscriptSegment]?
     var createdAt: Date?
 
     var isImage: Bool { kind == "image" }
     var isAudio: Bool { kind == "audio" }
+}
+
+/// One spoken passage and where it is in its recording part.
+struct TranscriptSegment: Codable, Hashable, Sendable {
+    var startMs: Int64
+    var endMs: Int64
+    var text: String
 }
 
 /// Where the notes AI is with a note.
@@ -141,6 +153,104 @@ struct NotesAISettings: Codable, Hashable, Sendable {
     var month: String?
     var spentThisMonthUsd: Double
     var keyConfigured: Bool
+}
+
+/// The owner's dictionary for voice notes. Words are spellings the notes AI
+/// uses; corrections map what speech recognition hears to what was meant,
+/// either always or only where the context fits.
+struct NotesDictionary: Codable, Hashable, Sendable {
+    var words: [String]
+    var corrections: [DictionaryCorrection]
+    var revision: Int64
+    var updatedAt: Date?
+
+    static let empty = NotesDictionary(words: [], corrections: [], revision: 0)
+
+    /// The body of a save: the whole dictionary and the revision it was
+    /// edited from, so a newer version from another device is not lost.
+    func updatePayload() throws -> Data {
+        let payload: [String: Any] = [
+            "words": words,
+            "corrections": corrections.map { ["from": $0.from, "to": $0.to, "mode": $0.mode.rawValue] },
+            "expected_revision": revision,
+        ]
+        return try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+    }
+
+    /// Adds imported entries that are not there yet, ignoring case.
+    mutating func merge(_ imported: NotesDictionaryImport.Result) {
+        for word in imported.words where !words.contains(where: { $0.caseInsensitiveCompare(word) == .orderedSame }) {
+            words.append(word)
+        }
+        for correction in imported.corrections where !corrections.contains(where: { $0.from.caseInsensitiveCompare(correction.from) == .orderedSame }) {
+            corrections.append(correction)
+        }
+    }
+}
+
+struct DictionaryCorrection: Codable, Hashable, Sendable {
+    enum Mode: String, Codable, Hashable, Sendable, CaseIterable {
+        /// Replaced in every transcript, as a whole word.
+        case always
+        /// An everyday word too; only the notes agent corrects it in context.
+        case context
+    }
+
+    var from: String
+    var to: String
+    var mode: Mode
+}
+
+/// Reads the text format of the server's seed file, one entry per line:
+/// "word: X", "always: A -> B", "context: A -> B". A line without a prefix
+/// is a word, or a context correction when it holds "->".
+enum NotesDictionaryImport {
+    struct Result: Equatable {
+        var words: [String] = []
+        var corrections: [DictionaryCorrection] = []
+    }
+
+    static func parse(_ text: String) -> Result? {
+        var result = Result()
+        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("#") { continue }
+            var kind = ""
+            var rest = line
+            if let colon = line.firstIndex(of: ":") {
+                let prefix = line[..<colon]
+                if !prefix.contains(where: { " ->".contains($0) }) {
+                    kind = prefix.trimmingCharacters(in: .whitespaces).lowercased()
+                    rest = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+                }
+            }
+            switch kind {
+            case "word":
+                result.words.append(rest)
+            case "always", "context":
+                guard let correction = correction(rest, mode: kind == "always" ? .always : .context) else { return nil }
+                result.corrections.append(correction)
+            case "":
+                if rest.contains("->") {
+                    guard let correction = correction(rest, mode: .context) else { return nil }
+                    result.corrections.append(correction)
+                } else {
+                    result.words.append(rest)
+                }
+            default:
+                return nil
+            }
+        }
+        return result
+    }
+
+    private static func correction(_ text: String, mode: DictionaryCorrection.Mode) -> DictionaryCorrection? {
+        guard let arrow = text.range(of: "->") else { return nil }
+        let from = text[..<arrow.lowerBound].trimmingCharacters(in: .whitespaces)
+        let to = text[arrow.upperBound...].trimmingCharacters(in: .whitespaces)
+        guard !from.isEmpty, !to.isEmpty else { return nil }
+        return DictionaryCorrection(from: from, to: to, mode: mode)
+    }
 }
 
 /// A photo or recording waiting on this device for its upload.

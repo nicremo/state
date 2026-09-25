@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/nicremo/state/internal/state"
 )
 
 func TestMCPNoteAttachmentProcessingAndRelations(t *testing.T) {
@@ -76,5 +77,50 @@ func TestMCPNoteAttachmentProcessingAndRelations(t *testing.T) {
 		if err == nil && !result.IsError {
 			t.Fatalf("runner used %s", tool)
 		}
+	}
+}
+
+func TestMCPAgentsReadTheDictionary(t *testing.T) {
+	t.Parallel()
+	fixture := newTestMCPFixture(t)
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", fixture.handler)
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	if _, err := fixture.state.UpdateNotesDictionary(context.Background(), fixture.owner, state.UpdateNotesDictionaryInput{
+		Words:       []string{"Supabase"},
+		Corrections: []state.DictionaryCorrection{{From: "ZEVDISK", To: "sevDesk", Mode: state.DictionaryModeAlways}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	session := connectToolSession(t, server.URL+"/mcp", fixture.pairHarness(t, "codex", "Codex", "MacBook"))
+	tools, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, tool := range tools.Tools {
+		if tool.Name == "get_notes_dictionary" {
+			found = true
+			if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
+				t.Fatal("get_notes_dictionary is not read-only")
+			}
+		}
+		if tool.Name == "update_notes_dictionary" {
+			t.Fatal("agents must not change the dictionary")
+		}
+	}
+	if !found {
+		t.Fatal("get_notes_dictionary is missing")
+	}
+	dictionary := callTool(t, session, "get_notes_dictionary", map[string]any{})
+	corrections, _ := dictionary["corrections"].([]any)
+	words, _ := dictionary["words"].([]any)
+	if len(words) != 1 || len(corrections) != 1 || corrections[0].(map[string]any)["mode"] != "always" {
+		t.Fatalf("get_notes_dictionary = %#v", dictionary)
+	}
+	runnerSession := connectToolSession(t, server.URL+"/mcp", pairRunner(t, fixture, "Mac mini").Token)
+	if result, err := runnerSession.CallTool(context.Background(), &mcp.CallToolParams{Name: "get_notes_dictionary", Arguments: map[string]any{}}); err == nil && !result.IsError {
+		t.Fatal("a runner read the dictionary")
 	}
 }

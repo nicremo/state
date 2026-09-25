@@ -14,6 +14,7 @@ type memoryNoteAI struct {
 	requestActors      map[string]string
 	jobs               map[string]NoteJob
 	settings           *NoteAISettings
+	dictionary         *NotesDictionary
 	usage              map[string]float64
 }
 
@@ -125,6 +126,8 @@ func (repository *MemoryRepository) SaveNoteAIChange(_ context.Context, noteID s
 			state.Attachments[index].DerivedText = text.Text
 			state.Attachments[index].DerivedKind = text.Kind
 			state.Attachments[index].DerivedModel = text.Model
+			state.Attachments[index].RawText = text.RawText
+			state.Attachments[index].Segments = append([]TranscriptSegment(nil), text.Segments...)
 		}
 	}
 	state.Relations = append(state.Relations, change.AddRelations...)
@@ -267,4 +270,34 @@ func (repository *MemoryRepository) noteSearchText(note Note) Note {
 		note.PlainText += "\n" + attachment.DerivedText
 	}
 	return note
+}
+
+func (repository *MemoryRepository) GetNotesDictionary(_ context.Context) (NotesDictionary, bool, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+
+	stored := repository.noteAI().dictionary
+	if stored == nil {
+		return NotesDictionary{}, false, nil
+	}
+	dictionary := *stored
+	dictionary.Words = append([]string(nil), stored.Words...)
+	dictionary.Corrections = append([]DictionaryCorrection(nil), stored.Corrections...)
+	return dictionary, true, nil
+}
+
+func (repository *MemoryRepository) SaveNotesDictionary(_ context.Context, dictionary NotesDictionary, event AuditEvent) error {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+
+	var revision int64
+	if stored := repository.noteAI().dictionary; stored != nil {
+		revision = stored.Revision
+	}
+	if revision != dictionary.Revision-1 {
+		return ErrRevisionConflict
+	}
+	repository.appendAuditEvent(event)
+	repository.noteAI().dictionary = &dictionary
+	return nil
 }

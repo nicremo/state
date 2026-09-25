@@ -196,3 +196,57 @@ func serveJSON(t *testing.T, handler http.Handler, method string, path string, t
 	}
 	return decoded
 }
+
+// The owner's dictionary seed is read from the data directory once, at the
+// first start after the file appears; later changes come from the app.
+func TestNewApplicationSeedsTheDictionaryOnce(t *testing.T) {
+	t.Parallel()
+
+	dataDirectory := t.TempDir()
+	seed := filepath.Join(dataDirectory, "notes-dictionary-seed.txt")
+	if err := os.WriteFile(seed, []byte("# seed\nword: Supabase\nalways: ZEVDISK -> sevDesk\ncontext: Note -> Node\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	application, err := newApplication(applicationConfig{dataDirectory: dataDirectory, version: "test-version"})
+	if err != nil {
+		t.Fatalf("newApplication() error = %v", err)
+	}
+	dictionary, err := application.state.GetNotesDictionary(context.Background())
+	if err != nil || dictionary.Revision != 1 || len(dictionary.Words) != 1 || len(dictionary.Corrections) != 2 {
+		t.Fatalf("seeded dictionary = %#v, %v", dictionary, err)
+	}
+	if err := application.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(seed, []byte("word: Anderes\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := newApplication(applicationConfig{dataDirectory: dataDirectory, version: "test-version"})
+	if err != nil {
+		t.Fatalf("restart error = %v", err)
+	}
+	defer restarted.close()
+	again, _ := restarted.state.GetNotesDictionary(context.Background())
+	if again.Revision != 1 || again.Words[0] != "Supabase" {
+		t.Fatalf("seed ran twice: %#v", again)
+	}
+}
+
+func TestNewApplicationStartsWithABrokenSeed(t *testing.T) {
+	t.Parallel()
+
+	dataDirectory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dataDirectory, "notes-dictionary-seed.txt"), []byte("sometimes: A -> B\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	application, err := newApplication(applicationConfig{dataDirectory: dataDirectory, version: "test-version"})
+	if err != nil {
+		t.Fatalf("a broken seed stopped the server: %v", err)
+	}
+	defer application.close()
+	dictionary, _ := application.state.GetNotesDictionary(context.Background())
+	if dictionary.Revision != 0 {
+		t.Fatalf("broken seed was stored: %#v", dictionary)
+	}
+}

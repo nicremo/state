@@ -93,18 +93,31 @@ func NotesAgentActor() Actor {
 }
 
 type NoteAttachment struct {
-	ID           string    `json:"id"`
-	NoteID       string    `json:"note_id"`
-	Ordinal      int       `json:"ordinal"`
-	Kind         string    `json:"kind"`
-	MimeType     string    `json:"mime_type"`
-	ByteSize     int64     `json:"byte_size"`
-	SHA256       string    `json:"sha256"`
-	DurationMS   int64     `json:"duration_ms,omitempty"`
-	DerivedText  string    `json:"derived_text,omitempty"`
-	DerivedKind  string    `json:"derived_kind,omitempty"`
-	DerivedModel string    `json:"derived_model,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           string `json:"id"`
+	NoteID       string `json:"note_id"`
+	Ordinal      int    `json:"ordinal"`
+	Kind         string `json:"kind"`
+	MimeType     string `json:"mime_type"`
+	ByteSize     int64  `json:"byte_size"`
+	SHA256       string `json:"sha256"`
+	DurationMS   int64  `json:"duration_ms,omitempty"`
+	DerivedText  string `json:"derived_text,omitempty"`
+	DerivedKind  string `json:"derived_kind,omitempty"`
+	DerivedModel string `json:"derived_model,omitempty"`
+	// RawText is the transcript exactly as speech recognition returned it,
+	// before the owner's dictionary corrected it into DerivedText.
+	RawText string `json:"raw_text,omitempty"`
+	// Segments are the transcript's sentences with their time in the
+	// recording, when the speech recognition provider returns them.
+	Segments  []TranscriptSegment `json:"segments,omitempty"`
+	CreatedAt time.Time           `json:"created_at"`
+}
+
+// TranscriptSegment is one spoken passage and where it is in its recording.
+type TranscriptSegment struct {
+	StartMS int64  `json:"start_ms"`
+	EndMS   int64  `json:"end_ms"`
+	Text    string `json:"text"`
 }
 
 type NoteProcessing struct {
@@ -198,9 +211,11 @@ type NoteView struct {
 }
 
 type NoteAttachmentText struct {
-	Text  string `json:"text"`
-	Kind  string `json:"kind"`
-	Model string `json:"model"`
+	Text     string              `json:"text"`
+	Kind     string              `json:"kind"`
+	Model    string              `json:"model"`
+	RawText  string              `json:"raw_text,omitempty"`
+	Segments []TranscriptSegment `json:"segments,omitempty"`
 }
 
 // NoteAIChange is one atomic write of AI data, stored with one audit event.
@@ -283,10 +298,13 @@ type AcceptReminderProposalInput struct {
 
 // NoteAgentOutcome is what one AI job produced.
 type NoteAgentOutcome struct {
-	Title           string
-	Summary         string
-	Document        string
-	NeedsReview     bool
+	Title       string
+	Summary     string
+	Document    string
+	NeedsReview bool
+	// ReviewReason tells the owner why the note needs a look, for example
+	// when the agent did not condense a voice note into bullet points.
+	ReviewReason    string
 	Model           string
 	AttachmentTexts map[string]NoteAttachmentText
 	Relations       []NoteRelation
@@ -307,6 +325,8 @@ type NoteAIRepository interface {
 	SaveNoteAISettings(ctx context.Context, settings NoteAISettings, event AuditEvent) error
 	AddNoteAIUsage(ctx context.Context, month string, costUSD float64) error
 	NoteAIUsage(ctx context.Context, month string) (float64, error)
+	GetNotesDictionary(ctx context.Context) (NotesDictionary, bool, error)
+	SaveNotesDictionary(ctx context.Context, dictionary NotesDictionary, event AuditEvent) error
 }
 
 // WithNoteAI tells the service whether the OpenRouter key is configured and
@@ -688,9 +708,49 @@ func cleanAttachmentTexts(texts map[string]NoteAttachmentText) map[string]NoteAt
 		if len(value) > maxAttachmentTextBytes {
 			value = strings.ToValidUTF8(value[:maxAttachmentTextBytes], "")
 		}
-		cleaned[id] = NoteAttachmentText{Text: strings.TrimSpace(value), Kind: text.Kind, Model: text.Model}
+		cleaned[id] = NoteAttachmentText{
+			Text:     strings.TrimSpace(value),
+			Kind:     text.Kind,
+			Model:    text.Model,
+			RawText:  strings.TrimSpace(boundedUTF8(text.RawText, maxAttachmentTextBytes)),
+			Segments: cleanSegments(text.Segments),
+		}
 	}
 	return cleaned
+}
+
+const (
+	maxTranscriptSegments     = 5000
+	maxTranscriptSegmentBytes = 4096
+)
+
+// cleanSegments keeps well-formed segments in time order, bounded in number
+// and size, so a provider answer cannot bloat a note.
+func cleanSegments(segments []TranscriptSegment) []TranscriptSegment {
+	if len(segments) == 0 {
+		return nil
+	}
+	cleaned := make([]TranscriptSegment, 0, min(len(segments), maxTranscriptSegments))
+	for _, segment := range segments {
+		text := strings.TrimSpace(boundedUTF8(segment.Text, maxTranscriptSegmentBytes))
+		if len(cleaned) >= maxTranscriptSegments || text == "" || segment.StartMS < 0 || segment.EndMS < segment.StartMS {
+			continue
+		}
+		cleaned = append(cleaned, TranscriptSegment{StartMS: segment.StartMS, EndMS: segment.EndMS, Text: text})
+	}
+	sort.SliceStable(cleaned, func(left, right int) bool { return cleaned[left].StartMS < cleaned[right].StartMS })
+	if len(cleaned) == 0 {
+		return nil
+	}
+	return cleaned
+}
+
+func boundedUTF8(value string, limit int) string {
+	value = strings.ToValidUTF8(value, "")
+	if len(value) > limit {
+		value = strings.ToValidUTF8(value[:limit], "")
+	}
+	return value
 }
 
 // attachmentTextDigest keeps the audit event small: the texts themselves are
@@ -735,7 +795,7 @@ func (service *Service) ApplyNoteAgentOutcomeFrom(ctx context.Context, job NoteJ
 			return err
 		}
 	}
-	document := strings.TrimSpace(strings.ToValidUTF8(outcome.Document, ""))
+	document := strings.TrimSpace(RemoveDashes(strings.ToValidUTF8(outcome.Document, ""), false))
 	proposedDocument := ""
 	if isMediaCapture(note.Capture) && document != "" && len(document) <= MaxNoteDocumentBytes {
 		if strings.TrimSpace(note.Document) == "" && note.Revision == startRevision {
@@ -769,8 +829,8 @@ func (service *Service) ApplyNoteAgentOutcomeFrom(ctx context.Context, job NoteJ
 	}
 	now := service.clock().UTC()
 	result := NoteAIResult{
-		Title:            truncateRunes(singleLine(outcome.Title), MaxNoteTitleRunes),
-		Summary:          truncateRunes(singleLine(outcome.Summary), MaxNoteSummaryRunes),
+		Title:            truncateRunes(singleLine(RemoveDashes(outcome.Title, true)), MaxNoteTitleRunes),
+		Summary:          truncateRunes(singleLine(RemoveDashes(outcome.Summary, false)), MaxNoteSummaryRunes),
 		Model:            singleLine(outcome.Model),
 		SourceHash:       plainTextHash(sourceText),
 		ProposedDocument: proposedDocument,
@@ -789,7 +849,7 @@ func (service *Service) ApplyNoteAgentOutcomeFrom(ctx context.Context, job NoteJ
 	if outcome.NeedsReview {
 		status = NoteProcessingNeedsReview
 	}
-	processing := NoteProcessing{Status: status, Model: result.Model, UpdatedAt: now}.carryRequests(aiState.Processing)
+	processing := NoteProcessing{Status: status, Error: truncateRunes(singleLine(outcome.ReviewReason), 280), Model: result.Model, UpdatedAt: now}.carryRequests(aiState.Processing)
 	change := NoteAIChange{Processing: &processing, Result: &result, AddRelations: relations, AddProposals: proposals}
 	after := map[string]any{
 		"title":       result.Title,
@@ -836,7 +896,7 @@ func (service *Service) acceptedRelations(ctx context.Context, note Note, existi
 			ID:            id,
 			NoteID:        note.ID,
 			RelatedNoteID: relation.RelatedNoteID,
-			Reason:        truncateRunes(singleLine(relation.Reason), maxRelationReasonRunes),
+			Reason:        truncateRunes(singleLine(RemoveDashes(relation.Reason, false)), maxRelationReasonRunes),
 			Confidence:    math.Max(0, math.Min(1, relation.Confidence)),
 			CreatedBy:     NotesAgentActor().ID,
 			CreatedAt:     now,
@@ -855,7 +915,7 @@ var (
 func (service *Service) acceptedProposals(note Note, proposed []ReminderProposal, now time.Time) ([]ReminderProposal, error) {
 	accepted := make([]ReminderProposal, 0)
 	for _, proposal := range proposed {
-		title := truncateRunes(singleLine(proposal.Title), MaxNoteTitleRunes)
+		title := truncateRunes(singleLine(RemoveDashes(proposal.Title, true)), MaxNoteTitleRunes)
 		if len(accepted) >= maxReminderProposalsPerJob || title == "" {
 			continue
 		}
@@ -877,10 +937,10 @@ func (service *Service) acceptedProposals(note Note, proposed []ReminderProposal
 			ID:          id,
 			NoteID:      note.ID,
 			Title:       title,
-			Description: truncateRunes(strings.TrimSpace(strings.ToValidUTF8(proposal.Description, "")), 2000),
+			Description: truncateRunes(strings.TrimSpace(RemoveDashes(strings.ToValidUTF8(proposal.Description, ""), false)), 2000),
 			LocalDate:   proposal.LocalDate,
 			LocalTime:   proposal.LocalTime,
-			Reason:      truncateRunes(singleLine(proposal.Reason), maxRelationReasonRunes),
+			Reason:      truncateRunes(singleLine(RemoveDashes(proposal.Reason, false)), maxRelationReasonRunes),
 			Status:      ReminderProposalPending,
 			CreatedAt:   now,
 			UpdatedAt:   now,

@@ -1527,6 +1527,47 @@ final class AppModel {
         }
     }
 
+    /// The owner's dictionary for voice notes, nil until loaded.
+    private(set) var notesDictionary: NotesDictionary?
+
+    enum DictionarySaveOutcome: Equatable {
+        case saved
+        /// Another device saved a newer version; it is loaded now.
+        case conflict
+        case invalid
+        case failed
+    }
+
+    func loadNotesDictionary() async {
+        guard let api, !isDemo else {
+            notesDictionary = .empty
+            return
+        }
+        do {
+            notesDictionary = try await api.notesDictionary()
+        } catch StateAPIError.notFound {
+            notesDictionary = nil
+        } catch {
+            present(error)
+        }
+    }
+
+    func saveNotesDictionary(_ dictionary: NotesDictionary) async -> DictionarySaveOutcome {
+        guard let api else { return .failed }
+        do {
+            notesDictionary = try await api.updateNotesDictionary(dictionary)
+            return .saved
+        } catch let StateAPIError.server(status, _) where status == 409 {
+            await loadNotesDictionary()
+            return .conflict
+        } catch let StateAPIError.server(status, _) where status == 400 {
+            return .invalid
+        } catch {
+            present(error)
+            return .failed
+        }
+    }
+
     /// Creates the reminder the AI proposed. Only the owner does this; the
     /// agent itself can never create one.
     func acceptReminderProposal(noteID: String, proposal: ReminderProposal) async {

@@ -11,6 +11,26 @@
         }
       }
     },
+    "%@ of %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ von %2$@"
+          }
+        }
+      }
+    },
+    "%lld entries" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld Einträge"
+          }
+        }
+      }
+    },
     "(conflict copy)" : {
       "localizations" : {
         "de" : {
@@ -87,6 +107,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eine Datei wurde nicht hochgeladen"
+          }
+        }
+      }
+    },
+    "A line has an unknown format. Use word:, always: or context:." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Zeile hat ein unbekanntes Format. Nutze word:, always: oder context:."
           }
         }
       }
@@ -181,6 +211,16 @@
         }
       }
     },
+    "Add" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hinzufügen"
+          }
+        }
+      }
+    },
     "Add comment" : {
       "localizations" : {
         "de" : {
@@ -201,12 +241,32 @@
         }
       }
     },
+    "Add correction" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Korrektur hinzufügen"
+          }
+        }
+      }
+    },
     "Add to note" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "In die Notiz übernehmen"
+          }
+        }
+      }
+    },
+    "Add word" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wort hinzufügen"
           }
         }
       }
@@ -371,6 +431,46 @@
         }
       }
     },
+    "Always" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immer"
+          }
+        }
+      }
+    },
+    "Always replaces the word in every transcript, only as a whole word. By context is for words that also exist in everyday speech, such as Note: the notes AI corrects them only where the context fits. The original transcript is kept." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Immer“ ersetzt das Wort in jedem Transkript, aber nur als ganzes Wort. „Nach Kontext“ ist für Wörter, die es auch im Alltag gibt, etwa Note: Die Notiz-KI korrigiert sie nur, wo der Zusammenhang passt. Das ursprüngliche Transkript bleibt erhalten."
+          }
+        }
+      }
+    },
+    "An entry is too long, contains control characters, or maps a word to itself." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Eintrag ist zu lang, enthält Steuerzeichen oder ersetzt ein Wort durch sich selbst."
+          }
+        }
+      }
+    },
+    "Another device changed the dictionary. Save again to keep this version." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein anderes Gerät hat das Wörterbuch geändert. Speichere erneut, um diese Fassung zu behalten."
+          }
+        }
+      }
+    },
     "Approval requested" : {
       "localizations" : {
         "de" : {
@@ -461,6 +561,16 @@
         }
       }
     },
+    "Back 15 seconds" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "15 Sekunden zurück"
+          }
+        }
+      }
+    },
     "Body" : {
       "localizations" : {
         "de" : {
@@ -487,6 +597,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bootstrap-Token"
+          }
+        }
+      }
+    },
+    "By context" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach Kontext"
           }
         }
       }
@@ -1111,6 +1231,16 @@
         }
       }
     },
+    "Dictionary" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wörterbuch"
+          }
+        }
+      }
+    },
     "Disconnect" : {
       "localizations" : {
         "de" : {
@@ -1441,6 +1571,16 @@
         }
       }
     },
+    "Forward 15 seconds" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "15 Sekunden vor"
+          }
+        }
+      }
+    },
     "Frequency" : {
       "localizations" : {
         "de" : {
@@ -1487,6 +1627,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Überschrift"
+          }
+        }
+      }
+    },
+    "Heard" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gehört"
           }
         }
       }
@@ -1701,6 +1851,16 @@
         }
       }
     },
+    "Meant" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemeint"
+          }
+        }
+      }
+    },
     "Memory for your coding agents" : {
       "localizations" : {
         "de" : {
@@ -1717,6 +1877,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Externe Dienste benachrichtigen"
+          }
+        }
+      }
+    },
+    "Misheard" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falsch gehört"
           }
         }
       }
@@ -1797,6 +1967,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Name"
+          }
+        }
+      }
+    },
+    "Names and terms speech recognition gets wrong. Voice notes are corrected with them; the original transcript is kept." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Namen und Begriffe, die die Spracherkennung falsch versteht. Sprachnotizen werden damit korrigiert, das ursprüngliche Transkript bleibt erhalten."
+          }
+        }
+      }
+    },
+    "Names and terms the notes AI spells exactly like this." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Namen und Begriffe, die die Notiz-KI genau so schreibt."
           }
         }
       }
@@ -2017,6 +2207,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Noch kein Text erkannt."
+          }
+        }
+      }
+    },
+    "No transcript yet. It appears once the notes AI has processed the recording." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch kein Transkript. Es erscheint, sobald die Notiz-KI die Aufnahme verarbeitet hat."
           }
         }
       }
@@ -2331,6 +2531,16 @@
         }
       }
     },
+    "One entry per line: word: Term, always: heard -> meant, or context: heard -> meant." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Eintrag pro Zeile: word: Begriff, always: gehört -> gemeint oder context: gehört -> gemeint."
+          }
+        }
+      }
+    },
     "One-time pairing code" : {
       "localizations" : {
         "de" : {
@@ -2411,6 +2621,16 @@
         }
       }
     },
+    "Opens the recording with its transcript" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnet die Aufnahme mit dem Transkript"
+          }
+        }
+      }
+    },
     "Origin: %@" : {
       "localizations" : {
         "de" : {
@@ -2467,6 +2687,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Teil %lld"
+          }
+        }
+      }
+    },
+    "Paste a list" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liste einfügen"
           }
         }
       }
@@ -2611,6 +2841,16 @@
         }
       }
     },
+    "Plays the recording from here" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spielt die Aufnahme ab dieser Stelle ab"
+          }
+        }
+      }
+    },
     "Please check the text" : {
       "localizations" : {
         "de" : {
@@ -2677,6 +2917,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Richtlinie: %@"
+          }
+        }
+      }
+    },
+    "Position" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Position"
           }
         }
       }
@@ -2861,6 +3111,16 @@
         }
       }
     },
+    "Recording, %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahme, %@"
+          }
+        }
+      }
+    },
     "Recording, part %lld" : {
       "localizations" : {
         "de" : {
@@ -3037,6 +3297,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wiederholen"
+          }
+        }
+      }
+    },
+    "Replace" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzen"
           }
         }
       }
@@ -3511,6 +3781,16 @@
         }
       }
     },
+    "Share transcript" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transkript teilen"
+          }
+        }
+      }
+    },
     "Show all" : {
       "localizations" : {
         "de" : {
@@ -3961,6 +4241,16 @@
         }
       }
     },
+    "The dictionary could not be saved. Check the connection to your server." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Wörterbuch konnte nicht gespeichert werden. Prüfe die Verbindung zu deinem Server."
+          }
+        }
+      }
+    },
     "The file is missing on this device." : {
       "localizations" : {
         "de" : {
@@ -4057,6 +4347,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die Notiz-KI liest diese Notiz"
+          }
+        }
+      }
+    },
+    "The recording could not be loaded. Check the connection to your server." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Aufnahme konnte nicht geladen werden. Prüfe die Verbindung zu deinem Server."
           }
         }
       }
@@ -4237,6 +4537,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Diese Notiz ist zu lang zum Synchronisieren."
+          }
+        }
+      }
+    },
+    "This transcript has no timestamps, so the spoken passage cannot be marked." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Transkript hat keine Zeitmarken, deshalb kann die gesprochene Stelle nicht markiert werden."
           }
         }
       }
@@ -4637,6 +4947,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mit einem öffentlichen State-Relay, zum Beispiel auf deinem VPS, bekommt dein iPhone Mitteilungen auch außerhalb des WLANs. Die Inhalte bleiben Ende-zu-Ende verschlüsselt."
+          }
+        }
+      }
+    },
+    "Word or name" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wort oder Name"
+          }
+        }
+      }
+    },
+    "Words" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wörter"
           }
         }
       }

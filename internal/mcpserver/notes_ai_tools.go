@@ -49,7 +49,7 @@ func (server *server) registerNoteAITools(readOnly *mcp.ToolAnnotations, mutatin
 	}, server.processNote)
 	mcp.AddTool(server.mcp, &mcp.Tool{
 		Name:        "get_note_processing",
-		Description: "Get a note's AI processing status, the AI title and summary with their model, and each attachment's OCR text or transcript.",
+		Description: "Get a note's AI processing status, the AI title and summary with their model, and each attachment's OCR text or transcript. Recordings also carry the raw transcript before the owner's dictionary corrected it and, when available, timed segments (start_ms, end_ms, text).",
 		Annotations: readOnly,
 	}, server.getNoteProcessing)
 	mcp.AddTool(server.mcp, &mcp.Tool{
@@ -57,6 +57,24 @@ func (server *server) registerNoteAITools(readOnly *mcp.ToolAnnotations, mutatin
 		Description: "List the notes State's notes AI linked to this note, each with the reason.",
 		Annotations: readOnly,
 	}, server.listRelatedNotes)
+	mcp.AddTool(server.mcp, &mcp.Tool{
+		Name:        "get_notes_dictionary",
+		Description: "Read the owner's dictionary for notes: words to spell exactly like this, and corrections of words speech recognition mishears (mode always: replaced in every transcript; mode context: only where the context shows that meaning). Use these spellings when you write notes or reminders. Only the owner changes it, in the app.",
+		Annotations: readOnly,
+	}, server.getNotesDictionary)
+}
+
+type emptyInput struct{}
+
+func (server *server) getNotesDictionary(ctx context.Context, request *mcp.CallToolRequest, _ emptyInput) (*mcp.CallToolResult, any, error) {
+	if _, err := server.reminderActor(ctx, request); err != nil {
+		return nil, nil, err
+	}
+	dictionary, err := server.state.GetNotesDictionary(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, dictionary, nil
 }
 
 func (server *server) addNoteAttachment(ctx context.Context, request *mcp.CallToolRequest, input addNoteAttachmentInput) (*mcp.CallToolResult, any, error) {
