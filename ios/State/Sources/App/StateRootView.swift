@@ -10,6 +10,7 @@ struct StateRootView: View {
         ZStack {
             stage
                 .tint(StateTheme.accent)
+                .toggleStyle(StateSwitchToggleStyle())
                 .background(StateTheme.ground.ignoresSafeArea())
                 .modifier(StateLifecycle(model: model))
 

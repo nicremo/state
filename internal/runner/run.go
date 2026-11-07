@@ -147,8 +147,11 @@ func (runner *Runner) execute(ctx context.Context, run state.AgentRun) error {
 		return runner.failUnavailable(ctx, run, shared.Revision(), fmt.Sprintf("start adapter: %v", err))
 	}
 	tailFn := func() string {
-		if process, ok := session.(*processSession); ok {
-			return process.tail.String()
+		switch running := session.(type) {
+		case *processSession:
+			return running.tail.String()
+		case *t3Session:
+			return running.tail.String()
 		}
 		return ""
 	}
@@ -181,6 +184,10 @@ func (runner *Runner) execute(ctx context.Context, run state.AgentRun) error {
 	summary := summarizeResult(result)
 	if shared.Cancelled() {
 		summary = "cancelled by owner"
+		if result.HarnessLink != "" {
+			// Only the wait ended; the harness keeps working on its own.
+			result.Text = "In State abgebrochen. Der Thread läuft in T3 Code weiter."
+		}
 	}
 	outcome := state.AgentRunStatusSucceeded
 	if finalStatus != "succeeded" {
@@ -193,6 +200,7 @@ func (runner *Runner) execute(ctx context.Context, run state.AgentRun) error {
 		ResultArtifactRef: filepath.Join(".state", "runs", run.ID),
 		ResultText:        redactText(result.Text, maxResultTextLength),
 		HarnessSessionID:  result.HarnessSessionID,
+		HarnessLink:       result.HarnessLink,
 		ExitCode:          result.ExitCode,
 		ExpectedRevision:  shared.Revision(),
 		MutationMetadata: state.MutationMetadata{
@@ -295,6 +303,7 @@ func (runner *Runner) failUnavailable(ctx context.Context, run state.AgentRun, r
 		RunID:            run.ID,
 		Outcome:          state.AgentRunStatusFailed,
 		ResultSummary:    redactSummary(detail),
+		ResultText:       redactText(strings.TrimPrefix(reason, ErrAdapterUnavailable.Error()+": "), maxResultTextLength),
 		FailureCode:      state.RunFailureAdapterUnavailable,
 		ExitCode:         1,
 		ExpectedRevision: revision,

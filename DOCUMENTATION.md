@@ -334,14 +334,25 @@ again.
 ## Agents that work for you on the Mac
 
 The app's **Agent** tab shows the sessions of coding agents that State starts
-on your Mac. Open a reminder, tap **Let an agent work on it**, pick the agent
-and project and add an instruction if you like. The paired runner on the Mac
-starts Claude Code, Codex or Kimi Code in the project folder; when the agent
+on your Mac. Tap **+** in the Agent tab and type a task, or open a reminder and
+tap **Let an agent work on it**. State preselects the agent and project you
+used last. A task typed in the Agent tab becomes a reminder without a date, so
+it keeps its history. The paired runner on the Mac
+starts Claude Code, Codex, Kimi Code or T3 Code in the project folder; when the agent
 finishes its round, its answer appears in the Agent tab (and as a push, where
 push is set up). Answer there and the agent continues the same conversation.
 **Open on the Mac** opens the session in Terminal on the Mac, for when you
 sit in front of it. **Cancel round** stops a round, **End session** closes the
 conversation.
+
+With **T3 Code** as the agent, every session is a thread in the T3 Code app on
+the Mac. **Open in T3 Code** opens that thread, on the Mac or through T3
+Connect on the phone, so you can watch the agent work and answer its questions
+there. If the thread stops to ask something, the round reads "Wartet in T3
+Code auf deine Antwort."; your next message in State is queued as the thread's
+next turn. Cancelling a round in State ends only State's wait: the thread keeps
+running in T3 Code. T3 Code applies its own approval settings, so a T3 Code
+policy needs full rights (`--rights full`).
 
 The owner decides what an agent may do: a project (a folder under the
 runner's work root) and a policy with the agent and its rights, set up on the

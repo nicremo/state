@@ -129,10 +129,9 @@ struct PolicyEditorView: View {
                     } else {
                         LabeledContent("Project", value: projectName)
                     }
-                    Toggle("Enabled", isOn: $draft.enabled)
                 }
 
-                Section("Adapter") {
+                Section {
                     Picker("Adapter", selection: $adapterSelection) {
                         ForEach(HarnessCatalog.adapterPresets, id: \.id) { preset in
                             Text(preset.label).tag(preset.id)
@@ -149,6 +148,12 @@ struct PolicyEditorView: View {
                                 .foregroundStyle(.red)
                         }
                     }
+                } header: {
+                    Text("Adapter")
+                } footer: {
+                    if adapterSelection == AgentNames.t3Code {
+                        Text("Runs as a thread in T3 Code on the Mac. T3 Code applies its own approval settings, so it only starts with a capability beyond editing, such as running tests.")
+                    }
                 }
 
                 Section {
@@ -157,7 +162,7 @@ struct PolicyEditorView: View {
                         Text("Unattended (low risk)").tag(ExecutionMode.unattendedLowRisk)
                     }
                 } footer: {
-                    Text("Supervised runs may use every selected capability and ask before risky steps. Unattended runs never ask, so only low-risk capabilities are allowed.")
+                    Text("Supervised asks before risky steps. Unattended never asks and allows only low-risk capabilities.")
                 }
 
                 Section("Capabilities") {

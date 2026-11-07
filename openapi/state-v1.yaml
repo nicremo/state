@@ -2116,6 +2116,7 @@ components:
         closed_at: { type: string, format: date-time }
         status: { type: string, enum: [working, needs_approval, waiting, failed, closed] }
         harness_session_id: { type: string }
+        harness_link: { type: string, format: uri, maxLength: 512, description: "Latest https link to the session in the agent's own interface, for example its T3 Code thread." }
         last_activity_at: { type: string, format: date-time }
         turns: { type: array, items: { $ref: "#/components/schemas/AgentRun" }, description: Rounds in order. }
     AgentRun:
@@ -2158,6 +2159,7 @@ components:
         prompt: { type: string, description: The owner's message for this round. }
         result_text: { type: string, maxLength: 20000, description: The agent's final message, redacted. }
         harness_session_id: { type: string, description: The agent CLI's own session ID. }
+        harness_link: { type: string, format: uri, maxLength: 512, description: "https link to this round in the agent's own interface." }
         failure_code: { type: [string, "null"], enum: [evidence_mismatch, approval_declined, null] }
         approval_capability:
           oneOf:
@@ -2201,6 +2203,7 @@ components:
             failure_code: { type: [string, "null"], enum: [adapter_unavailable, null], description: "Optional caller failure code. Server-owned codes (evidence_mismatch, approval_declined) cannot be supplied." }
             result_text: { type: string, maxLength: 20000, description: The agent's final message; redacted and bounded again by the server. }
             harness_session_id: { type: string, pattern: "^[A-Za-z0-9_.:-]{1,128}$" }
+            harness_link: { type: string, format: uri, maxLength: 512, description: "Optional absolute https URL without credentials, for example the T3 Code thread." }
             exit_code: { type: integer }
             expected_revision: { type: integer, format: int64, minimum: 1 }
     RequestApprovalRequest:

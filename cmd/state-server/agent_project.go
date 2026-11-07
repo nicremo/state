@@ -25,7 +25,7 @@ func runAgentProject(args []string, stdout io.Writer, stderr io.Writer) error {
 	dataDirectory := flags.String("data", environmentOrDefault("STATE_DATA_DIR", "/data"), "persistent data directory")
 	name := flags.String("name", "", "project name, the folder name under the runner's work root, for example karla-report")
 	description := flags.String("description", "", "what the project is")
-	adapter := flags.String("adapter", "claude-code", "agent: claude-code, codex, kimi-code, opencode, pi-agent or deepseek-harness")
+	adapter := flags.String("adapter", "claude-code", "agent: claude-code, codex, kimi-code, opencode, pi-agent, deepseek-harness or t3-code (needs -rights full)")
 	rights := flags.String("rights", "edit", "what the agent may do without asking: read, edit or full")
 	runnerName := flags.String("runner", "", "display name of the runner that serves the project, for example \"MacBook Pro\"")
 	timeout := flags.Int("timeout", 60, "minutes one round may take")

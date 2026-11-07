@@ -719,6 +719,9 @@ func (service *Service) CompleteAgentRun(ctx context.Context, actor Actor, input
 	if input.HarnessSessionID != "" && !ValidHarnessSessionID(input.HarnessSessionID) {
 		return AgentRun{}, ErrInvalidInput
 	}
+	if input.HarnessLink != "" && !ValidHarnessLink(input.HarnessLink) {
+		return AgentRun{}, fmt.Errorf("%w: harness_link must be an absolute https URL without credentials", ErrInvalidInput)
+	}
 	run, err := service.repository.GetAgentRun(ctx, input.RunID)
 	if err != nil {
 		return AgentRun{}, err
@@ -761,6 +764,7 @@ func (service *Service) CompleteAgentRun(ctx context.Context, actor Actor, input
 	updated.ResultArtifactRef = strings.TrimSpace(input.ResultArtifactRef)
 	updated.ResultText = redactResultText(input.ResultText)
 	updated.HarnessSessionID = input.HarnessSessionID
+	updated.HarnessLink = input.HarnessLink
 	updated.FailureCode = failureCode
 	completedBy := actor
 	updated.CompletedByActor = &completedBy

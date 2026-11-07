@@ -7,6 +7,7 @@ struct AgentSessionsView: View {
     @Bindable var model: AppModel
     var selection: Binding<String?>?
     @State private var path: [String] = []
+    @State private var startsTask = false
 
     var body: some View {
         Group {
@@ -29,6 +30,9 @@ struct AgentSessionsView: View {
                 guard !Task.isCancelled else { return }
                 await model.loadAgentSessions()
             }
+        }
+        .sheet(isPresented: $startsTask) {
+            StartAgentSessionSheet(model: model, reminder: nil)
         }
         .onAppear(perform: openRequestedSession)
         .onChange(of: model.agentSessionToOpen) { _, _ in openRequestedSession() }
@@ -53,7 +57,7 @@ struct AgentSessionsView: View {
                 ContentUnavailableView {
                     Label(String(localized: "No agent sessions yet"), systemImage: "terminal")
                 } description: {
-                    Text("Open a reminder and tap Let an agent work on it. The agent works on your Mac; its answer appears here and you can reply.")
+                    Text("Tap + to give an agent a task. It works on your Mac; its answer appears here and you can reply.")
                 }
                 .accessibilityIdentifier("agent-empty")
             } else {
@@ -75,6 +79,17 @@ struct AgentSessionsView: View {
         .stateBackground()
         .navigationTitle(String(localized: "Agent"))
         .refreshable { await model.loadAgentSessions() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    startsTask = true
+                } label: {
+                    Label(String(localized: "New task"), systemImage: "plus")
+                }
+                .disabled(model.isDemo)
+                .accessibilityIdentifier("agent-new-task")
+            }
+        }
     }
 
     @ViewBuilder
@@ -113,7 +128,11 @@ struct AgentSessionRow: View {
                 }
             }
             HStack(spacing: StateTheme.Space.inner) {
-                AgentStatusPill(status: session.status)
+                // Ended sessions sit in their own section; the pill would
+                // only repeat its title.
+                if !session.closed {
+                    AgentStatusPill(status: session.status)
+                }
                 Text([session.agentName, session.projectName].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -193,6 +212,16 @@ enum AgentText {
             }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+    }
+
+    /// A plain preview for reminder rows: Markdown headings such as
+    /// "## Objective" are structure, not content, and are left out.
+    static func rowPreview(_ markdown: String) -> String {
+        let body = markdown
+            .split(separator: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
+            .joined(separator: "\n")
+        return preview(body).replacingOccurrences(of: "`", with: "")
     }
 
     /// What the owner's rights setting lets the agent do, from the policy's

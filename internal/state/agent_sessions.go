@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -59,6 +60,20 @@ func ValidHarnessSessionID(id string) bool {
 	return harnessSessionIDPattern.MatchString(id)
 }
 
+// maxHarnessLinkLength bounds a stored harness link.
+const maxHarnessLinkLength = 512
+
+// ValidHarnessLink reports whether a link to the agent's own view of a session
+// is safe to store and open on a device: absolute https with a host, no
+// credentials, bounded length.
+func ValidHarnessLink(link string) bool {
+	if link == "" || len(link) > maxHarnessLinkLength {
+		return false
+	}
+	parsed, err := url.Parse(link)
+	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil
+}
+
 type AgentSession struct {
 	ID             string     `json:"id"`
 	ReminderID     string     `json:"reminder_id"`
@@ -82,9 +97,12 @@ type AgentSessionView struct {
 	Status SessionStatus `json:"status"`
 	// HarnessSessionID is the agent CLI's session, known after the first
 	// round that reported one.
-	HarnessSessionID string     `json:"harness_session_id,omitempty"`
-	LastActivityAt   time.Time  `json:"last_activity_at"`
-	Turns            []AgentRun `json:"turns"`
+	HarnessSessionID string `json:"harness_session_id,omitempty"`
+	// HarnessLink is the latest link to the session in the agent's own
+	// interface, for example its T3 Code thread.
+	HarnessLink    string     `json:"harness_link,omitempty"`
+	LastActivityAt time.Time  `json:"last_activity_at"`
+	Turns          []AgentRun `json:"turns"`
 }
 
 type StartAgentSessionInput struct {
@@ -433,6 +451,9 @@ func (service *Service) sessionView(ctx context.Context, session AgentSession) (
 	for _, turn := range turns {
 		if view.HarnessSessionID == "" && turn.HarnessSessionID != "" {
 			view.HarnessSessionID = turn.HarnessSessionID
+		}
+		if turn.HarnessLink != "" {
+			view.HarnessLink = turn.HarnessLink
 		}
 		if turn.UpdatedAt.After(view.LastActivityAt) {
 			view.LastActivityAt = turn.UpdatedAt

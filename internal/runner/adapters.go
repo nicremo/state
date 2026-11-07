@@ -30,11 +30,13 @@ type StartRequest struct {
 // Result is the terminal evidence of an adapter process. Text and
 // HarnessSessionID come from CLIs with structured output; AgentFailed is set
 // when the CLI reported the round as failed although it exited cleanly.
+// HarnessLink opens the round in the harness's own interface (T3 Code).
 type Result struct {
 	ExitCode         int
 	Tail             string
 	Text             string
 	HarnessSessionID string
+	HarnessLink      string
 	AgentFailed      bool
 }
 
@@ -54,9 +56,8 @@ type Adapter interface {
 }
 
 // DefaultAdapters returns the shipped adapter registry: codex, claude-code,
-// kimi-code, opencode, pi-agent (Pi Agent) and deepseek-harness (DeepSeek
-// Harness). The
-// test-only script adapter is registered only when
+// kimi-code, opencode, pi-agent (Pi Agent), deepseek-harness (DeepSeek
+// Harness) and t3-code (a thread in the T3 Code app). The test-only script adapter is registered only when
 // STATE_RUNNER_TEST_ADAPTER=1, so integration tests never need real agent CLIs
 // and production processes never get it.
 func DefaultAdapters() map[string]Adapter {
@@ -91,6 +92,7 @@ func DefaultAdapters() map[string]Adapter {
 			binary: "dsh",
 			args:   func(_ state.TaskContract, prompt string) []string { return []string{"--profile", "headless", prompt} },
 		},
+		t3AdapterSlug: &t3Adapter{},
 	}
 	if os.Getenv("STATE_RUNNER_TEST_ADAPTER") == "1" {
 		script := os.Getenv("STATE_RUNNER_TEST_SCRIPT")

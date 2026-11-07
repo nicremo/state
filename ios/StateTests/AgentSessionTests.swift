@@ -66,6 +66,33 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(decoded.turns.last?.turnKind, .openTerminal)
     }
 
+    func testT3SessionCarriesItsThreadLinkAndNoTerminalResume() throws {
+        var json = String(decoding: session(turns: turn(id: "t1", status: "succeeded", result: "OK"), adapter: "t3-code", harness: "mcp:abc"), as: UTF8.self)
+        json = json.replacingOccurrences(of: #""harness_session_id":"mcp:abc""#, with: #""harness_session_id":"mcp:abc","harness_link":"https://app.t3.codes/threads/env/mcp%3Aabc""#)
+        let decoded = try StateJSON.decoder.decode(AgentSession.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.agentName, "T3 Code")
+        XCTAssertTrue(decoded.runsInT3)
+        XCTAssertEqual(decoded.harnessURL?.absoluteString, "https://app.t3.codes/threads/env/mcp%3Aabc")
+        XCTAssertNil(decoded.resumeCommand)
+        XCTAssertFalse(decoded.canOpenOnMac)
+        XCTAssertTrue(decoded.canSend, "T3 threads take follow-up messages")
+    }
+
+    func testOnlyHTTPSHarnessLinksOpen() throws {
+        var json = String(decoding: session(turns: "", adapter: "t3-code", harness: "x"), as: UTF8.self)
+        json = json.replacingOccurrences(of: #""harness_session_id":"x""#, with: #""harness_session_id":"x","harness_link":"http://insecure.example/x""#)
+        let decoded = try StateJSON.decoder.decode(AgentSession.self, from: Data(json.utf8))
+        XCTAssertNil(decoded.harnessURL)
+    }
+
+    func testUnknownAdaptersGetAReadableName() {
+        XCTAssertEqual(AgentNames.name(for: "my-agent"), "My Agent")
+    }
+
+    func testRowPreviewDropsMarkdownHeadings() {
+        XCTAssertEqual(AgentText.rowPreview("## Objective\nDen **Report** bauen.\n- `make test`"), "Den Report bauen. make test")
+    }
+
     func testResumeCommandPerAgent() throws {
         let claude = try StateJSON.decoder.decode(AgentSession.self, from: session(turns: "", adapter: "claude-code", harness: "abc"))
         XCTAssertEqual(claude.resumeCommand, "claude --resume abc")

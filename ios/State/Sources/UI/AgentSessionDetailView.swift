@@ -48,7 +48,7 @@ struct AgentSessionDetailView: View {
             }
             Button(String(localized: "Cancel"), role: .cancel) {}
         } message: {
-            Text("The agent keeps its work. You can open the session on the Mac later, but not answer here any more.")
+            Text("The agent keeps its work. You cannot answer here any more.")
         }
     }
 
@@ -80,7 +80,15 @@ struct AgentSessionDetailView: View {
             Text([session.agentName, session.projectName].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
             Spacer(minLength: 0)
+            if let url = session.harnessURL {
+                Link(destination: url) {
+                    Label(String(localized: "Open in T3 Code"), systemImage: "arrow.up.forward.square")
+                        .font(.caption.weight(.semibold))
+                }
+                .accessibilityIdentifier("agent-open-harness")
+            }
         }
     }
 
@@ -97,10 +105,8 @@ struct AgentSessionDetailView: View {
                 if let prompt = turn.prompt, !prompt.isEmpty {
                     ownerMessage(prompt)
                 } else if isFirst {
-                    Text("Started on the reminder's task")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    // The first round works on the reminder itself.
+                    ownerMessage(session.title)
                 }
                 agentPart(turn, session: session)
             }
@@ -154,7 +160,7 @@ struct AgentSessionDetailView: View {
     private func answerCard(_ turn: AgentRun, session: AgentSession) -> some View {
         VStack(alignment: .leading, spacing: StateTheme.Space.inner) {
             HStack {
-                Label(session.agentName, systemImage: "terminal")
+                Label(session.agentName, systemImage: session.runsInT3 ? "rectangle.stack" : "terminal")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -190,6 +196,10 @@ struct AgentSessionDetailView: View {
 
     private func failureText(_ turn: AgentRun) -> String {
         if turn.failureCode == "adapter_unavailable" {
+            // The runner's reason, when there is one, is the answer text above.
+            if !(turn.resultText ?? "").isEmpty {
+                return String(localized: "The agent could not start on the Mac.")
+            }
             return String(localized: "The agent could not start on the Mac. Check that it is installed and the project is set up for the runner.")
         }
         if turn.status == .expired {
@@ -302,13 +312,20 @@ struct AgentSessionDetailView: View {
         if let session {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button {
-                        Task { await model.openAgentSessionOnMac(session) }
-                    } label: {
-                        Label(String(localized: "Open on the Mac"), systemImage: "macbook")
+                    if let url = session.harnessURL {
+                        Link(destination: url) {
+                            Label(String(localized: "Open in T3 Code"), systemImage: "arrow.up.forward.square")
+                        }
                     }
-                    .disabled(!session.canOpenOnMac)
+                    // Only agents with a terminal resume can be opened on the
+                    // Mac; for the others the entry would always be greyed.
                     if let command = session.resumeCommand {
+                        Button {
+                            Task { await model.openAgentSessionOnMac(session) }
+                        } label: {
+                            Label(String(localized: "Open on the Mac"), systemImage: "macbook")
+                        }
+                        .disabled(!session.canOpenOnMac)
                         Button {
                             copy(command)
                         } label: {

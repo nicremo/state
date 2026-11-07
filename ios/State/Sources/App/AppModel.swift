@@ -854,6 +854,19 @@ final class AppModel {
         }
     }
 
+    /// Starts an agent on a task typed in the Agent tab. The task becomes a
+    /// reminder without a date first, so it has history and the session a
+    /// reminder to belong to; then the session starts on it.
+    func startAgentTask(title: String, policyID: String) async -> AgentSession? {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        var draft = ReminderDraft()
+        draft.title = trimmed
+        draft.executionPolicyID = policyID
+        guard let reminderID = await createReminder(draft) else { return nil }
+        return await startAgentSession(reminderID: reminderID, policyID: policyID, instruction: "")
+    }
+
     func openAgentSession(_ id: String) {
         agentSessionToOpen = id
         requestedTab = .agent
