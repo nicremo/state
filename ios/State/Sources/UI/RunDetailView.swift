@@ -74,7 +74,7 @@ struct AgentRunRow: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(run.status.color)
                 Spacer()
-                Text(run.adapter)
+                Text(AgentNames.name(for: run.adapter))
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
             }
@@ -139,7 +139,7 @@ struct RunDetailView: View {
                     Text(run.taskContract.objective)
                         .foregroundStyle(StateTheme.graphite)
                     HStack {
-                        Text(run.adapter)
+                        Text(AgentNames.name(for: run.adapter))
                             .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
                         Text(run.taskContract.projectName)

@@ -31,6 +31,9 @@ struct AgentSession: Codable, Hashable, Identifiable, Sendable {
     var closedAt: Date?
     var status: AgentSessionStatus
     var harnessSessionID: String?
+    /// The session in the agent's own interface, for example its T3 Code
+    /// thread. Set by the server only for an absolute https link.
+    var harnessLink: String? = nil
     var lastActivityAt: Date?
     var revision: Int64
     var createdAt: Date
@@ -52,6 +55,16 @@ struct AgentSession: Codable, Hashable, Identifiable, Sendable {
 
     var agentName: String { AgentNames.name(for: adapter) }
 
+    /// The T3 Code thread (or another harness view) to open, if the server
+    /// reported one.
+    var harnessURL: URL? {
+        guard let link = harnessLink, let url = URL(string: link), url.scheme == "https" else { return nil }
+        return url
+    }
+
+    /// Sessions of T3 Code live in T3; there is no terminal to resume them in.
+    var runsInT3: Bool { adapter == AgentNames.t3Code }
+
     /// The command that continues this session in a terminal, run in the
     /// project folder on the Mac.
     var resumeCommand: String? {
@@ -71,6 +84,8 @@ struct AgentSessionListResponse: Codable, Sendable {
 
 /// Display names of the agents a runner can start.
 enum AgentNames {
+    static let t3Code = "t3-code"
+
     static func name(for adapter: String) -> String {
         switch adapter {
         case "claude-code": "Claude Code"
@@ -79,7 +94,8 @@ enum AgentNames {
         case "opencode": "OpenCode"
         case "pi-agent": "Pi"
         case "deepseek-harness": "DeepSeek Harness"
-        default: adapter
+        case t3Code: "T3 Code"
+        default: HarnessCatalog.displayLabel(for: adapter)
         }
     }
 }

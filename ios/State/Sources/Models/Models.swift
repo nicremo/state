@@ -546,6 +546,9 @@ struct AgentRun: Codable, Hashable, Identifiable, Sendable {
     var prompt: String?
     var resultText: String?
     var harnessSessionID: String?
+    /// Opens the round in the agent's own interface, for example a T3 Code
+    /// thread.
+    var harnessLink: String? = nil
     var createdByActor: Actor?
     var completedByActor: Actor?
     var revision: Int64

@@ -26,6 +26,8 @@ enum HarnessCatalog {
         ("opencode", "OpenCode"),
         ("pi-agent", "Pi"),
         ("deepseek-harness", "DeepSeek Harness"),
+        ("kimi-code", "Kimi Code"),
+        ("t3-code", "T3 Code"),
     ]
 
     /// The name State proposes for a newly paired agent. The owner sees the
@@ -34,6 +36,12 @@ enum HarnessCatalog {
     static func suggestedName(for harness: String) -> String {
         let base = presets.first { $0.id == harness }?.label ?? displayLabel(for: harness)
         return String(format: String(localized: "%@ Agent"), base)
+    }
+
+    /// The readable name of a pairing label: the preset's name, else the
+    /// label with capitalised words.
+    static func label(for harness: String) -> String {
+        presets.first { $0.id == harness }?.label ?? displayLabel(for: harness)
     }
 
     /// Turns a raw label into something readable: `claude-code` becomes
