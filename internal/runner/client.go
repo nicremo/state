@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"net/http"
 	"strconv"
@@ -74,6 +75,17 @@ func (client *Client) Register(ctx context.Context, input state.RegisterRunnerIn
 		return state.Runner{}, err
 	}
 	return registered, nil
+}
+
+// ReportHarnessModels sends the model catalog the runner read from its
+// harness. The server ignores an unchanged catalog.
+func (client *Client) ReportHarnessModels(ctx context.Context, models []state.HarnessModel) (state.Runner, error) {
+	var runner state.Runner
+	input := state.ReportHarnessModelsInput{Models: models, ClientRequestID: uuid.NewString()}
+	if err := client.do(ctx, http.MethodPut, "/api/v1/runner/harness-models", input, client.token, http.StatusOK, &runner); err != nil {
+		return state.Runner{}, err
+	}
+	return runner, nil
 }
 
 // Claim long-polls for an eligible run. A 409 not_claimable maps to

@@ -162,6 +162,8 @@ type Runner struct {
 	RegisteredAt time.Time `json:"registered_at"`
 	LastSeenAt   time.Time `json:"last_seen_at"`
 	Revision     int64     `json:"revision"`
+	// HarnessModels is the model catalog the runner read from its harness.
+	HarnessModels []HarnessModel `json:"harness_models,omitempty"`
 }
 
 type AgentRunStatus string

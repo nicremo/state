@@ -319,6 +319,7 @@ func (service *Service) RegisterRunner(ctx context.Context, actor Actor, input R
 	if !registered {
 		runner.RegisteredAt = existing.RegisteredAt
 		runner.Revision = existing.Revision + 1
+		runner.HarnessModels = existing.HarnessModels
 		action = AuditActionRunnerUpdated
 	}
 	eventID, err := service.newID()

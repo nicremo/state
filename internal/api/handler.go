@@ -138,6 +138,7 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("PATCH /api/v1/policies/{id}", handler.updatePolicy)
 	handler.router.HandleFunc("POST /api/v1/runner/registration", handler.registerRunner)
 	handler.router.HandleFunc("POST /api/v1/runner/claims", handler.claimAgentRun)
+	handler.router.HandleFunc("PUT /api/v1/runner/harness-models", handler.reportHarnessModels)
 	handler.router.HandleFunc("POST /api/v1/runner/runs/{id}/events", handler.reportRunEvent)
 	handler.router.HandleFunc("POST /api/v1/runner/runs/{id}/complete", handler.completeRun)
 	handler.router.HandleFunc("POST /api/v1/runner/runs/{id}/approval", handler.requestRunApproval)
@@ -844,6 +845,25 @@ func (handler *Handler) registerRunner(writer http.ResponseWriter, request *http
 	}
 	handler.notifySync(request.Context(), actor.ID)
 	writeJSON(writer, http.StatusCreated, runner)
+}
+
+func (handler *Handler) reportHarnessModels(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindRunner)
+	if !ok {
+		return
+	}
+	var input state.ReportHarnessModelsInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	runner, err := handler.state.ReportHarnessModels(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, runner)
 }
 
 func (handler *Handler) claimAgentRun(writer http.ResponseWriter, request *http.Request) {
