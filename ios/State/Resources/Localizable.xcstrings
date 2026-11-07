@@ -591,6 +591,16 @@
         }
       }
     },
+    "At the limit, new notes wait for next month." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ist das Limit erreicht, warten neue Notizen auf den nächsten Monat."
+          }
+        }
+      }
+    },
     "Automation" : {
       "localizations" : {
         "de" : {
@@ -617,6 +627,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "15 Sekunden zurück"
+          }
+        }
+      }
+    },
+    "Becomes a reminder without a date, so the task keeps its history." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird als Erinnerung ohne Datum gespeichert, damit die Aufgabe ihren Verlauf behält."
           }
         }
       }
@@ -721,22 +741,22 @@
         }
       }
     },
+    "Change" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ändern"
+          }
+        }
+      }
+    },
     "Changed fields: %@" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Geänderte Felder: %@"
-          }
-        }
-      }
-    },
-    "Check and save key" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Schlüssel prüfen und speichern"
           }
         }
       }
@@ -1231,16 +1251,6 @@
         }
       }
     },
-    "Delivery and privacy" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zustellung und Datenschutz"
-          }
-        }
-      }
-    },
     "Denied" : {
       "localizations" : {
         "de" : {
@@ -1721,6 +1731,16 @@
         }
       }
     },
+    "General" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allgemein"
+          }
+        }
+      }
+    },
     "Harness" : {
       "localizations" : {
         "de" : {
@@ -1861,6 +1881,16 @@
         }
       }
     },
+    "Key set up" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlüssel eingerichtet"
+          }
+        }
+      }
+    },
     "Last seen" : {
       "localizations" : {
         "de" : {
@@ -1907,16 +1937,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jetzt arbeiten lassen"
-          }
-        }
-      }
-    },
-    "License" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lizenz"
           }
         }
       }
@@ -2071,16 +2091,6 @@
         }
       }
     },
-    "Models" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modelle"
-          }
-        }
-      }
-    },
     "Monthly" : {
       "localizations" : {
         "de" : {
@@ -2127,16 +2137,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Name"
-          }
-        }
-      }
-    },
-    "Names and terms speech recognition gets wrong. Voice notes are corrected with them; the original transcript is kept." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Namen und Begriffe, die die Spracherkennung falsch versteht. Sprachnotizen werden damit korrigiert, das ursprüngliche Transkript bleibt erhalten."
           }
         }
       }
@@ -2217,6 +2217,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Neue Erinnerung"
+          }
+        }
+      }
+    },
+    "New task" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neue Aufgabe"
           }
         }
       }
@@ -2701,16 +2711,6 @@
         }
       }
     },
-    "Once the limit is reached, notes stay usable and wait for next month or a higher limit." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ist das Limit erreicht, bleiben Notizen nutzbar und warten auf den nächsten Monat oder ein höheres Limit."
-          }
-        }
-      }
-    },
     "One binary on a machine you control. It keeps the audit chain." : {
       "localizations" : {
         "de" : {
@@ -2761,32 +2761,22 @@
         }
       }
     },
-    "Only you and your own devices can set the key. The server checks it with OpenRouter and keeps it; this device and your agents never see it again. Set a spending limit for the key on openrouter.ai." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nur du und deine eigenen Geräte können den Schlüssel setzen. Der Server prüft ihn bei OpenRouter und bewahrt ihn auf, dieses Gerät und deine Agenten sehen ihn danach nie wieder. Setze auf openrouter.ai ein Ausgabelimit für den Schlüssel."
-          }
-        }
-      }
-    },
-    "Open a reminder and tap Let an agent work on it. The agent works on your Mac; its answer appears here and you can reply." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Öffne eine Erinnerung und tippe auf „Jetzt arbeiten lassen“. Der Agent arbeitet auf deinem Mac, seine Antwort erscheint hier und du kannst antworten."
-          }
-        }
-      }
-    },
     "Open iOS notification settings" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "iOS-Benachrichtigungseinstellungen öffnen"
+          }
+        }
+      }
+    },
+    "Open in T3 Code" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In T3 Code öffnen"
           }
         }
       }
@@ -3051,12 +3041,12 @@
         }
       }
     },
-    "Photos, recordings and note text are sent through OpenRouter to the selected model provider for processing. The OpenRouter key stays on your server; this device never sees it. Originals are always kept." : {
+    "Photos, recordings and text go through OpenRouter to the model provider. Originals are always kept." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fotos, Sprachaufnahmen und Notiztext werden zur Verarbeitung über OpenRouter an den gewählten Modellanbieter gesendet. Der OpenRouter-Schlüssel bleibt auf deinem Server, dieses Gerät sieht ihn nie. Die Originale bleiben immer erhalten."
+            "value" : "Fotos, Aufnahmen und Text gehen über OpenRouter an den Modellanbieter. Originale bleiben immer erhalten."
           }
         }
       }
@@ -3611,16 +3601,6 @@
         }
       }
     },
-    "Revision %lld" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Revision %lld"
-          }
-        }
-      }
-    },
     "Revoke access" : {
       "localizations" : {
         "de" : {
@@ -3851,6 +3831,26 @@
         }
       }
     },
+    "Runs as a thread in T3 Code on the Mac. T3 Code applies its own approval settings, so it only starts with a capability beyond editing, such as running tests." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Läuft als Thread in T3 Code auf dem Mac. T3 Code nutzt eigene Freigaberegeln und startet deshalb nur mit einer Fähigkeit über das Bearbeiten hinaus, etwa Tests ausführen."
+          }
+        }
+      }
+    },
+    "Runs as a thread in T3 Code on your Mac. You can follow it there or open it from the session." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Läuft als Thread in T3 Code auf deinem Mac. Du verfolgst ihn dort oder öffnest ihn aus der Sitzung."
+          }
+        }
+      }
+    },
     "Sample data, nothing leaves this iPhone" : {
       "localizations" : {
         "de" : {
@@ -3867,6 +3867,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Speichern"
+          }
+        }
+      }
+    },
+    "Save key" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlüssel speichern"
           }
         }
       }
@@ -4027,16 +4037,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Datum festlegen"
-          }
-        }
-      }
-    },
-    "Set up" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eingerichtet"
           }
         }
       }
@@ -4261,16 +4261,6 @@
         }
       }
     },
-    "Started on the reminder's task" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mit der Aufgabe der Erinnerung gestartet"
-          }
-        }
-      }
-    },
     "State could not complete the action" : {
       "localizations" : {
         "de" : {
@@ -4431,12 +4421,12 @@
         }
       }
     },
-    "Supervised runs may use every selected capability and ask before risky steps. Unattended runs never ask, so only low-risk capabilities are allowed." : {
+    "Supervised asks before risky steps. Unattended never asks and allows only low-risk capabilities." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Beaufsichtigte Läufe dürfen alle gewählten Fähigkeiten nutzen und fragen bei riskanten Schritten nach. Unbeaufsichtigte Läufe fragen nie, daher sind nur risikoarme Fähigkeiten erlaubt."
+            "value" : "Beaufsichtigt fragt vor riskanten Schritten. Unbeaufsichtigt fragt nie und erlaubt nur Fähigkeiten mit geringem Risiko."
           }
         }
       }
@@ -4501,6 +4491,16 @@
         }
       }
     },
+    "Tap + to give an agent a task. It works on your Mac; its answer appears here and you can reply." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tippe auf +, um einem Agenten eine Aufgabe zu geben. Er arbeitet auf deinem Mac, seine Antwort erscheint hier und du kannst antworten."
+          }
+        }
+      }
+    },
     "Task" : {
       "localizations" : {
         "de" : {
@@ -4561,6 +4561,16 @@
         }
       }
     },
+    "The agent could not start on the Mac." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Agent konnte auf dem Mac nicht starten."
+          }
+        }
+      }
+    },
     "The agent could not start on the Mac. Check that it is installed and the project is set up for the runner." : {
       "localizations" : {
         "de" : {
@@ -4571,22 +4581,22 @@
         }
       }
     },
-    "The agent keeps its work. You can open the session on the Mac later, but not answer here any more." : {
+    "The agent keeps its work. You cannot answer here any more." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Arbeit des Agenten bleibt erhalten. Am Mac kannst du die Session später öffnen, hier aber nicht mehr antworten."
+            "value" : "Der Agent behält seine Arbeit. Antworten kannst du hier danach nicht mehr."
           }
         }
       }
     },
-    "The agent starts on your Mac in the project folder. Its answer appears in the Agent tab, where you can keep writing with it." : {
+    "The dictionary corrects names in voice notes." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Der Agent startet auf deinem Mac im Projektordner. Seine Antwort erscheint im Agent-Tab, dort kannst du mit ihm weiterschreiben."
+            "value" : "Das Wörterbuch korrigiert Namen in Sprachnotizen."
           }
         }
       }
@@ -4637,6 +4647,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Der Schlüssel konnte nicht gespeichert werden. Prüfe die Verbindung zu deinem Server."
+          }
+        }
+      }
+    },
+    "The key stays on your server. Set a spending limit for it on openrouter.ai." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Schlüssel bleibt auf deinem Server. Lege auf openrouter.ai ein Ausgabelimit dafür fest."
           }
         }
       }
@@ -5317,6 +5337,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Willkommen bei State"
+          }
+        }
+      }
+    },
+    "What should the agent do?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Was soll der Agent tun?"
           }
         }
       }

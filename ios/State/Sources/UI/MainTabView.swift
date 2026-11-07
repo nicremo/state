@@ -149,31 +149,13 @@ struct ReminderCollectionView: View {
             }
         }
         .navigationTitle(currentMode.title)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if let modeSelection {
-                Picker(String(localized: "Agenda"), selection: modeSelection) {
-                    Text("Today").tag(ReminderCollectionMode.today)
-                    Text("Planned").tag(ReminderCollectionMode.planned)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, StateTheme.Space.block)
-                .padding(.bottom, StateTheme.Space.inner)
-                .background(.bar)
-                .accessibilityIdentifier("agenda-mode")
-            }
-        }
+        .modifier(AgendaModeSwitch(modeSelection: modeSelection, inNavigationBar: selection == nil))
         .searchable(text: $search, prompt: String(localized: "Search reminders"))
         .toolbar {
-            ToolbarItem(placement: .stateLeading) {
-                if model.isSyncing {
-                    ProgressView()
-                        .controlSize(.small)
-                        .transition(.opacity)
-                        .accessibilityLabel(String(localized: "Synchronizing"))
-                }
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                if modeSelection != nil {
+            // Pull to refresh shows the synchronization; a spinner here left
+            // an empty bar item behind whenever nothing was syncing.
+            if modeSelection != nil {
+                ToolbarItem(placement: .stateLeading) {
                     Button {
                         showsActivity = true
                     } label: {
@@ -181,6 +163,8 @@ struct ReminderCollectionView: View {
                     }
                     .accessibilityIdentifier("agenda-activity")
                 }
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     editorIsPresented.wrappedValue = true
                 } label: {
@@ -188,7 +172,6 @@ struct ReminderCollectionView: View {
                 }
             }
         }
-        .animation(StateTheme.stateChange, value: model.isSyncing)
         .sheet(isPresented: $showsActivity) {
             ActivityView(model: model, onDone: { showsActivity = false })
                 #if os(macOS)
@@ -273,13 +256,6 @@ struct ReminderCollectionView: View {
                 Label(String(localized: "Nothing pending"), systemImage: "checkmark.circle")
             } description: {
                 Text("Reminders you or your agents create appear here.")
-            } actions: {
-                Button {
-                    editorIsPresented.wrappedValue = true
-                } label: {
-                    Text("New reminder")
-                }
-                .buttonStyle(.statePill)
             }
         } else {
             ContentUnavailableView.search(text: search)
@@ -341,7 +317,10 @@ struct ReminderRow: View {
                         .foregroundStyle(checked ? StateTheme.accent : Color.secondary.opacity(0.6))
                         .contentTransition(.symbolEffect(.replace))
                         .frame(width: 28, height: 28)
+                        // A 44 point target without moving the circle.
+                        .padding(8)
                         .contentShape(Rectangle())
+                        .padding(-8)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "Complete reminder"))
@@ -354,14 +333,14 @@ struct ReminderRow: View {
                     .strikethrough(checked)
                     .lineLimit(2)
 
-                if let description = reminder.description, !description.isEmpty {
-                    Text(description)
+                if let description = reminder.description, case let preview = AgentText.rowPreview(description), !preview.isEmpty {
+                    Text(preview)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
 
-                if dueSchedule != nil || latestEvent?.actor != nil {
+                if dueSchedule != nil || originActor != nil {
                     HStack(spacing: StateTheme.Space.inner) {
                         if let dueSchedule {
                             MetaLabel(
@@ -370,7 +349,7 @@ struct ReminderRow: View {
                                 tint: isOverdue ? .orange : .secondary
                             )
                         }
-                        if let actor = latestEvent?.actor {
+                        if let actor = originActor {
                             OriginBadge(actor: actor)
                         }
                     }
@@ -386,6 +365,13 @@ struct ReminderRow: View {
         ReminderListing.dueSchedule(for: reminder, summary: summary)
     }
 
+    /// Who last touched the reminder, shown only when it was not the owner:
+    /// the owner's own changes need no badge on every row.
+    private var originActor: Actor? {
+        guard let actor = latestEvent?.actor, actor.kind != .owner else { return nil }
+        return actor
+    }
+
     /// A due date in the past that nobody has acted on deserves a warmer color.
     private var isOverdue: Bool {
         guard
@@ -396,5 +382,46 @@ struct ReminderRow: View {
             return false
         }
         return date < Date()
+    }
+}
+
+/// The Today and Planned switch. On the iPhone it sits in the middle of an
+/// inline navigation bar, above the search field, so title, switch and
+/// search never overlap. The split layout's narrow column keeps it below the
+/// bar, with a background that stops at the bar instead of running under it.
+private struct AgendaModeSwitch: ViewModifier {
+    let modeSelection: Binding<ReminderCollectionMode>?
+    let inNavigationBar: Bool
+
+    func body(content: Content) -> some View {
+        if let modeSelection, inNavigationBar {
+            content
+                .stateInlineNavigationTitle()
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        picker(modeSelection)
+                            .frame(maxWidth: 240)
+                    }
+                }
+        } else if let modeSelection {
+            content.safeAreaInset(edge: .top, spacing: 0) {
+                picker(modeSelection)
+                    .padding(.horizontal, StateTheme.Space.block)
+                    .padding(.vertical, StateTheme.Space.inner)
+                    .background(.bar, ignoresSafeAreaEdges: [])
+            }
+        } else {
+            content
+        }
+    }
+
+    private func picker(_ selection: Binding<ReminderCollectionMode>) -> some View {
+        Picker(String(localized: "Agenda"), selection: selection) {
+            Text("Today").tag(ReminderCollectionMode.today)
+            Text("Planned").tag(ReminderCollectionMode.planned)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityIdentifier("agenda-mode")
     }
 }

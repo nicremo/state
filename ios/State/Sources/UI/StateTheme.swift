@@ -139,7 +139,7 @@ struct OriginBadge: View {
     }
 
     private var label: String {
-        actor.displayName ?? actor.harness ?? actor.deviceName ?? actor.kind.rawValue.capitalized
+        actor.displayName ?? actor.harness.map(HarnessCatalog.label(for:)) ?? actor.deviceName ?? actor.kind.rawValue.capitalized
     }
 
     private var icon: String {
@@ -314,4 +314,18 @@ extension ButtonStyle where Self == StateSecondaryButtonStyle {
 
 extension ButtonStyle where Self == StatePillButtonStyle {
     static var statePill: StatePillButtonStyle { StatePillButtonStyle() }
+}
+
+/// Switches in the system green. The app's ink tint is near white in dark
+/// mode and near black in light mode, which made an enabled switch look
+/// white or black instead of on. Set once at the root, so every switch,
+/// including future ones, gets it; buttons and links keep the ink tint.
+struct StateSwitchToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        // The explicit .switch style keeps the inner toggle from picking this
+        // style up again from the environment.
+        Toggle(configuration)
+            .toggleStyle(.switch)
+            .tint(.green)
+    }
 }

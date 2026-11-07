@@ -36,7 +36,6 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 connectionSection
-                syncSection
 
                 if model.session?.actor.kind == .owner {
                     Section("Agents") {
@@ -74,11 +73,17 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Notifications") {
+                Section("General") {
+                    NavigationLink {
+                        NoteAISettingsView(model: model)
+                    } label: {
+                        Label("Notes AI", systemImage: "sparkles")
+                    }
+                    .accessibilityIdentifier("settings-notes-ai")
                     NavigationLink {
                         NotificationSettingsView()
                     } label: {
-                        Label("Delivery and privacy", systemImage: "bell.badge")
+                        Label("Notifications", systemImage: "bell.badge")
                     }
                     #if os(iOS)
                     NavigationLink {
@@ -95,26 +100,19 @@ struct SettingsView: View {
                     NotificationSettingsView()
                 }
 
-                Section("Notes") {
-                    NavigationLink {
-                        NoteAISettingsView(model: model)
-                    } label: {
-                        Label("Notes AI", systemImage: "sparkles")
-                    }
-                    .accessibilityIdentifier("settings-notes-ai")
-                }
-
-                Section("Help") {
+                Section {
                     NavigationLink {
                         DocumentationView()
                     } label: {
                         Label("Documentation", systemImage: "book")
                     }
-                    LabeledContent("Version", value: appVersion)
                     Link(destination: StateLinks.repository) {
                         Label("Source code", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
-                    LabeledContent("License", value: "Apache-2.0")
+                } header: {
+                    Text("Help")
+                } footer: {
+                    Text(verbatim: "State \(appVersion) · Apache-2.0")
                 }
 
                 Section {
@@ -281,6 +279,7 @@ struct SettingsView: View {
                 }
                 .padding(.vertical, StateTheme.Space.tight)
             }
+            syncRow
         } header: {
             Text("Connection")
         } footer: {
@@ -295,27 +294,25 @@ struct SettingsView: View {
         }
     }
 
-    private var syncSection: some View {
-        Section {
-            Button {
-                Task { await model.synchronize() }
-            } label: {
-                HStack(spacing: StateTheme.Space.group) {
-                    if model.isSyncing {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(width: 20)
-                    } else {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .frame(width: 20)
-                    }
-                    Text(model.isSyncing ? "Synchronizing" : "Synchronize now")
-                    Spacer()
+    private var syncRow: some View {
+        Button {
+            Task { await model.synchronize() }
+        } label: {
+            HStack(spacing: StateTheme.Space.group) {
+                if model.isSyncing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 20)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .frame(width: 20)
                 }
+                Text(model.isSyncing ? "Synchronizing" : "Synchronize now")
+                Spacer()
             }
-            .disabled(model.isSyncing || model.isDemo)
-            .animation(StateTheme.stateChange, value: model.isSyncing)
         }
+        .disabled(model.isSyncing || model.isDemo)
+        .animation(StateTheme.stateChange, value: model.isSyncing)
     }
 
     // MARK: Push relay
@@ -657,7 +654,7 @@ struct SettingsView: View {
         let mode = policy.mode == .supervised
             ? String(localized: "Supervised")
             : String(localized: "Unattended (low risk)")
-        return "\(projectName(for: policy.projectID)) · \(policy.adapter) · \(mode)"
+        return "\(projectName(for: policy.projectID)) · \(AgentNames.name(for: policy.adapter)) · \(mode)"
     }
 
     private func policyEnabledBinding(_ policy: ExecutionPolicy) -> Binding<Bool> {

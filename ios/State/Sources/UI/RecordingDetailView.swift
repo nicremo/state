@@ -138,7 +138,6 @@ struct RecordingDetailView: View {
                     scrubbing = nil
                 }
             }
-            .tint(StateTheme.accent)
             .disabled(!player.isLoaded)
             .accessibilityLabel(String(localized: "Position"))
             .accessibilityValue(String(localized: "\(Self.clock(position)) of \(Self.clock(duration))"))

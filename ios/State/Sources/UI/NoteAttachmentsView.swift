@@ -411,13 +411,21 @@ extension NoteAISettingsView {
     func keySection(_ settings: NotesAISettings) -> some View {
         Section {
             if settings.keyConfigured && !replacesKey {
-                LabeledContent(String(localized: "OpenRouter key")) {
-                    Label(String(localized: "Set up"), systemImage: "checkmark.seal")
-                        .foregroundStyle(.secondary)
+                // One row: the status and, behind one menu, the two rare
+                // actions on the key.
+                LabeledContent {
+                    Menu {
+                        Button(String(localized: "Replace key")) { replacesKey = true }
+                        Button(String(localized: "Remove key"), role: .destructive) { confirmsRemoval = true }
+                    } label: {
+                        Text("Change")
+                            .foregroundStyle(StateTheme.accent)
+                    }
+                    .accessibilityIdentifier("notes-ai-key-menu")
+                } label: {
+                    Label(String(localized: "Key set up"), systemImage: "checkmark.seal")
                 }
                 .accessibilityIdentifier("notes-ai-key-status")
-                Button(String(localized: "Replace key")) { replacesKey = true }
-                Button(String(localized: "Remove key"), role: .destructive) { confirmsRemoval = true }
             } else {
                 SecureField(String(localized: "OpenRouter key (sk-or-...)"), text: $keyDraft)
                     .textContentType(.password)
@@ -432,7 +440,7 @@ extension NoteAISettingsView {
                     if savesKey {
                         ProgressView()
                     } else {
-                        Text("Check and save key")
+                        Text("Save key")
                     }
                 }
                 .disabled(keyDraft.trimmingCharacters(in: .whitespaces).isEmpty || savesKey)
@@ -452,7 +460,7 @@ extension NoteAISettingsView {
         } header: {
             Text("OpenRouter key")
         } footer: {
-            Text("Only you and your own devices can set the key. The server checks it with OpenRouter and keeps it; this device and your agents never see it again. Set a spending limit for the key on openrouter.ai.")
+            Text("The key stays on your server. Set a spending limit for it on openrouter.ai.")
         }
     }
 
@@ -504,7 +512,7 @@ struct NoteAISettingsView: View {
                     }
                     .accessibilityIdentifier("notes-ai-consent")
                 } footer: {
-                    Text("Photos, recordings and note text are sent through OpenRouter to the selected model provider for processing. The OpenRouter key stays on your server; this device never sees it. Originals are always kept.")
+                    Text("Photos, recordings and text go through OpenRouter to the model provider. Originals are always kept.")
                 }
 
                 Section {
@@ -518,7 +526,7 @@ struct NoteAISettingsView: View {
                     .accessibilityIdentifier("notes-ai-limit")
                     LabeledContent(String(localized: "Spent this month"), value: settings.spentThisMonthUsd.formatted(.currency(code: "USD").precision(.fractionLength(2...4))))
                 } footer: {
-                    Text("Once the limit is reached, notes stay usable and wait for next month or a higher limit.")
+                    Text("At the limit, new notes wait for next month.")
                 }
 
                 keySection(settings)
@@ -530,14 +538,11 @@ struct NoteAISettingsView: View {
                         LabeledContent(String(localized: "Dictionary"), value: dictionarySummary)
                     }
                     .accessibilityIdentifier("notes-ai-dictionary")
-                } footer: {
-                    Text("Names and terms speech recognition gets wrong. Voice notes are corrected with them; the original transcript is kept.")
-                }
-
-                Section(String(localized: "Models")) {
                     LabeledContent(String(localized: "Notes agent"), value: settings.agentModel)
                     LabeledContent(String(localized: "Transcription"), value: settings.transcriptionModel)
                     LabeledContent(String(localized: "Photos per note"), value: "\(model.noteCapabilities.photoLimit)")
+                } footer: {
+                    Text("The dictionary corrects names in voice notes.")
                 }
             } else {
                 ProgressView()

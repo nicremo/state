@@ -101,13 +101,17 @@ struct ReminderDetailView: View {
         .navigationTitle("Details")
         .stateInlineNavigationTitle()
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     showsEditor = true
                 } label: {
                     Label("Edit", systemImage: "pencil")
                 }
-                Button {
+            }
+            // Archiving is rare and sat right next to Edit; it moves behind
+            // the menu, the list still archives with a swipe.
+            ToolbarItem(placement: .secondaryAction) {
+                Button(role: .destructive) {
                     confirmsArchive = true
                 } label: {
                     Label("Archive", systemImage: "archivebox")
@@ -158,15 +162,6 @@ struct ReminderDetailView: View {
                         MetaLabel(text: label(for: recurrence), systemImage: "repeat")
                     }
                     Spacer(minLength: StateTheme.Space.tight)
-                    Text(verbatim: "r\(reminder.revision)")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.tertiary)
-                        .accessibilityLabel(
-                            String.localizedStringWithFormat(
-                                String(localized: "Revision %lld"),
-                                reminder.revision
-                            )
-                        )
                 }
             }
             .padding(.vertical, StateTheme.Space.snug)
