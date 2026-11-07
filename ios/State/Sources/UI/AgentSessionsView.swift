@@ -53,7 +53,7 @@ struct AgentSessionsView: View {
         let active = model.agentSessions.filter { !$0.closed }
         let closed = model.agentSessions.filter(\.closed)
         Group {
-            if model.agentSessions.isEmpty {
+            if model.agentSessions.isEmpty && model.pendingAgentStarts.isEmpty {
                 ContentUnavailableView {
                     Label(String(localized: "No agent sessions yet"), systemImage: "terminal")
                 } description: {
@@ -62,6 +62,29 @@ struct AgentSessionsView: View {
                 .accessibilityIdentifier("agent-empty")
             } else {
                 List(selection: selection) {
+                    if let silence = macSilence {
+                        Section {
+                            Label(String(format: String(localized: "Your Mac has not answered since %@. Tasks wait and start when it is back."), silence), systemImage: "wifi.exclamationmark")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if !model.pendingAgentStarts.isEmpty {
+                        Section {
+                            ForEach(model.pendingAgentStarts) { start in
+                                PendingStartRow(start: start, modelName: model.modelCatalog.label(for: start.model))
+                                    .swipeActions {
+                                        Button(String(localized: "Discard"), role: .destructive) {
+                                            model.discardPendingAgentStart(start)
+                                        }
+                                    }
+                            }
+                        } header: {
+                            Text("Waiting for a connection")
+                        } footer: {
+                            Text("Sent to your Mac as soon as State reaches it again.")
+                        }
+                    }
                     if !active.isEmpty {
                         Section(String(localized: "Active")) {
                             ForEach(active) { row($0, selection: selection) }
@@ -90,6 +113,13 @@ struct AgentSessionsView: View {
                 .accessibilityIdentifier("agent-new-task")
             }
         }
+    }
+
+    /// "seit 14:05" when the last successful sync is more than an hour old
+    /// and there is something that waits for the Mac.
+    private var macSilence: String? {
+        guard let last = model.lastSyncAt, Date().timeIntervalSince(last) > 3600 else { return nil }
+        return last.formatted(.relative(presentation: .named))
     }
 
     @ViewBuilder
@@ -235,5 +265,26 @@ enum AgentText {
             return String(localized: "May edit files in the project, no commands.")
         }
         return String(localized: "May only read the project.")
+    }
+}
+
+/// A start that waits for the Mac.
+struct PendingStartRow: View {
+    let start: PendingAgentStart
+    let modelName: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: StateTheme.Space.snug) {
+            Text(start.title.isEmpty ? String(localized: "New task") : start.title)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(StateTheme.graphite)
+                .lineLimit(2)
+            Label([String(localized: "Waiting"), modelName].compactMap { $0 }.joined(separator: " · "), systemImage: "clock")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, StateTheme.Space.tight)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("agent-pending-start")
     }
 }

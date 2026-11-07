@@ -26,15 +26,19 @@ type Config struct {
 	Version string
 	// NotesAI is optional; without it notes work and AI reports not_configured.
 	NotesAI NotesAI
+	// RemoteURL is optional: the address under which this server is reachable
+	// away from home (Tailscale), empty when there is none.
+	RemoteURL func() string
 }
 
 type Handler struct {
-	auth    *stateauth.Manager
-	state   *state.Service
-	push    *statepush.Service
-	version string
-	notesAI NotesAI
-	router  *http.ServeMux
+	auth      *stateauth.Manager
+	state     *state.Service
+	push      *statepush.Service
+	version   string
+	notesAI   NotesAI
+	remoteURL func() string
+	router    *http.ServeMux
 }
 
 type ReminderDetail struct {
@@ -68,12 +72,13 @@ type NoteDetail struct {
 
 func NewHandler(config Config) http.Handler {
 	handler := &Handler{
-		auth:    config.Auth,
-		state:   config.State,
-		push:    config.Push,
-		version: config.Version,
-		notesAI: config.NotesAI,
-		router:  http.NewServeMux(),
+		auth:      config.Auth,
+		state:     config.State,
+		push:      config.Push,
+		version:   config.Version,
+		notesAI:   config.NotesAI,
+		remoteURL: config.RemoteURL,
+		router:    http.NewServeMux(),
 	}
 	handler.registerRoutes()
 	return securityHeaders(handler.router)
@@ -136,8 +141,10 @@ func (handler *Handler) registerRoutes() {
 	handler.router.HandleFunc("GET /api/v1/policies", handler.listPolicies)
 	handler.router.HandleFunc("GET /api/v1/policies/{id}", handler.getPolicy)
 	handler.router.HandleFunc("PATCH /api/v1/policies/{id}", handler.updatePolicy)
+	handler.router.HandleFunc("GET /api/v1/connection", handler.connection)
 	handler.router.HandleFunc("POST /api/v1/runner/registration", handler.registerRunner)
 	handler.router.HandleFunc("POST /api/v1/runner/claims", handler.claimAgentRun)
+	handler.router.HandleFunc("PUT /api/v1/runner/harness-models", handler.reportHarnessModels)
 	handler.router.HandleFunc("POST /api/v1/runner/runs/{id}/events", handler.reportRunEvent)
 	handler.router.HandleFunc("POST /api/v1/runner/runs/{id}/complete", handler.completeRun)
 	handler.router.HandleFunc("POST /api/v1/runner/runs/{id}/approval", handler.requestRunApproval)
@@ -824,6 +831,19 @@ func (handler *Handler) updatePolicy(writer http.ResponseWriter, request *http.R
 	writeJSON(writer, http.StatusOK, policy)
 }
 
+// connection tells a paired client where else this server answers, so the
+// iPhone can reach the Mac away from home without pairing again.
+func (handler *Handler) connection(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := handler.authenticate(writer, request); !ok {
+		return
+	}
+	remote := ""
+	if handler.remoteURL != nil {
+		remote = handler.remoteURL()
+	}
+	writeJSON(writer, http.StatusOK, map[string]string{"remote_url": remote})
+}
+
 func (handler *Handler) registerRunner(writer http.ResponseWriter, request *http.Request) {
 	actor, ok := handler.authenticateKind(writer, request, state.ActorKindRunner)
 	if !ok {
@@ -844,6 +864,25 @@ func (handler *Handler) registerRunner(writer http.ResponseWriter, request *http
 	}
 	handler.notifySync(request.Context(), actor.ID)
 	writeJSON(writer, http.StatusCreated, runner)
+}
+
+func (handler *Handler) reportHarnessModels(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.authenticateKind(writer, request, state.ActorKindRunner)
+	if !ok {
+		return
+	}
+	var input state.ReportHarnessModelsInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, state.ErrInvalidInput, nil)
+		return
+	}
+	runner, err := handler.state.ReportHarnessModels(request.Context(), actor, input)
+	if err != nil {
+		writeError(writer, err, nil)
+		return
+	}
+	handler.notifySync(request.Context(), actor.ID)
+	writeJSON(writer, http.StatusOK, runner)
 }
 
 func (handler *Handler) claimAgentRun(writer http.ResponseWriter, request *http.Request) {
@@ -1229,6 +1268,10 @@ func decodeUpdateReminder(request *http.Request, input *state.UpdateReminderInpu
 	if value, present := fields["execution_policy_id"]; present && strings.TrimSpace(string(value)) == "null" {
 		var cleared *string
 		input.ExecutionPolicyID = &cleared
+	}
+	if value, present := fields["execution_model"]; present && strings.TrimSpace(string(value)) == "null" {
+		var cleared *state.AgentModel
+		input.ExecutionModel = &cleared
 	}
 	return nil
 }

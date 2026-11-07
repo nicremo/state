@@ -212,10 +212,12 @@ func readFile(t *testing.T, path string) string {
 }
 
 func TestT3SessionRoundReportsTheThreadAndItsLink(t *testing.T) {
-	// Not parallel: changes PATH.
+	// Not parallel: changes PATH and HOME. A temporary HOME keeps the
+	// adapter away from a real T3 service binary in ~/.t3 on this machine.
 	bin := t.TempDir()
 	fakeT3(t, bin, "ok")
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
+	t.Setenv("HOME", t.TempDir())
 	fixture, policy, process := newSessionRunnerFixtureFor(t, "t3-code")
 	ctx := context.Background()
 	session, err := fixture.state.StartAgentSession(ctx, fixture.owner, state.StartAgentSessionInput{

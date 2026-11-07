@@ -27,6 +27,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -105,13 +106,16 @@ func runDesktop(args []string, input io.Reader, output, stderr io.Writer, logger
 	if err != nil {
 		return err
 	}
-	app, err := newApplication(applicationConfig{dataDirectory: *data, version: version})
+	_, listenPort, _ := net.SplitHostPort(listener.Addr().String())
+	remote := newTailnetURL(listenPort)
+	app, err := newApplication(applicationConfig{dataDirectory: *data, version: version, remoteURL: remote.URL})
 	if err != nil {
 		return err
 	}
 	defer app.close()
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+	go remote.follow(ctx)
 	owner, err := app.auth.DesktopOwner(ctx)
 	if err != nil {
 		return err
@@ -298,12 +302,89 @@ func desktopLANOnly(next http.Handler) http.Handler {
 		peer, err := netip.ParseAddrPort(r.RemoteAddr)
 		// Preserve IPv6 interface zones and normalize IPv4-mapped addresses.
 		ip := peer.Addr().Unmap()
-		if err != nil || !(ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()) {
+		if err != nil || !(ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || viaTailnet(ip, r)) {
 			http.Error(w, "local network only", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// Tailscale assigns addresses from the shared address space and its own
+// unique local prefix. Both ends must be in it: the peer came through the
+// tunnel and addressed this Mac's Tailscale address, not its LAN address.
+var (
+	tailnetIPv4 = netip.MustParsePrefix("100.64.0.0/10")
+	tailnetIPv6 = netip.MustParsePrefix("fd7a:115c:a1e0::/48")
+)
+
+func tailnetAddress(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	return tailnetIPv4.Contains(ip) || tailnetIPv6.Contains(ip)
+}
+
+func viaTailnet(peer netip.Addr, r *http.Request) bool {
+	if !tailnetAddress(peer) {
+		return false
+	}
+	local, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	if !ok {
+		return false
+	}
+	address, err := netip.ParseAddrPort(local.String())
+	return err == nil && tailnetAddress(address.Addr())
+}
+
+// tailnetURL follows this Mac's Tailscale IPv4 address, which appears when
+// Tailscale connects and may come after the server started.
+type tailnetURL struct {
+	port  string
+	value atomic.Value
+}
+
+func newTailnetURL(port string) *tailnetURL {
+	remote := &tailnetURL{port: port}
+	remote.refresh(net.InterfaceAddrs)
+	return remote
+}
+
+func (remote *tailnetURL) URL() string {
+	value, _ := remote.value.Load().(string)
+	return value
+}
+
+func (remote *tailnetURL) refresh(addresses func() ([]net.Addr, error)) {
+	remote.value.Store(tailnetURLFrom(addresses, remote.port))
+}
+
+func (remote *tailnetURL) follow(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			remote.refresh(net.InterfaceAddrs)
+		}
+	}
+}
+
+func tailnetURLFrom(addresses func() ([]net.Addr, error), port string) string {
+	list, err := addresses()
+	if err != nil {
+		return ""
+	}
+	for _, address := range list {
+		prefix, err := netip.ParsePrefix(address.String())
+		if err != nil {
+			continue
+		}
+		if ip := prefix.Addr(); ip.Is4() && tailnetIPv4.Contains(ip) {
+			return "https://" + net.JoinHostPort(ip.String(), port)
+		}
+	}
+	return ""
 }
 
 func desktopCertificate(path, host string) (tls.Certificate, string, error) {

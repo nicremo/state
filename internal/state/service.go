@@ -124,6 +124,9 @@ func (service *Service) CreateReminder(ctx context.Context, actor Actor, input C
 	if actor.Kind == ActorKindRunner {
 		return Reminder{}, ErrForbidden
 	}
+	if !validAgentModelPointer(input.ExecutionModel) {
+		return Reminder{}, ErrInvalidInput
+	}
 	if input.ExecutionPolicyID != nil && *input.ExecutionPolicyID != "" {
 		if _, err := service.repository.GetPolicy(ctx, *input.ExecutionPolicyID); err != nil {
 			if errors.Is(err, ErrNotFound) {
@@ -150,6 +153,7 @@ func (service *Service) CreateReminder(ctx context.Context, actor Actor, input C
 		Schedule:          cloneSchedule(input.Schedule),
 		Recurrence:        cloneRecurrence(input.Recurrence),
 		ExecutionPolicyID: cloneStringPointer(input.ExecutionPolicyID),
+		ExecutionModel:    cloneAgentModel(input.ExecutionModel),
 		Revision:          1,
 		CreatedAt:         now,
 		UpdatedAt:         now,
@@ -186,6 +190,9 @@ func (service *Service) UpdateReminder(ctx context.Context, actor Actor, reminde
 	}
 	if input.Archived != nil && actor.Kind != ActorKindOwner && actor.Kind != ActorKindDevice {
 		return Reminder{}, ErrForbidden
+	}
+	if input.ExecutionModel != nil && !validAgentModelPointer(*input.ExecutionModel) {
+		return Reminder{}, ErrInvalidInput
 	}
 	if input.ExecutionPolicyID != nil && *input.ExecutionPolicyID != nil && **input.ExecutionPolicyID != "" {
 		if _, err := service.repository.GetPolicy(ctx, **input.ExecutionPolicyID); err != nil {
@@ -235,6 +242,10 @@ func (service *Service) UpdateReminder(ctx context.Context, actor Actor, reminde
 	if input.ExecutionPolicyID != nil && !reflect.DeepEqual(updated.ExecutionPolicyID, *input.ExecutionPolicyID) {
 		updated.ExecutionPolicyID = cloneStringPointer(*input.ExecutionPolicyID)
 		changed = append(changed, "execution_policy_id")
+	}
+	if input.ExecutionModel != nil && !reflect.DeepEqual(updated.ExecutionModel, *input.ExecutionModel) {
+		updated.ExecutionModel = cloneAgentModel(*input.ExecutionModel)
+		changed = append(changed, "execution_model")
 	}
 	if input.Archived != nil && updated.Archived != *input.Archived {
 		updated.Archived = *input.Archived
@@ -537,6 +548,7 @@ func cloneReminder(reminder Reminder) Reminder {
 	reminder.Schedule = cloneSchedule(reminder.Schedule)
 	reminder.Recurrence = cloneRecurrence(reminder.Recurrence)
 	reminder.ExecutionPolicyID = cloneStringPointer(reminder.ExecutionPolicyID)
+	reminder.ExecutionModel = cloneAgentModel(reminder.ExecutionModel)
 	return reminder
 }
 

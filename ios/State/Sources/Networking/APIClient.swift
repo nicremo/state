@@ -54,15 +54,49 @@ enum StateAPIError: Error, LocalizedError, Sendable {
 actor APIClient: StateAPI {
     let serverURL: URL
     private let token: String
-    private let session: URLSession
+    /// The paired address first, then the remote one (Tailscale) when the
+    /// server published it. Each has its own session and pinned trust.
+    private let bases: [(url: URL, session: URLSession)]
+    /// The base that answered last; requests start there.
+    private var preferredBase = 0
 
-    init(serverURL: URL, token: String, session: URLSession = .shared) throws {
+    init(serverURL: URL, token: String, session: URLSession = .shared, remote: (url: URL, session: URLSession)? = nil) throws {
         guard Self.isAllowedServerURL(serverURL), !token.isEmpty else {
             throw StateAPIError.invalidServerURL
         }
         self.serverURL = serverURL
         self.token = token
-        self.session = session
+        var bases = [(url: serverURL, session: session)]
+        if let remote, remote.url != serverURL, Self.isAllowedServerURL(remote.url) {
+            bases.append(remote)
+        }
+        self.bases = bases
+    }
+
+    /// Whether the last answer came from the remote address.
+    var usesRemote: Bool { preferredBase > 0 }
+
+    /// Errors that mean the address is not reachable from here, as opposed
+    /// to an answer from the server. Only these try the other address.
+    static func isConnectivityFailure(_ error: Error) -> Bool {
+        guard let error = error as? URLError else { return false }
+        switch error.code {
+        case .cannotFindHost, .cannotConnectToHost, .timedOut, .networkConnectionLost,
+             .dnsLookupFailed, .notConnectedToInternet, .secureConnectionFailed,
+             .internationalRoamingOff, .dataNotAllowed:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Where else the server answers, for example its Tailscale address.
+    func connection() async throws -> URL? {
+        let data = try await request(path: "/api/v1/connection")
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let value = object?["remote_url"] as? String, !value.isEmpty, let url = URL(string: value),
+              url.scheme == "https", url.host != nil else { return nil }
+        return url
     }
 
     func getChanges(after: Int64, limit: Int) async throws -> ChangesResponse {
@@ -341,8 +375,12 @@ actor APIClient: StateAPI {
 
     /// Starts an agent on the reminder's task with the policy's project,
     /// agent and rights.
-    func startAgentSession(reminderID: String, policyID: String, instruction: String) async throws -> AgentSession {
-        let body = try sessionBody(["reminder_id": reminderID, "policy_id": policyID, "instruction": instruction])
+    func startAgentSession(reminderID: String, policyID: String, instruction: String, model: AgentModel? = nil, requestID: String? = nil) async throws -> AgentSession {
+        var fields: [String: Any] = ["reminder_id": reminderID, "policy_id": policyID, "instruction": instruction]
+        if let model {
+            fields["model"] = ["provider": model.provider, "model": model.model]
+        }
+        let body = try sessionBody(fields, requestID: requestID)
         return try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions", method: "POST", body: body))
     }
 
@@ -366,8 +404,9 @@ actor APIClient: StateAPI {
         return try StateJSON.decoder.decode(AgentSession.self, from: try await request(path: "/api/v1/agent-sessions/\(sessionID)/close", method: "POST", body: body))
     }
 
-    private func sessionBody(_ fields: [String: Any]) throws -> Data {
-        let requestID = UUIDv7.generate().uuidString.lowercased()
+    private func sessionBody(_ fields: [String: Any], requestID: String? = nil) throws -> Data {
+        // A queued start keeps its request ID, so the server creates it once.
+        let requestID = requestID ?? UUIDv7.generate().uuidString.lowercased()
         var payload = fields
         payload["client_request_id"] = requestID
         payload["correlation_id"] = requestID
@@ -456,7 +495,33 @@ actor APIClient: StateAPI {
         accept: String = "application/json",
         timeout: TimeInterval? = nil
     ) async throws -> Data {
-        var components = URLComponents(url: Self.endpoint(base: serverURL, path: path), resolvingAgainstBaseURL: false)
+        var lastError: Error = StateAPIError.invalidServerURL
+        let order = [preferredBase] + bases.indices.filter { $0 != preferredBase }
+        for index in order {
+            do {
+                let data = try await perform(base: bases[index], path: path, method: method, query: query, body: body, contentType: contentType, headers: headers, accept: accept, timeout: timeout)
+                preferredBase = index
+                return data
+            } catch where Self.isConnectivityFailure(error) {
+                // The server never answered at this address; try the other.
+                lastError = error
+            }
+        }
+        throw lastError
+    }
+
+    private func perform(
+        base: (url: URL, session: URLSession),
+        path: String,
+        method: String,
+        query: [URLQueryItem],
+        body: Data?,
+        contentType: String,
+        headers: [String: String],
+        accept: String,
+        timeout: TimeInterval?
+    ) async throws -> Data {
+        var components = URLComponents(url: Self.endpoint(base: base.url, path: path), resolvingAgainstBaseURL: false)
         components?.queryItems = query.isEmpty ? nil : query
         guard let url = components?.url else { throw StateAPIError.invalidServerURL }
         var request = URLRequest(url: url)
@@ -471,7 +536,7 @@ actor APIClient: StateAPI {
         for (name, value) in headers {
             request.setValue(value, forHTTPHeaderField: name)
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await base.session.data(for: request)
         try Self.validate(response: response, data: data)
         return data
     }

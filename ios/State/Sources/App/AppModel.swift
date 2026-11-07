@@ -24,6 +24,7 @@ struct ReminderDraft: Sendable {
     var timeZoneMode: TimeZoneMode = .floating
     var timeZoneIdentifier = TimeZone.current.identifier
     var executionPolicyID: String?
+    var executionModel: AgentModel?
 }
 
 /// Editable fields of an execution policy. The project is fixed at creation.
@@ -161,6 +162,21 @@ final class AppModel {
         }
     }
 
+    /// Learns the server's remote address (Tailscale) while the paired one
+    /// works, so the next request from away can fall back to it. A changed
+    /// address rebuilds the client; the credential stays in Keychain.
+    private func refreshRemoteAddress() async {
+        guard let api, !isDemo, let current = session else { return }
+        guard let remote = try? await api.connection(), remote != current.remoteURL else { return }
+        do {
+            if let (updated, token) = try sessionRepository.updateRemoteURL(remote) {
+                try configure(session: updated, token: token)
+            }
+        } catch {
+            // The next sync tries again.
+        }
+    }
+
     /// Stores a relay address with the current session. Push registration reads
     /// the address from the session, so this only has to persist the profile.
     func updateRelayURL(_ relayURL: URL?) {
@@ -197,6 +213,8 @@ final class AppModel {
             await reloadCache()
             await reloadActors()
             await refreshNoteCapabilities()
+            await refreshRemoteAddress()
+            await flushPendingAgentStarts()
         } catch is CancellationError {
         } catch {
             await reloadCache()
@@ -242,6 +260,7 @@ final class AppModel {
                 schedule: schedule,
                 recurrence: draft.recurrence.map { RecurrenceRule(frequency: $0, interval: 1, untilDate: nil) },
                 executionPolicyID: draft.executionPolicyID,
+                executionModel: draft.executionModel,
                 revision: 1,
                 archived: false,
                 createdAt: now,
@@ -284,6 +303,7 @@ final class AppModel {
                 schedule: reminder.schedule,
                 recurrence: reminder.recurrence,
                 executionPolicyID: reminder.executionPolicyID,
+                executionModel: reminder.executionModel,
                 clientTime: now,
                 source: "ios",
                 sourceExcerpt: nil,
@@ -315,7 +335,8 @@ final class AppModel {
         description: String,
         schedule: Schedule?,
         recurrence: RecurrenceRule? = nil,
-        executionPolicyID: String?
+        executionPolicyID: String?,
+        executionModel: AgentModel?
     ) async {
         do {
             guard var detail = try await database.detail(id: reminder.id) else { return }
@@ -329,6 +350,7 @@ final class AppModel {
                     schedule: schedule,
                     recurrence: recurrence,
                     executionPolicyID: executionPolicyID,
+                    executionModel: executionModel,
                     revision: expectedRevision + 1,
                     archived: detail.reminder.archived,
                     createdAt: detail.reminder.createdAt,
@@ -359,6 +381,7 @@ final class AppModel {
                 schedule: schedule,
                 recurrence: recurrence,
                 executionPolicyID: executionPolicyID,
+                executionModel: executionModel,
                 expectedRevision: expectedRevision,
                 clientTime: Date(),
                 source: "ios",
@@ -385,7 +408,8 @@ final class AppModel {
             description: draft.description,
             schedule: draft.scheduled ? makeSchedule(from: draft) : nil,
             recurrence: draft.recurrence.map { RecurrenceRule(frequency: $0, interval: 1, untilDate: nil) },
-            executionPolicyID: draft.executionPolicyID
+            executionPolicyID: draft.executionPolicyID,
+            executionModel: draft.executionPolicyID == nil ? nil : draft.executionModel
         )
     }
 
@@ -399,7 +423,8 @@ final class AppModel {
             description: reminder.description ?? "",
             schedule: reminder.schedule,
             recurrence: reminder.recurrence,
-            executionPolicyID: policyID
+            executionPolicyID: policyID,
+            executionModel: policyID == nil ? nil : reminder.executionModel
         )
     }
 
@@ -471,6 +496,7 @@ final class AppModel {
                     schedule: detail.reminder.schedule,
                     recurrence: detail.reminder.recurrence,
                     executionPolicyID: detail.reminder.executionPolicyID,
+                    executionModel: detail.reminder.executionModel,
                     revision: expectedRevision + 1,
                     archived: archived,
                     createdAt: detail.reminder.createdAt,
@@ -590,6 +616,7 @@ final class AppModel {
                     schedule: local.schedule,
                     recurrence: local.recurrence,
                     executionPolicyID: local.executionPolicyID,
+                    executionModel: local.executionModel,
                     expectedRevision: server.revision,
                     clientTime: Date(),
                     source: "ios-conflict-resolution",
@@ -841,30 +868,89 @@ final class AppModel {
 
     /// Starts an agent on a reminder and opens the new session in the Agent
     /// tab.
-    func startAgentSession(reminderID: String, policyID: String, instruction: String) async -> AgentSession? {
-        guard let api, !isDemo else { return nil }
+    /// Starts a session. When the Mac cannot be reached (offline, away
+    /// without Tailscale, Mac off) the start is queued and sent after the
+    /// next successful sync; the server creates it once thanks to the
+    /// stable request ID.
+    @discardableResult
+    func startAgentSession(reminderID: String, policyID: String, instruction: String, model agentModel: AgentModel? = nil, title: String? = nil) async -> AgentStartResult {
+        guard let api, !isDemo else { return .failed }
+        let instruction = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        let requestID = UUIDv7.generate().uuidString.lowercased()
         do {
-            let session = try await api.startAgentSession(reminderID: reminderID, policyID: policyID, instruction: instruction.trimmingCharacters(in: .whitespacesAndNewlines))
+            let session = try await api.startAgentSession(reminderID: reminderID, policyID: policyID, instruction: instruction, model: agentModel, requestID: requestID)
             replaceAgentSession(session)
             openAgentSession(session.id)
-            return session
+            return .started(session)
+        } catch where APIClient.isConnectivityFailure(error) {
+            let reminderTitle = title ?? reminders.first { $0.id == reminderID }?.title ?? ""
+            pendingAgentStarts.append(PendingAgentStart(id: requestID, reminderID: reminderID, title: reminderTitle, policyID: policyID, model: agentModel, instruction: instruction, createdAt: Date()))
+            savePendingAgentStarts()
+            requestedTab = .agent
+            return .queued
         } catch {
             present(error)
-            return nil
+            return .failed
+        }
+    }
+
+    /// Starts that waited for the Mac. Kept in the app's own defaults: they
+    /// hold task titles, never credentials.
+    private(set) var pendingAgentStarts: [PendingAgentStart] = AppModel.loadPendingAgentStarts()
+
+    private static let pendingStartsKey = "state.agent.pending-starts"
+
+    private static func loadPendingAgentStarts() -> [PendingAgentStart] {
+        guard let data = UserDefaults.standard.data(forKey: pendingStartsKey) else { return [] }
+        return (try? JSONDecoder().decode([PendingAgentStart].self, from: data)) ?? []
+    }
+
+    private func savePendingAgentStarts() {
+        if let data = try? JSONEncoder().encode(pendingAgentStarts) {
+            UserDefaults.standard.set(data, forKey: Self.pendingStartsKey)
+        }
+    }
+
+    func discardPendingAgentStart(_ start: PendingAgentStart) {
+        pendingAgentStarts.removeAll { $0.id == start.id }
+        savePendingAgentStarts()
+    }
+
+    /// Sends the queued starts after a sync reached the server. A start
+    /// whose reminder was created offline finds it by title, because the
+    /// server assigned its own ID during the sync.
+    private func flushPendingAgentStarts() async {
+        guard let api, !isDemo, !pendingAgentStarts.isEmpty else { return }
+        for start in pendingAgentStarts {
+            let reminderID = reminders.contains { $0.id == start.reminderID }
+                ? start.reminderID
+                : reminders.first { $0.title == start.title }?.id
+            guard let reminderID else { continue }
+            do {
+                let session = try await api.startAgentSession(reminderID: reminderID, policyID: start.policyID, instruction: start.instruction, model: start.model, requestID: start.id)
+                replaceAgentSession(session)
+                discardPendingAgentStart(start)
+            } catch where APIClient.isConnectivityFailure(error) {
+                return
+            } catch {
+                discardPendingAgentStart(start)
+                present(error)
+            }
         }
     }
 
     /// Starts an agent on a task typed in the Agent tab. The task becomes a
     /// reminder without a date first, so it has history and the session a
     /// reminder to belong to; then the session starts on it.
-    func startAgentTask(title: String, policyID: String) async -> AgentSession? {
+    func startAgentTask(title: String, policyID: String, model agentModel: AgentModel?) async -> AgentStartResult {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard !trimmed.isEmpty else { return .failed }
         var draft = ReminderDraft()
         draft.title = trimmed
         draft.executionPolicyID = policyID
-        guard let reminderID = await createReminder(draft) else { return nil }
-        return await startAgentSession(reminderID: reminderID, policyID: policyID, instruction: "")
+        draft.executionModel = agentModel
+        guard let reminderID = await createReminder(draft) else { return .failed }
+        return await startAgentSession(reminderID: reminderID, policyID: policyID, instruction: "", model: agentModel, title: trimmed)
     }
 
     func openAgentSession(_ id: String) {
@@ -963,7 +1049,13 @@ final class AppModel {
     }
 
     private func configure(session: ServerSession, token: String) throws {
-        let api = try APIClient(serverURL: session.serverURL, token: token, session: LocalServerTrust.session(serverURL: session.serverURL, fingerprint: session.certificateFingerprint))
+        // The remote address is tried only when the paired one is out of
+        // reach; it gets its own trust, pinned to the same certificate.
+        var remote: (url: URL, session: URLSession)?
+        if let remoteURL = session.remoteURL, let transport = try? LocalServerTrust.session(serverURL: remoteURL, fingerprint: session.certificateFingerprint) {
+            remote = (remoteURL, transport)
+        }
+        let api = try APIClient(serverURL: session.serverURL, token: token, session: LocalServerTrust.session(serverURL: session.serverURL, fingerprint: session.certificateFingerprint), remote: remote)
         isDemo = false
         self.session = session
         self.api = api
@@ -1114,15 +1206,42 @@ final class AppModel {
             createdAt: now.addingTimeInterval(-86_400),
             updatedAt: now.addingTimeInterval(-86_400)
         )
-        let runner = Runner(
+        // The demo also shows the T3 Code path: a policy without an agent of
+        // its own and the models the runner reports.
+        let t3Policy = ExecutionPolicy(
+            id: "01989f00-0000-7000-8000-000000000053",
+            name: "customer-api-t3-code",
+            projectID: project.id,
+            adapter: AgentNames.t3Code,
+            mode: .supervised,
+            allowedCapabilities: ["read_repository", "edit_repository", "run_tests"],
+            markOccurrenceDoneOnSuccess: false,
+            notifyOnStart: false,
+            notifyOnCompletion: true,
+            notifyOnFailure: true,
+            timeoutMinutes: 60,
+            enabled: true,
+            revision: 1,
+            createdAt: now.addingTimeInterval(-86_400),
+            updatedAt: now.addingTimeInterval(-86_400)
+        )
+        var runner = Runner(
             id: "01989f00-0000-7000-8000-000000000052",
             displayName: "Mac mini",
             projects: [project.id],
-            adapters: ["claude-code", "codex"],
+            adapters: ["claude-code", "codex", AgentNames.t3Code],
             registeredAt: now.addingTimeInterval(-86_400),
             lastSeenAt: now.addingTimeInterval(-300),
             revision: 1
         )
+        runner.harnessModels = [
+            HarnessModel(provider: "claudeAgent_claude_hub", providerName: "Claude Hub", model: "claude-opus-5-5", modelName: "Claude Opus 5.5", isDefault: true),
+            HarnessModel(provider: "claudeAgent_claude_hub", providerName: "Claude Hub", model: "claude-sonnet-5-5", modelName: "Claude Sonnet 5.5"),
+            HarnessModel(provider: "claudeAgent_claude_hub", providerName: "Claude Hub", model: "claude-haiku-5-5", modelName: "Claude Haiku 5.5"),
+            HarnessModel(provider: "codex", providerName: "Codex", model: "gpt-6.1-sol", modelName: "GPT-6.1-Sol", isDefault: true),
+            HarnessModel(provider: "acpRegistry_kimi", providerName: "Kimi", model: "kimi-code/k3.1-pro", modelName: "K3.1 Pro", isDefault: true),
+            HarnessModel(provider: "acpRegistry_dsh", providerName: "DeepSeek Harness", model: #"["deepseek-official","deepseek-flash"]"#, modelName: "DeepSeek-V4.1-Flash"),
+        ]
         let runnerActor = Actor(
             id: runner.id,
             kind: .runner,
@@ -1187,7 +1306,7 @@ final class AppModel {
             updatedAt: now.addingTimeInterval(-600)
         )
         try await database.apply(projects: [project])
-        try await database.apply(policies: [policy])
+        try await database.apply(policies: [policy, t3Policy])
         try await database.apply(runners: [runner])
         try await database.apply(
             detail: ReminderDetail(
@@ -1935,6 +2054,7 @@ private struct CreateReminderRequest: Codable {
     let schedule: Schedule?
     let recurrence: RecurrenceRule?
     let executionPolicyID: String?
+    var executionModel: AgentModel? = nil
     let clientTime: Date
     let source: String
     let sourceExcerpt: String?
@@ -1948,6 +2068,7 @@ private struct UpdateReminderRequest: Codable {
     let schedule: Schedule?
     let recurrence: RecurrenceRule?
     let executionPolicyID: String?
+    var executionModel: AgentModel? = nil
     let expectedRevision: Int64
     let clientTime: Date
     let source: String
@@ -1960,6 +2081,7 @@ private struct UpdateReminderRequest: Codable {
         case schedule
         case recurrence
         case executionPolicyID
+        case executionModel
         case expectedRevision
         case clientTime
         case source
@@ -1985,6 +2107,12 @@ private struct UpdateReminderRequest: Codable {
             try container.encode(executionPolicyID, forKey: .executionPolicyID)
         } else {
             try container.encodeNil(forKey: .executionPolicyID)
+        }
+        // The editor always sends the model it shows; null removes it.
+        if let executionModel {
+            try container.encode(executionModel, forKey: .executionModel)
+        } else {
+            try container.encodeNil(forKey: .executionModel)
         }
         try container.encode(expectedRevision, forKey: .expectedRevision)
         try container.encode(clientTime, forKey: .clientTime)

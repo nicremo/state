@@ -2,22 +2,27 @@ import SwiftUI
 
 /// Starts an agent session. From a reminder it works on that reminder; from
 /// the Agent tab the owner types a new task, which becomes a reminder first so
-/// it keeps its history. The agent and project (a policy) default to the last
-/// one used; with a single policy there is nothing to choose. The new session
-/// opens in the Agent tab.
+/// it keeps its history. The owner picks the project and, for T3 Code, the
+/// model; both default to what was used last. When the Mac is out of reach
+/// the start waits and goes out after the next sync.
 struct StartAgentSessionSheet: View {
     @Bindable var model: AppModel
     /// The reminder to work on; nil for a new task typed here.
     let reminder: Reminder?
     @Environment(\.dismiss) private var dismiss
     @AppStorage("state.agent.last-policy") private var lastPolicyID = ""
+    @AppStorage(AgentPreferences.t3OnlyKey) private var t3Only = true
     @State private var policyID: String?
+    @State private var agentModel: AgentModel?
     @State private var task = ""
     @State private var instruction = ""
     @State private var starting = false
     @FocusState private var taskFocused: Bool
 
-    private var policy: ExecutionPolicy? { model.sessionPolicies.first { $0.id == policyID } }
+    private var policies: [ExecutionPolicy] { model.agentPolicies(t3Only: t3Only) }
+    private var policy: ExecutionPolicy? { policies.first { $0.id == policyID } }
+    private var catalog: ModelCatalog { model.modelCatalog }
+    private var usesModel: Bool { policy?.adapter == AgentNames.t3Code }
 
     private var canStart: Bool {
         guard policy != nil, !starting else { return false }
@@ -28,7 +33,7 @@ struct StartAgentSessionSheet: View {
         NavigationStack {
             Form {
                 taskSection
-                if model.sessionPolicies.isEmpty {
+                if policies.isEmpty {
                     Section {
                         Text("No agent is set up yet. The owner sets one up on the Mac with state-server agent-project: it names the project folder, the agent and what it may do.")
                             .font(.callout)
@@ -36,19 +41,22 @@ struct StartAgentSessionSheet: View {
                     }
                 } else {
                     Section {
-                        if model.sessionPolicies.count == 1, let only = model.sessionPolicies.first {
-                            LabeledContent(String(localized: "Agent"), value: label(for: only))
-                        } else {
-                            Picker(String(localized: "Agent"), selection: $policyID) {
-                                ForEach(model.sessionPolicies) { policy in
-                                    Text(label(for: policy)).tag(Optional(policy.id))
-                                }
-                            }
-                            .accessibilityIdentifier("start-agent-policy")
+                        if policies.count > 1 {
+                            AgentProjectPicker(model: model, policies: policies, policyID: $policyID)
+                        } else if let only = policies.first {
+                            LabeledContent(String(localized: "Project"), value: model.project(for: only)?.name ?? only.name)
+                        }
+                        if usesModel {
+                            AgentModelPicker(catalog: catalog, selection: $agentModel)
                         }
                     } footer: {
                         if let policy {
-                            Text(footer(for: policy))
+                            VStack(alignment: .leading, spacing: StateTheme.Space.tight) {
+                                AgentProjectFooter(project: model.project(for: policy), catalogIsEmpty: usesModel && catalog.isEmpty)
+                                if !usesModel {
+                                    Text(AgentText.rights(policy.allowedCapabilities))
+                                }
+                            }
                         }
                     }
                     if reminder != nil {
@@ -81,14 +89,9 @@ struct StartAgentSessionSheet: View {
                     .accessibilityIdentifier("start-agent-confirm")
                 }
             }
-            .onAppear {
-                guard policyID == nil else { return }
-                let policies = model.sessionPolicies
-                let preferred = policies.first { $0.id == reminder?.executionPolicyID }
-                    ?? policies.first { $0.id == lastPolicyID }
-                    ?? policies.first
-                policyID = preferred?.id
-                if reminder == nil { taskFocused = true }
+            .onAppear(perform: preselect)
+            .onChange(of: policyID) { _, _ in
+                if usesModel, agentModel == nil { agentModel = defaultModel }
             }
         }
     }
@@ -100,7 +103,7 @@ struct StartAgentSessionSheet: View {
                 Text(reminder.title)
                     .font(.headline)
                 if let description = reminder.description, !description.isEmpty {
-                    Text(AgentText.preview(description))
+                    Text(AgentText.rowPreview(description))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(4)
@@ -118,34 +121,35 @@ struct StartAgentSessionSheet: View {
         }
     }
 
-    /// "Agent · Project", plus the policy name when two policies would read
-    /// the same (for example one that reads and one that edits).
-    private func label(for policy: ExecutionPolicy) -> String {
-        let project = model.projects.first { $0.id == policy.projectID }?.name
-        let base = [AgentNames.name(for: policy.adapter), project].compactMap { $0 }.joined(separator: " · ")
-        let twins = model.sessionPolicies.filter { $0.adapter == policy.adapter && $0.projectID == policy.projectID }
-        return twins.count > 1 ? "\(base) (\(policy.name))" : base
+    /// The reminder's own model, else the last one used, else Claude Sonnet.
+    private var defaultModel: AgentModel? {
+        reminder?.executionModel ?? AgentPreferences.lastModel() ?? catalog.suggested
     }
 
-    private func footer(for policy: ExecutionPolicy) -> String {
-        if policy.adapter == AgentNames.t3Code {
-            return String(localized: "Runs as a thread in T3 Code on your Mac. You can follow it there or open it from the session.")
-        }
-        return AgentText.rights(policy.allowedCapabilities)
+    private func preselect() {
+        guard policyID == nil else { return }
+        let preferred = policies.first { $0.id == reminder?.executionPolicyID }
+            ?? policies.first { $0.id == lastPolicyID }
+            ?? policies.first
+        policyID = preferred?.id
+        if preferred?.adapter == AgentNames.t3Code { agentModel = defaultModel }
+        if reminder == nil { taskFocused = true }
     }
 
     private func start() async {
         guard let policy else { return }
         starting = true
-        let session: AgentSession?
+        let chosenModel = usesModel ? agentModel : nil
+        let result: AgentStartResult
         if let reminder {
-            session = await model.startAgentSession(reminderID: reminder.id, policyID: policy.id, instruction: instruction)
+            result = await model.startAgentSession(reminderID: reminder.id, policyID: policy.id, instruction: instruction, model: chosenModel)
         } else {
-            session = await model.startAgentTask(title: task, policyID: policy.id)
+            result = await model.startAgentTask(title: task, policyID: policy.id, model: chosenModel)
         }
         starting = false
-        if session != nil {
+        if result.succeeded {
             lastPolicyID = policy.id
+            AgentPreferences.remember(chosenModel)
             dismiss()
         }
     }

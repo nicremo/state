@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ type searchRemindersInput struct {
 
 type getReminderInput struct {
 	ReminderID string `json:"reminder_id" jsonschema:"UUIDv7 of the reminder."`
+	Full       bool   `json:"full,omitempty" jsonschema:"Return every occurrence and the complete history. By default the answer keeps all comments, the 3 latest past and 5 next occurrences and the 20 latest history entries."`
 }
 
 type getChangesInput struct {
@@ -181,7 +183,7 @@ func (server *server) registerTools() {
 	}, server.searchReminders)
 	mcp.AddTool(server.mcp, &mcp.Tool{
 		Name:        "get_reminder",
-		Description: "Get a reminder with comments, occurrences, and complete audit history.",
+		Description: "Get a reminder with all comments, its recent and next occurrences, and recent audit history. Pass full=true for every occurrence and the complete history.",
 		Annotations: readOnly,
 	}, server.getReminder)
 	mcp.AddTool(server.mcp, &mcp.Tool{
@@ -273,6 +275,9 @@ func (server *server) getReminder(ctx context.Context, request *mcp.CallToolRequ
 	if err != nil {
 		return nil, nil, err
 	}
+	if !input.Full {
+		boundReminderDetail(detail, time.Now())
+	}
 	return nil, detail, nil
 }
 
@@ -301,6 +306,54 @@ func (server *server) reminderDetail(ctx context.Context, reminderID string) (ma
 		"occurrences": occurrences,
 		"history":     history,
 	}, nil
+}
+
+// Bounds of the default get_reminder answer. A daily reminder carries a year
+// of occurrences and every audit snapshot, which would fill an agent's
+// context; comments are the owner's and agents' notes and stay complete.
+const (
+	boundedPastOccurrences     = 3
+	boundedUpcomingOccurrences = 5
+	boundedHistoryEntries      = 20
+)
+
+// boundReminderDetail trims occurrences and history in place and records
+// what was left out, so the agent knows it can ask for full=true.
+func boundReminderDetail(detail map[string]any, now time.Time) {
+	occurrences, _ := detail["occurrences"].([]state.Occurrence)
+	history, _ := detail["history"].([]state.AuditEvent)
+	counts := map[string]int{}
+	past := make([]state.Occurrence, 0)
+	upcoming := make([]state.Occurrence, 0)
+	sorted := append([]state.Occurrence(nil), occurrences...)
+	sort.SliceStable(sorted, func(left, right int) bool {
+		return sorted[left].LocalDate+sorted[left].LocalTime < sorted[right].LocalDate+sorted[right].LocalTime
+	})
+	for _, occurrence := range sorted {
+		counts[string(occurrence.Status)]++
+		if occurrence.ScheduledAt != nil && occurrence.ScheduledAt.After(now) {
+			upcoming = append(upcoming, occurrence)
+		} else {
+			past = append(past, occurrence)
+		}
+	}
+	if len(past) > boundedPastOccurrences {
+		past = past[len(past)-boundedPastOccurrences:]
+	}
+	if len(upcoming) > boundedUpcomingOccurrences {
+		upcoming = upcoming[:boundedUpcomingOccurrences]
+	}
+	kept := append(past, upcoming...)
+	detail["occurrences"] = kept
+	if len(history) > boundedHistoryEntries {
+		detail["history"] = history[len(history)-boundedHistoryEntries:]
+	}
+	detail["bounded"] = map[string]any{
+		"occurrences_total":     len(occurrences),
+		"occurrences_by_status": counts,
+		"history_total":         len(history),
+		"hint":                  "Call get_reminder with full=true for every occurrence and the complete history.",
+	}
 }
 
 func (server *server) getChanges(ctx context.Context, request *mcp.CallToolRequest, input getChangesInput) (*mcp.CallToolResult, any, error) {

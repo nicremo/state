@@ -75,19 +75,21 @@ func ValidHarnessLink(link string) bool {
 }
 
 type AgentSession struct {
-	ID             string     `json:"id"`
-	ReminderID     string     `json:"reminder_id"`
-	PolicyID       string     `json:"policy_id"`
-	ProjectID      string     `json:"project_id"`
-	ProjectName    string     `json:"project_name"`
-	Adapter        string     `json:"adapter"`
-	Title          string     `json:"title"`
-	Closed         bool       `json:"closed"`
-	ClosedAt       *time.Time `json:"closed_at,omitempty"`
-	CreatedByActor Actor      `json:"created_by_actor"`
-	Revision       int64      `json:"revision"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID          string `json:"id"`
+	ReminderID  string `json:"reminder_id"`
+	PolicyID    string `json:"policy_id"`
+	ProjectID   string `json:"project_id"`
+	ProjectName string `json:"project_name"`
+	Adapter     string `json:"adapter"`
+	// Model is the T3 Code model the session runs with, if one was chosen.
+	Model          *AgentModel `json:"model,omitempty"`
+	Title          string      `json:"title"`
+	Closed         bool        `json:"closed"`
+	ClosedAt       *time.Time  `json:"closed_at,omitempty"`
+	CreatedByActor Actor       `json:"created_by_actor"`
+	Revision       int64       `json:"revision"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
 // AgentSessionView is a session with its rounds in order and what follows
@@ -109,6 +111,9 @@ type StartAgentSessionInput struct {
 	ReminderID  string `json:"reminder_id"`
 	PolicyID    string `json:"policy_id"`
 	Instruction string `json:"instruction,omitempty"`
+	// Model chooses the T3 Code model; only a t3-code policy accepts one.
+	// Without it a t3-code session falls back to the reminder's model.
+	Model *AgentModel `json:"model,omitempty"`
 	MutationMetadata
 }
 
@@ -161,6 +166,13 @@ func (service *Service) StartAgentSession(ctx context.Context, actor Actor, inpu
 	if !policy.Enabled {
 		return AgentSessionView{}, ErrInvalidInput
 	}
+	model := cloneAgentModel(input.Model)
+	if model == nil && policy.Adapter == AdapterT3Code {
+		model = cloneAgentModel(reminder.ExecutionModel)
+	}
+	if !validAgentModelPointer(model) || (model != nil && policy.Adapter != AdapterT3Code) {
+		return AgentSessionView{}, ErrInvalidInput
+	}
 	project, err := service.repository.GetProject(ctx, policy.ProjectID)
 	if err != nil {
 		return AgentSessionView{}, err
@@ -177,6 +189,7 @@ func (service *Service) StartAgentSession(ctx context.Context, actor Actor, inpu
 		ProjectID:      project.ID,
 		ProjectName:    project.Name,
 		Adapter:        policy.Adapter,
+		Model:          model,
 		Title:          reminder.Title,
 		CreatedByActor: actor,
 		Revision:       1,
@@ -207,15 +220,21 @@ func (service *Service) StartAgentSession(ctx context.Context, actor Actor, inpu
 func firstRoundObjective(reminder Reminder, instruction string) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "Task from State: %s\n", reminder.Title)
+	fmt.Fprintf(&builder, "State reminder ID: %s\n", reminder.ID)
 	if description := strings.TrimSpace(reminder.Description); description != "" {
 		builder.WriteString("\n" + description + "\n")
 	}
 	if instruction != "" {
 		builder.WriteString("\nThe owner's instruction:\n" + instruction + "\n")
 	}
-	builder.WriteString("\n" + sessionRules)
+	builder.WriteString("\n" + stateContextRules + "\n\n" + sessionRules)
 	return builder.String()
 }
+
+// stateContextRules points the agent at the reminder in State: its comments
+// carry paths, repositories and the last state of earlier runs, and the next
+// run reads what this one records.
+const stateContextRules = `This task comes from State. Before you start, read the reminder with the State MCP server: call get_reminder with the reminder ID above for its comments (paths, repositories, decisions, the last state of earlier runs) and recent history. When you finish, record the result and anything the next run needs with add_comment on the same reminder. If the State MCP server is not available to you, work from the description above and say so in your summary.`
 
 // sessionRules tells the agent how a round works. The owner reads only the
 // final message of each round, in the State app, and answers there.
@@ -309,6 +328,10 @@ func (service *Service) newSessionTurn(ctx context.Context, actor Actor, session
 		SessionID:           session.ID,
 		TurnKind:            string(kind),
 		ResumeSessionID:     resumeID,
+	}
+	if session.Model != nil {
+		contract.ModelProvider = session.Model.Provider
+		contract.Model = session.Model.Model
 	}
 	contract.ContractHash = contract.ComputeHash()
 	run := AgentRun{

@@ -55,6 +55,8 @@ struct Reminder: Codable, Hashable, Identifiable, Sendable {
     var schedule: Schedule?
     var recurrence: RecurrenceRule?
     var executionPolicyID: String?
+    /// The T3 Code model the policy runs this reminder with.
+    var executionModel: AgentModel? = nil
     var revision: Int64
     var archived: Bool
     var createdAt: Date
@@ -385,6 +387,8 @@ struct Runner: Codable, Hashable, Identifiable, Sendable {
     let registeredAt: Date
     var lastSeenAt: Date
     var revision: Int64
+    /// The models the runner's T3 Code offers.
+    var harnessModels: [HarnessModel] = []
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -394,6 +398,7 @@ struct Runner: Codable, Hashable, Identifiable, Sendable {
         case registeredAt
         case lastSeenAt
         case revision
+        case harnessModels
     }
 
     init(
@@ -424,6 +429,7 @@ struct Runner: Codable, Hashable, Identifiable, Sendable {
         registeredAt = try container.decode(Date.self, forKey: .registeredAt)
         lastSeenAt = try container.decode(Date.self, forKey: .lastSeenAt)
         revision = try container.decode(Int64.self, forKey: .revision)
+        harnessModels = try container.decodeIfPresent([HarnessModel].self, forKey: .harnessModels) ?? []
     }
 }
 

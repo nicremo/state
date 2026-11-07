@@ -162,6 +162,8 @@ type Runner struct {
 	RegisteredAt time.Time `json:"registered_at"`
 	LastSeenAt   time.Time `json:"last_seen_at"`
 	Revision     int64     `json:"revision"`
+	// HarnessModels is the model catalog the runner read from its harness.
+	HarnessModels []HarnessModel `json:"harness_models,omitempty"`
 }
 
 type AgentRunStatus string
@@ -206,6 +208,10 @@ type TaskContract struct {
 	SessionID       string `json:"session_id,omitempty"`
 	TurnKind        string `json:"turn_kind,omitempty"`
 	ResumeSessionID string `json:"resume_session_id,omitempty"`
+	// ModelProvider and Model choose the model in a multi-provider harness
+	// (T3 Code). Empty for every other adapter, so older hashes hold.
+	ModelProvider string `json:"model_provider,omitempty"`
+	Model         string `json:"model,omitempty"`
 }
 
 // ComputeHash returns the SHA-256 over the canonical JSON encoding of the

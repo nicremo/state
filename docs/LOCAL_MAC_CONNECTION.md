@@ -22,6 +22,23 @@ State synchronizes on foreground and every 15 seconds while the app is active.
 The Mac must be awake and reachable. Previously synchronized reminders and local
 notifications remain available offline; no continuous iOS background polling is promised.
 
+## Use the app away from home (Tailscale)
+
+The desktop server also answers over Tailscale. It accepts a request when both the peer and
+the address it reached are Tailscale addresses (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`);
+everything else from outside the local network stays refused with "local network only".
+The certificate and the pairing stay the same.
+
+The server watches its own Tailscale IPv4 address (refreshed every minute) and publishes it
+to paired clients at `GET /api/v1/connection` as `remote_url`, for example
+`https://100.92.239.22:9847`. The app learns it during a sync at home and stores it with the
+session. Away from home, when the paired `.local` address does not answer, every request is
+retried once on the remote address, with its own trust pinned to the same certificate
+fingerprint, and the app keeps using the address that answered.
+
+On the iPhone the Tailscale app must be signed in to the same tailnet and connected. iOS
+allows one VPN at a time: with another VPN active, Tailscale and therefore State are off.
+
 ## Push outside the home network
 
 A Mac server stays in the local network, so the iPhone cannot reach it while it is away.

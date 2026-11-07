@@ -55,23 +55,59 @@ func (adapter *t3Adapter) Name() string {
 	return t3AdapterSlug
 }
 
-// binary finds the t3 CLI: on PATH, else in ~/.t3/bin where T3 Code installs
-// it (the runner's launchd PATH usually does not contain that folder).
+// binary finds the t3 CLI. First the binary of T3's background service
+// (~/.t3/runtime/versions/<active>/t3): it works without the desktop app,
+// open or installed. Then t3 on PATH, then the launcher in ~/.t3/bin, which
+// runs the desktop app's bundled CLI.
 func (adapter *t3Adapter) binary() (string, error) {
+	home := adapter.homeDir()
+	if home != "" {
+		if service := t3ServiceBinary(home); service != "" {
+			return service, nil
+		}
+	}
 	if path, err := exec.LookPath("t3"); err == nil {
 		return path, nil
 	}
-	home := adapter.home
-	if home == "" {
-		home, _ = os.UserHomeDir()
-	}
 	if home != "" {
-		candidate := filepath.Join(home, ".t3", "bin", "t3")
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+		if candidate := filepath.Join(home, ".t3", "bin", "t3"); executableFile(candidate) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("%w: t3 not found on PATH or in ~/.t3/bin, install T3 Code", ErrAdapterUnavailable)
+	return "", fmt.Errorf("%w: t3 not found (T3 service, PATH or ~/.t3/bin), install T3 Code", ErrAdapterUnavailable)
+}
+
+func (adapter *t3Adapter) homeDir() string {
+	if adapter.home != "" {
+		return adapter.home
+	}
+	home, _ := os.UserHomeDir()
+	return home
+}
+
+// t3ServiceBinary is the CLI of the T3 version the background service runs,
+// as recorded in ~/.t3/runtime/service-state.json.
+func t3ServiceBinary(home string) string {
+	contents, err := os.ReadFile(filepath.Join(home, ".t3", "runtime", "service-state.json"))
+	if err != nil {
+		return ""
+	}
+	var serviceState struct {
+		ActiveVersion string `json:"activeVersion"`
+	}
+	if json.Unmarshal(contents, &serviceState) != nil || serviceState.ActiveVersion == "" || strings.ContainsAny(serviceState.ActiveVersion, `/\`) || serviceState.ActiveVersion == ".." {
+		return ""
+	}
+	candidate := filepath.Join(home, ".t3", "runtime", "versions", serviceState.ActiveVersion, "t3")
+	if !executableFile(candidate) {
+		return ""
+	}
+	return candidate
+}
+
+func executableFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Mode()&0o111 != 0
 }
 
 func (adapter *t3Adapter) Validate(contract state.TaskContract) error {
@@ -97,6 +133,11 @@ func (adapter *t3Adapter) Start(ctx context.Context, request StartRequest) (Sess
 			return nil, err
 		}
 		args = []string{"thread", "start", "--wait", "--title", t3Title(request.Contract.Objective)}
+		// The model the owner chose wins; without one the project's newest
+		// thread shows what currently works in T3.
+		if chosen := (state.AgentModel{Provider: request.Contract.ModelProvider, Model: request.Contract.Model}); chosen.Valid() {
+			model = t3Model{provider: chosen.Provider, model: chosen.Model}
+		}
 		if model.provider != "" && model.model != "" {
 			args = append(args, "--provider", model.provider, "--model", model.model)
 		}

@@ -3,6 +3,7 @@ import UserNotifications
 
 struct SettingsView: View {
     @Bindable var model: AppModel
+    @AppStorage(AgentPreferences.t3OnlyKey) private var t3Only = true
     @Binding var opensNotificationSettings: Bool
 
     @State private var harnessSelection = "codex"
@@ -70,6 +71,11 @@ struct SettingsView: View {
                         } label: {
                             SettingsRowLabel(title: "Agent tasks", systemImage: "play.circle", count: model.policies.count)
                         }
+
+                        Toggle(isOn: $t3Only) {
+                            Label("Only T3 Code", systemImage: "rectangle.stack")
+                        }
+                        .accessibilityIdentifier("settings-t3-only")
                     }
                 }
 

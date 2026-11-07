@@ -77,7 +77,7 @@ struct AgentSessionDetailView: View {
     private func header(_ session: AgentSession) -> some View {
         HStack(spacing: StateTheme.Space.inner) {
             AgentStatusPill(status: session.status)
-            Text([session.agentName, session.projectName].compactMap { $0 }.joined(separator: " · "))
+            Text([session.agentName, model.modelCatalog.label(for: session.model), session.projectName].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
