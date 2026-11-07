@@ -63,8 +63,14 @@ func (repository *PocketBaseRepository) CreateAgentSession(_ context.Context, se
 		`).Bind(dbx.Params{"id": session.ID, "reminder_id": session.ReminderID, "created_at": formatTime(session.CreatedAt), "data_json": string(encoded)}).Execute(); err != nil {
 			return fmt.Errorf("insert agent session: %w", err)
 		}
-		if _, err := insertRunRow(txApp, first); err != nil {
+		inserted, err := insertRunRow(txApp, first)
+		if err != nil {
 			return err
+		}
+		if !inserted {
+			// A run for the same occurrence and policy revision exists
+			// already (scheduler): no session without its first round.
+			return state.ErrRunStateConflict
 		}
 		if err := repository.appendSessionEvent(txApp, event); err != nil {
 			return err

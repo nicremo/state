@@ -220,15 +220,21 @@ func (service *Service) StartAgentSession(ctx context.Context, actor Actor, inpu
 func firstRoundObjective(reminder Reminder, instruction string) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "Task from State: %s\n", reminder.Title)
+	fmt.Fprintf(&builder, "State reminder ID: %s\n", reminder.ID)
 	if description := strings.TrimSpace(reminder.Description); description != "" {
 		builder.WriteString("\n" + description + "\n")
 	}
 	if instruction != "" {
 		builder.WriteString("\nThe owner's instruction:\n" + instruction + "\n")
 	}
-	builder.WriteString("\n" + sessionRules)
+	builder.WriteString("\n" + stateContextRules + "\n\n" + sessionRules)
 	return builder.String()
 }
+
+// stateContextRules points the agent at the reminder in State: its comments
+// carry paths, repositories and the last state of earlier runs, and the next
+// run reads what this one records.
+const stateContextRules = `This task comes from State. Before you start, read the reminder with the State MCP server: call get_reminder with the reminder ID above for its comments (paths, repositories, decisions, the last state of earlier runs) and recent history. When you finish, record the result and anything the next run needs with add_comment on the same reminder. If the State MCP server is not available to you, work from the description above and say so in your summary.`
 
 // sessionRules tells the agent how a round works. The owner reads only the
 // final message of each round, in the State app, and answers there.

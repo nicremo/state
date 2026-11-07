@@ -471,9 +471,12 @@ func (service *Service) CreateManualRun(ctx context.Context, actor Actor, input 
 	return created, nil
 }
 
-// MaterializeEligibleRuns creates one eligible run per due occurrence whose
-// reminder carries an enabled execution policy. It is idempotent through the
-// (occurrence_id, policy_revision) unique key.
+// MaterializeEligibleRuns starts the work of due reminders that carry an
+// enabled execution policy: one eligible run, or for a t3-code policy one
+// agent session. Per reminder only the newest due occurrence is a
+// candidate, so a reminder that piled up a backlog while the Mac was off
+// runs once instead of once per missed day; the older dates are named in the
+// session. It is idempotent through the (occurrence_id, policy_revision) key.
 func (service *Service) MaterializeEligibleRuns(ctx context.Context, now time.Time) ([]AgentRun, error) {
 	now = now.UTC()
 	due, err := service.repository.ListDueOccurrences(ctx, now)
@@ -481,9 +484,9 @@ func (service *Service) MaterializeEligibleRuns(ctx context.Context, now time.Ti
 		return nil, err
 	}
 	created := make([]AgentRun, 0)
-	for _, item := range due {
-		reminder := item.Reminder
-		occurrence := item.Occurrence
+	for _, candidate := range newestDuePerReminder(due) {
+		reminder := candidate.Reminder
+		occurrence := candidate.Occurrence
 		if reminder.ExecutionPolicyID == nil || *reminder.ExecutionPolicyID == "" {
 			continue
 		}
@@ -503,6 +506,18 @@ func (service *Service) MaterializeEligibleRuns(ctx context.Context, now time.Ti
 		}
 		if err != nil {
 			return nil, err
+		}
+		if policy.Adapter == AdapterT3Code {
+			// T3 Code work is a conversation: the owner follows it in the
+			// Agent tab and in T3, and can answer after the first round.
+			turn, wasCreated, err := service.startScheduledSession(ctx, reminder, occurrence, candidate.Earlier, policy, project, now)
+			if err != nil {
+				return nil, err
+			}
+			if wasCreated {
+				created = append(created, turn)
+			}
+			continue
 		}
 		runID, err := service.newID()
 		if err != nil {
