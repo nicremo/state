@@ -341,16 +341,6 @@
         }
       }
     },
-    "Agent execution" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent-Ausführung"
-          }
-        }
-      }
-    },
     "Agent name" : {
       "localizations" : {
         "de" : {
@@ -1331,6 +1321,16 @@
         }
       }
     },
+    "Discard" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwerfen"
+          }
+        }
+      }
+    },
     "Disconnect" : {
       "localizations" : {
         "de" : {
@@ -2091,6 +2091,16 @@
         }
       }
     },
+    "Model" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modell"
+          }
+        }
+      }
+    },
     "Monthly" : {
       "localizations" : {
         "de" : {
@@ -2747,6 +2757,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Online"
+          }
+        }
+      }
+    },
+    "Only T3 Code" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur T3 Code"
           }
         }
       }
@@ -3981,6 +4001,16 @@
         }
       }
     },
+    "Sent to your Mac as soon as State reaches it again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geht an deinen Mac, sobald State ihn wieder erreicht."
+          }
+        }
+      }
+    },
     "Server" : {
       "localizations" : {
         "de" : {
@@ -4471,6 +4501,16 @@
         }
       }
     },
+    "T3 default" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard von T3"
+          }
+        }
+      }
+    },
     "Table" : {
       "localizations" : {
         "de" : {
@@ -4677,6 +4717,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Das Modell %@ kann keine Fotos lesen. Wähle in den Servereinstellungen ein Modell, das Bilder liest."
+          }
+        }
+      }
+    },
+    "The models appear as soon as your Mac reports them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Modelle erscheinen, sobald dein Mac sie meldet."
           }
         }
       }
@@ -5281,6 +5331,26 @@
         }
       }
     },
+    "Waiting" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet"
+          }
+        }
+      }
+    },
+    "Waiting for a connection" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartet auf Verbindung"
+          }
+        }
+      }
+    },
     "Waiting for the notes AI" : {
       "localizations" : {
         "de" : {
@@ -5347,6 +5417,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Was soll der Agent tun?"
+          }
+        }
+      }
+    },
+    "When the reminder is due, a T3 Code session starts on your Mac with this model. If the Mac is off, it starts as soon as the Mac is back." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ist die Erinnerung fällig, startet auf deinem Mac eine T3-Code-Session mit diesem Modell. Ist der Mac aus, startet sie, sobald er wieder läuft."
           }
         }
       }
@@ -5447,6 +5527,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Du betreibst den Server. Deine Agenten schreiben Erinnerungen hinein. Dieses iPhone liest sie, arbeitet offline und meldet sich, wenn etwas fällig ist."
+          }
+        }
+      }
+    },
+    "Your Mac has not answered since %@. Tasks wait and start when it is back." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Mac antwortet seit %@ nicht. Aufgaben warten und starten, sobald er wieder erreichbar ist."
           }
         }
       }

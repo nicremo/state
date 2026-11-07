@@ -3,6 +3,7 @@ import SwiftUI
 struct ReminderEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: AppModel
+    @AppStorage(AgentPreferences.t3OnlyKey) private var t3Only = true
     @State private var draft: ReminderDraft
     @State private var isSaving = false
     @State private var showsPolicyEditor = false
@@ -23,6 +24,7 @@ struct ReminderEditorView: View {
             draft.timeZoneMode = reminder.schedule?.mode ?? .floating
             draft.timeZoneIdentifier = reminder.schedule?.timeZone ?? TimeZone.current.identifier
             draft.executionPolicyID = reminder.executionPolicyID
+            draft.executionModel = reminder.executionModel
         }
         _draft = State(initialValue: draft)
         title = reminder == nil ? "New reminder" : "Edit reminder"
@@ -76,11 +78,9 @@ struct ReminderEditorView: View {
                 }
 
                 Section {
-                    Picker("Policy", selection: $draft.executionPolicyID) {
-                        Text("None").tag(nil as String?)
-                        ForEach(model.policies) { policy in
-                            Text(policy.name).tag(policy.id as String?)
-                        }
+                    AgentProjectPicker(model: model, policies: editorPolicies, policyID: $draft.executionPolicyID, allowsNone: true)
+                    if selectedPolicy?.adapter == AgentNames.t3Code {
+                        AgentModelPicker(catalog: model.modelCatalog, selection: $draft.executionModel)
                     }
                     Button {
                         showsPolicyEditor = true
@@ -88,12 +88,21 @@ struct ReminderEditorView: View {
                         Label("New policy…", systemImage: "plus")
                     }
                 } header: {
-                    Text("Agent execution")
+                    Text("Agent")
                 } footer: {
                     if model.policies.isEmpty {
                         Text("No policies yet. Create one and a runner can execute this reminder on your Mac when it is due.")
+                    } else if selectedPolicy?.adapter == AgentNames.t3Code {
+                        Text("When the reminder is due, a T3 Code session starts on your Mac with this model. If the Mac is off, it starts as soon as the Mac is back.")
                     } else {
                         Text("A runner executes this reminder with the policy's capabilities when it is due.")
+                    }
+                }
+                .onChange(of: draft.executionPolicyID) { _, _ in
+                    // A T3 Code assignment always carries a model, so a
+                    // scheduled session never depends on recent manual use.
+                    if selectedPolicy?.adapter == AgentNames.t3Code, draft.executionModel == nil {
+                        draft.executionModel = model.modelCatalog.suggested
                     }
                 }
             }
@@ -128,5 +137,19 @@ struct ReminderEditorView: View {
                 }
             }
         }
+    }
+
+    /// The policies the agent section offers; the assigned one always stays
+    /// in the list, so editing never drops it.
+    private var editorPolicies: [ExecutionPolicy] {
+        var list = model.agentPolicies(t3Only: t3Only)
+        if let assigned = model.policies.first(where: { $0.id == draft.executionPolicyID }), !list.contains(where: { $0.id == assigned.id }) {
+            list.append(assigned)
+        }
+        return list
+    }
+
+    private var selectedPolicy: ExecutionPolicy? {
+        model.policies.first { $0.id == draft.executionPolicyID }
     }
 }

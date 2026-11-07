@@ -26,6 +26,8 @@ struct AgentSession: Codable, Hashable, Identifiable, Sendable {
     let projectID: String
     var projectName: String?
     var adapter: String
+    /// The T3 Code model the session runs with.
+    var model: AgentModel? = nil
     var title: String
     var closed: Bool
     var closedAt: Date?

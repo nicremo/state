@@ -8,6 +8,9 @@ struct ServerSession: Codable, Sendable {
     /// session so a server switch cannot inherit the address of an earlier
     /// connection.
     var relayURL: URL? = nil
+    /// Where the server answers away from home (its Tailscale address). The
+    /// server publishes it; the same pinned certificate applies.
+    var remoteURL: URL? = nil
 }
 
 @MainActor
@@ -45,6 +48,16 @@ final class SessionRepository {
         updated.relayURL = relayURL
         try save(session: updated, token: token)
         return updated
+    }
+
+    /// Stores the server's remote address with the current session.
+    @discardableResult
+    func updateRemoteURL(_ remoteURL: URL?) throws -> (ServerSession, String)? {
+        guard let (session, token) = try load() else { return nil }
+        var updated = session
+        updated.remoteURL = remoteURL
+        try save(session: updated, token: token)
+        return (updated, token)
     }
 
     func clear() throws {
