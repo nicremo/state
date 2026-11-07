@@ -34,11 +34,17 @@ func fakeClaude(t *testing.T, answer string) (string, string) {
 // a Claude Code policy the runner serves.
 func newSessionRunnerFixture(t *testing.T) (runnerFixture, state.ExecutionPolicy, *Runner) {
 	t.Helper()
+	return newSessionRunnerFixtureFor(t, "claude-code")
+}
+
+// newSessionRunnerFixtureFor serves the session policy with the given adapter.
+func newSessionRunnerFixtureFor(t *testing.T, adapter string) (runnerFixture, state.ExecutionPolicy, *Runner) {
+	t.Helper()
 	fixture := newRunnerFixture(t, "echo unused")
 	// The fixture's scheduled manual run is not part of this test.
 	fixture.ownerCancelRun(t, fixture.run.ID)
 	policy, err := fixture.state.CreatePolicy(context.Background(), fixture.owner, state.CreatePolicyInput{
-		Name: "karla-claude", ProjectID: fixture.project.ID, Adapter: "claude-code", Mode: state.ExecutionModeSupervised,
+		Name: "karla-agent", ProjectID: fixture.project.ID, Adapter: adapter, Mode: state.ExecutionModeSupervised,
 		AllowedCapabilities: []string{state.CapabilityReadRepository, state.CapabilityEditRepository, state.CapabilityRunTests},
 		TimeoutMinutes:      5, ClientRequestID: uuid.NewString(),
 	})
@@ -49,7 +55,7 @@ func newSessionRunnerFixture(t *testing.T) (runnerFixture, state.ExecutionPolicy
 	if err != nil || len(runners) != 1 {
 		t.Fatalf("runners = %v, %v", runners, err)
 	}
-	adapters := []string{"script", "claude-code"}
+	adapters := []string{"script", adapter}
 	if _, err := fixture.state.UpdateRunner(context.Background(), fixture.owner, runners[0].ID, state.UpdateRunnerInput{Adapters: &adapters, ExpectedRevision: runners[0].Revision, ClientRequestID: uuid.NewString()}); err != nil {
 		t.Fatal(err)
 	}
@@ -203,4 +209,30 @@ func readFile(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(content)
+}
+
+func TestT3SessionRoundReportsTheThreadAndItsLink(t *testing.T) {
+	// Not parallel: changes PATH.
+	bin := t.TempDir()
+	fakeT3(t, bin, "ok")
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
+	fixture, policy, process := newSessionRunnerFixtureFor(t, "t3-code")
+	ctx := context.Background()
+	session, err := fixture.state.StartAgentSession(ctx, fixture.owner, state.StartAgentSessionInput{
+		ReminderID: fixture.reminder.ID, PolicyID: policy.ID, MutationMetadata: state.MutationMetadata{ClientRequestID: uuid.NewString()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := process.Run(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	view, _ := fixture.state.GetAgentSession(ctx, session.ID)
+	turn := view.Turns[0]
+	if turn.Status != state.AgentRunStatusSucceeded || turn.HarnessSessionID != "t3-thread-1" || turn.ResultText != "## Erledigt\nAlles fertig." {
+		t.Fatalf("round = %s %q %q", turn.Status, turn.HarnessSessionID, turn.ResultText)
+	}
+	if view.HarnessLink != "https://app.t3.codes/threads/env-1/t3-thread-1" {
+		t.Fatalf("session link = %q", view.HarnessLink)
+	}
 }

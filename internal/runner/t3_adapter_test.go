@@ -26,7 +26,11 @@ case "$1 $2" in
   if [ "` + mode + `" = noproject ] && [ ! -f ` + filepath.Join(dir, "added") + ` ]; then
     echo "No T3 Code project matches '$5'. Pass a project id or a path inside a project." >&2; exit 1
   fi
-  echo '[]';;
+  if [ "` + mode + `" = withthreads ]; then
+    echo '[{"threadId":"old","providerInstanceId":"claudeAgent_claude_hub","model":"claude-opus-5-5"}]'
+  else
+    echo '[]'
+  fi;;
 "project add") touch ` + filepath.Join(dir, "added") + `; echo "Added";;
 "thread show") echo '{"thread":{"threadId":"'"$6"'","link":"https://app.t3.codes/threads/env-1/'"$6"'"},"messages":[]}';;
 "thread start"|"thread send")
@@ -164,5 +168,23 @@ func TestT3TitleUsesTheFirstLineBounded(t *testing.T) {
 	}
 	if got := t3Title(""); got != "State" {
 		t.Fatalf("empty title = %q", got)
+	}
+}
+
+func TestT3NewThreadUsesTheNewestThreadsProviderAndModel(t *testing.T) {
+	result, calls := runT3(t, "withthreads", fullRightsContract())
+	if result.ExitCode != 0 || !strings.Contains(calls, " --provider claudeAgent_claude_hub --model claude-opus-5-5 ") {
+		t.Fatalf("result = %+v calls:\n%s", result, calls)
+	}
+}
+
+func TestNewestT3ModelSkipsThreadsWithoutAModel(t *testing.T) {
+	t.Parallel()
+	got := newestT3Model(`[{"providerInstanceId":"","model":""},{"providerInstanceId":"codex_main","model":"gpt-6"}]`)
+	if got.provider != "codex_main" || got.model != "gpt-6" {
+		t.Fatalf("model = %+v", got)
+	}
+	if got := newestT3Model("not json"); got != (t3Model{}) {
+		t.Fatalf("garbage = %+v", got)
 	}
 }

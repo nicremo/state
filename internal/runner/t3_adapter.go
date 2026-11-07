@@ -91,10 +91,15 @@ func (adapter *t3Adapter) Start(ctx context.Context, request StartRequest) (Sess
 	threadID := request.Contract.ResumeSessionID
 	var args []string
 	if threadID == "" {
-		if err := ensureT3Project(ctx, binary, request.Dir); err != nil {
+		model, err := ensureT3Project(ctx, binary, request.Dir)
+		if err != nil {
 			return nil, err
 		}
-		args = []string{"thread", "start", "--wait", "--title", t3Title(request.Contract.Objective), request.Dir, "-"}
+		args = []string{"thread", "start", "--wait", "--title", t3Title(request.Contract.Objective)}
+		if model.provider != "" && model.model != "" {
+			args = append(args, "--provider", model.provider, "--model", model.model)
+		}
+		args = append(args, request.Dir, "-")
 	} else {
 		if !state.ValidHarnessSessionID(threadID) {
 			return nil, errors.New("invalid T3 thread ID")
@@ -116,20 +121,49 @@ func (adapter *t3Adapter) Start(ctx context.Context, request StartRequest) (Sess
 	return &t3Session{binary: binary, command: command, tail: tail, stdout: stdout, stderr: stderr}, nil
 }
 
+// t3Model is the provider instance and model a new thread runs with.
+type t3Model struct {
+	provider string
+	model    string
+}
+
 // ensureT3Project registers the folder as a T3 project when T3 knows none
-// for it, so a new State project needs no setup in T3 Code.
-func ensureT3Project(ctx context.Context, binary string, dir string) error {
+// for it, so a new State project needs no setup in T3 Code. It returns the
+// provider and model of the project's newest thread: that is the setup the
+// owner works with in T3, while the project's stored default can point to a
+// provider instance that was disabled since. Without threads the project
+// default applies.
+func ensureT3Project(ctx context.Context, binary string, dir string) (t3Model, error) {
 	output, err := runT3Helper(ctx, binary, dir, "thread", "list", "--json", "--project", dir)
 	if err == nil {
-		return nil
+		return newestT3Model(output), nil
 	}
 	if !strings.Contains(output, t3NoProjectMarker) {
-		return fmt.Errorf("%w: T3 Code is not reachable, is the app running? %s", ErrAdapterUnavailable, lastLine(output))
+		return t3Model{}, fmt.Errorf("%w: T3 Code is not reachable, is the app running? %s", ErrAdapterUnavailable, lastLine(output))
 	}
 	if output, err := runT3Helper(ctx, binary, dir, "project", "add", dir); err != nil {
-		return fmt.Errorf("%w: add the folder to T3 Code: %s", ErrAdapterUnavailable, lastLine(output))
+		return t3Model{}, fmt.Errorf("%w: add the folder to T3 Code: %s", ErrAdapterUnavailable, lastLine(output))
 	}
-	return nil
+	return t3Model{}, nil
+}
+
+// newestT3Model reads `t3 thread list --json` (newest first) and returns the
+// first thread's provider and model that are both set.
+func newestT3Model(output string) t3Model {
+	var threads []struct {
+		ProviderInstanceID string `json:"providerInstanceId"`
+		Model              string `json:"model"`
+	}
+	start := strings.Index(output, "[")
+	if start < 0 || json.Unmarshal([]byte(output[start:]), &threads) != nil {
+		return t3Model{}
+	}
+	for _, thread := range threads {
+		if thread.ProviderInstanceID != "" && thread.Model != "" {
+			return t3Model{provider: thread.ProviderInstanceID, model: thread.Model}
+		}
+	}
+	return t3Model{}
 }
 
 // runT3Helper runs a short t3 call with its own deadline and returns the
