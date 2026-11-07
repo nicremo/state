@@ -9,7 +9,7 @@ This checklist separates repository preparation from the App Store Connect decis
 - The primary category is Productivity and the copyright notice is included in Fastlane metadata.
 - The main app and Notification Service Extension declare their bundle identifiers, App Group and release entitlements.
 - The archive lane uses automatic provisioning and the beta lane targets internal TestFlight distribution.
-- The build number never touches a tracked file. `ios/project.yml` keeps `CURRENT_PROJECT_VERSION: 1`, both `Info.plist` files keep `$(CURRENT_PROJECT_VERSION)`, and `fastlane ios build` passes the real value through `xcargs`. Override it with `BUILD_NUMBER=...`, otherwise a UTC `yymmddHHMM` stamp is used. That format stays below the App Store Connect limit of 2^32 per version component.
+- The build number never touches a tracked file. `ios/project.yml` keeps `CURRENT_PROJECT_VERSION: 1`, both `Info.plist` files keep `$(CURRENT_PROJECT_VERSION)`, and `fastlane ios build` passes the real value through `xcargs`. Override it with `BUILD_NUMBER=...`, otherwise a UTC `yyyymmddHHMM` stamp is used. It must stay above every build already uploaded: TestFlight offers a build as an update only when its number is higher than the installed one, and State's uploads since September 2026 use the 12-digit form (for example `202609251740`), so a 10-digit `yymmddHHMM` stamp would never reach a device.
 - The app declares `ITSAppUsesNonExemptEncryption` as false. The account holder must confirm that export classification before App Store submission.
 
 ## Credentials
@@ -85,7 +85,7 @@ bundle exec fastlane mac_beta    # signed pkg for macOS plus the TestFlight uplo
 bundle exec fastlane beta        # iPhone and iPad build plus the TestFlight upload
 ```
 
-Both lanes take the build number from the same source: `BUILD_NUMBER` if it is set, a UTC `yymmddHHMM` stamp otherwise. Override it when a number is already taken, because App Store Connect rejects an upload with a build number that exists for that version and platform.
+Both lanes take the build number from the same source: `BUILD_NUMBER` if it is set, a UTC `yyyymmddHHMM` stamp otherwise. Override it when a number is already taken, because App Store Connect rejects an upload with a build number that exists for that version and platform.
 
 `bundle exec fastlane mac_test` builds `StateMac` without signing. It is the smoke test for the Mac target, and it needs no Apple account.
 

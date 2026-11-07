@@ -49,8 +49,11 @@ def asc_key_path = File.expand_path(required_env("ASC_KEY_PATH", "the App Store 
 # The Xcode project is generated from project.yml, so no tracked file may carry
 # a build number. The archive receives it as a build setting override instead.
 # The UTC default stays below 2^32 so App Store Connect accepts every component.
+# A UTC yyyymmddHHMM stamp. TestFlight already holds builds with this
+# 12-digit form (202609251740); a shorter yymmddHHMM stamp sorts below them,
+# so TestFlight would never offer it as an update.
 def state_build_number
-  ENV.fetch("BUILD_NUMBER", Time.now.utc.strftime("%y%m%d%H%M"))
+  ENV.fetch("BUILD_NUMBER", Time.now.utc.strftime("%Y%m%d%H%M"))
 end
 
 # Xcode packages the IPA with /usr/bin/rsync, which is openrsync. openrsync
