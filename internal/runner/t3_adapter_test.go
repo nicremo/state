@@ -23,6 +23,7 @@ printf ' %s' "$@" >> ` + log + `
 printf '\n' >> ` + log + `
 case "$1 $2" in
 "thread list")
+  if [ "` + mode + `" = down ]; then exit 3; fi
   if [ "` + mode + `" = noproject ] && [ ! -f ` + filepath.Join(dir, "added") + ` ]; then
     echo "No T3 Code project matches '$5'. Pass a project id or a path inside a project." >&2; exit 1
   fi
@@ -186,5 +187,24 @@ func TestNewestT3ModelSkipsThreadsWithoutAModel(t *testing.T) {
 	}
 	if got := newestT3Model("not json"); got != (t3Model{}) {
 		t.Fatalf("garbage = %+v", got)
+	}
+}
+
+func TestT3UnreachableNamesTheCause(t *testing.T) {
+	bin := t.TempDir()
+	fakeT3(t, bin, "down")
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
+	adapter := &t3Adapter{home: t.TempDir()}
+	_, err := adapter.Start(context.Background(), StartRequest{Contract: fullRightsContract(), Dir: t.TempDir(), Prompt: "x"})
+	if !errors.Is(err, ErrAdapterUnavailable) || !strings.Contains(err.Error(), "exit status 3") {
+		t.Fatalf("Start() error = %v", err)
+	}
+}
+
+func TestUnavailableTextDropsInternalPrefixes(t *testing.T) {
+	t.Parallel()
+	got := unavailableText("start adapter: adapter_unavailable: T3 Code did not answer (exit status 3), is the app running?")
+	if got != "T3 Code did not answer (exit status 3), is the app running?" {
+		t.Fatalf("text = %q", got)
 	}
 }

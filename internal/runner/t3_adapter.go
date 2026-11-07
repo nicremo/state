@@ -36,8 +36,9 @@ const (
 	// t3TitleLimit mirrors the CLI's own title bound.
 	t3TitleLimit = 80
 	// t3HelperTimeout bounds the short helper calls (project check, project
-	// add, thread show).
-	t3HelperTimeout = 30 * time.Second
+	// add, thread show). They take well under a second, but the first call
+	// from a new runner binary can wait for macOS to assess the T3 Code app.
+	t3HelperTimeout = 2 * time.Minute
 )
 
 // t3Adapter runs one agent round as a T3 Code thread: the first round
@@ -139,7 +140,7 @@ func ensureT3Project(ctx context.Context, binary string, dir string) (t3Model, e
 		return newestT3Model(output), nil
 	}
 	if !strings.Contains(output, t3NoProjectMarker) {
-		return t3Model{}, fmt.Errorf("%w: T3 Code is not reachable, is the app running? %s", ErrAdapterUnavailable, lastLine(output))
+		return t3Model{}, fmt.Errorf("%w: T3 Code did not answer (%s), is the app running? %s", ErrAdapterUnavailable, t3Failure(ctx, err), lastLine(output))
 	}
 	if output, err := runT3Helper(ctx, binary, dir, "project", "add", dir); err != nil {
 		return t3Model{}, fmt.Errorf("%w: add the folder to T3 Code: %s", ErrAdapterUnavailable, lastLine(output))
@@ -166,6 +167,15 @@ func newestT3Model(output string) t3Model {
 	return t3Model{}
 }
 
+// t3Failure names why a helper call failed: its own deadline or the CLI's
+// exit status.
+func t3Failure(ctx context.Context, err error) string {
+	if errors.Is(err, context.DeadlineExceeded) || (ctx.Err() == nil && strings.Contains(err.Error(), "killed")) {
+		return fmt.Sprintf("no answer within %s", t3HelperTimeout)
+	}
+	return err.Error()
+}
+
 // runT3Helper runs a short t3 call with its own deadline and returns the
 // combined output.
 func runT3Helper(ctx context.Context, binary string, dir string, args ...string) (string, error) {
@@ -174,6 +184,9 @@ func runT3Helper(ctx context.Context, binary string, dir string, args ...string)
 	command := exec.CommandContext(ctx, binary, args...)
 	command.Dir = dir
 	output, err := command.CombinedOutput()
+	if err != nil && ctx.Err() != nil {
+		err = fmt.Errorf("%w: %v", ctx.Err(), err)
+	}
 	return string(output), err
 }
 

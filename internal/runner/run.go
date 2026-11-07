@@ -303,7 +303,7 @@ func (runner *Runner) failUnavailable(ctx context.Context, run state.AgentRun, r
 		RunID:            run.ID,
 		Outcome:          state.AgentRunStatusFailed,
 		ResultSummary:    redactSummary(detail),
-		ResultText:       redactText(strings.TrimPrefix(reason, ErrAdapterUnavailable.Error()+": "), maxResultTextLength),
+		ResultText:       redactText(unavailableText(reason), maxResultTextLength),
 		FailureCode:      state.RunFailureAdapterUnavailable,
 		ExitCode:         1,
 		ExpectedRevision: revision,
@@ -317,6 +317,13 @@ func (runner *Runner) failUnavailable(ctx context.Context, run state.AgentRun, r
 	}
 	runner.note("run %s failed: %s", run.ID, detail)
 	return nil
+}
+
+// unavailableText is the reason a round could not start, as the owner reads
+// it in the app: without the runner's internal prefixes.
+func unavailableText(reason string) string {
+	text := strings.TrimPrefix(reason, "start adapter: ")
+	return strings.TrimPrefix(text, ErrAdapterUnavailable.Error()+": ")
 }
 
 // refreshContext rewrites .state/context/current.md from the server briefing.
