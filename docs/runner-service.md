@@ -185,6 +185,37 @@ and any of `run_tests`, `network_access`, `write_state`, `deploy`,
 project folder, a script that changes into the folder and runs the CLI's
 interactive resume, and opens it with `/usr/bin/open`, which starts Terminal.
 
+### T3 Code
+
+The `t3-code` adapter runs each round as a thread in the T3 Code desktop app,
+through the `t3` CLI (on `PATH`, else `~/.t3/bin/t3`; T3 Code must be running):
+
+- first round: `t3 thread list --json --project <folder>` checks that T3 knows
+  the folder and `t3 project add <folder>` registers it otherwise; then
+  `t3 thread start --wait --title <objective> <folder> -` with the prompt on
+  standard input. The CLI announces `Thread <id>` on standard error at once and
+  prints the agent's reply at the end. The thread ID is the session ID.
+- later rounds: `t3 thread send --wait <thread> -`.
+- after every round `t3 thread show --json <thread>` gives the thread's link
+  (`https://app.t3.codes/threads/...`), which the runner reports as
+  `harness_link`; the app shows it as "Open in T3 Code".
+- exit code 2 means the thread waits for an answer in T3 Code. The round ends
+  successfully with the text "Wartet in T3 Code auf deine Antwort."
+- cancelling the round kills the waiting CLI only; the thread keeps running in
+  T3 Code and its link stays on the session.
+- T3 Code applies its own approval settings, not State's rights levels. The
+  adapter therefore refuses policies below full rights.
+
+Set it up once:
+
+```bash
+state-server agent-project --data "$HOME/Library/Application Support/State Server" \
+  --name <folder> --adapter t3-code --rights full --runner "MacBook Pro"
+```
+
+and add `t3-code` to `adapters` in the runner's `runner.json`, then reload the
+runner with `state-runner service install` (see "Restarting after a change").
+
 ## Security boundaries
 
 - **Outgoing only.** The runner polls the server it was paired with

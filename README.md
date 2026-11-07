@@ -165,7 +165,7 @@ state-runner pair --server https://state.example.com --code ONE_TIME_CODE --name
 state-runner run
 ```
 
-The runner polls outbound-only, validates the hash-pinned task contract against its local configuration, writes the contract and status under the project's `.state/runs/` directory, launches the matching local harness adapter (`codex`, `claude-code`, `opencode`, `pi-agent`, `deepseek-harness`) and reports a redacted result. `pi-agent` runs `pi --print` and `deepseek-harness` runs `dsh --profile headless`, each with the prompt as a single argument. The owner watches the lifecycle in the iOS app, approves sensitive capabilities per run, and receives an encrypted push when a run finishes. Unattended policies are limited to low-risk capabilities; everything else stays supervised.
+The runner polls outbound-only, validates the hash-pinned task contract against its local configuration, writes the contract and status under the project's `.state/runs/` directory, launches the matching local harness adapter (`codex`, `claude-code`, `kimi-code`, `opencode`, `pi-agent`, `deepseek-harness`, `t3-code`) and reports a redacted result. `pi-agent` runs `pi --print` and `deepseek-harness` runs `dsh --profile headless`, each with the prompt as a single argument. `t3-code` runs the task as a thread in the T3 Code app (see `docs/runner-service.md`). The owner watches the lifecycle in the iOS app, approves sensitive capabilities per run, and receives an encrypted push when a run finishes. Unattended policies are limited to low-risk capabilities; everything else stays supervised.
 
 ### Agent sessions from the app
 
