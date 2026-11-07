@@ -1181,6 +1181,7 @@ paths:
                     reminder_id: { $ref: "#/components/schemas/UUIDv7" }
                     policy_id: { $ref: "#/components/schemas/UUIDv7" }
                     instruction: { type: string, maxLength: 8000 }
+                    model: { $ref: "#/components/schemas/AgentModel" }
       responses:
         "201": { description: The session., content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
         "400": { $ref: "#/components/responses/Error" }
@@ -1553,6 +1554,11 @@ components:
           oneOf:
             - $ref: "#/components/schemas/UUIDv7"
             - type: "null"
+        execution_model:
+          description: Model a T3 Code policy runs this reminder with.
+          oneOf:
+            - $ref: "#/components/schemas/AgentModel"
+            - type: "null"
         revision: { type: integer, format: int64, minimum: 1 }
         archived: { type: boolean }
         created_at: { type: string, format: date-time }
@@ -1664,6 +1670,10 @@ components:
               oneOf:
                 - $ref: "#/components/schemas/UUIDv7"
                 - type: "null"
+            execution_model:
+              oneOf:
+                - $ref: "#/components/schemas/AgentModel"
+                - type: "null"
     UpdateReminderRequest:
       allOf:
         - $ref: "#/components/schemas/MutationMetadata"
@@ -1685,6 +1695,11 @@ components:
               description: Explicit null detaches the policy.
               oneOf:
                 - $ref: "#/components/schemas/UUIDv7"
+                - type: "null"
+            execution_model:
+              description: Explicit null removes the model.
+              oneOf:
+                - $ref: "#/components/schemas/AgentModel"
                 - type: "null"
             archived: { type: boolean }
             expected_revision: { type: integer, format: int64, minimum: 1 }
@@ -2101,6 +2116,15 @@ components:
         session_id: { type: string, description: Set on rounds of an agent session. }
         turn_kind: { type: string, enum: [message, open_terminal] }
         resume_session_id: { type: string, description: The agent CLI session to resume; empty on the first round. }
+        model_provider: { type: string, description: T3 Code provider instance; empty for other adapters. }
+        model: { type: string, description: T3 Code model slug; empty for other adapters. }
+    AgentModel:
+      type: object
+      description: A provider instance and model in T3 Code, for example claudeAgent_claude_hub and claude-sonnet-5-5.
+      required: [provider, model]
+      properties:
+        provider: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$" }
+        model: { type: string, minLength: 1, maxLength: 200 }
     AgentSession:
       type: object
       required: [id, reminder_id, policy_id, project_id, adapter, title, closed, status, turns]
@@ -2111,6 +2135,7 @@ components:
         project_id: { $ref: "#/components/schemas/UUIDv7" }
         project_name: { type: string }
         adapter: { type: string }
+        model: { $ref: "#/components/schemas/AgentModel" }
         title: { type: string }
         closed: { type: boolean }
         closed_at: { type: string, format: date-time }

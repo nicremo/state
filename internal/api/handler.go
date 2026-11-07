@@ -1230,6 +1230,10 @@ func decodeUpdateReminder(request *http.Request, input *state.UpdateReminderInpu
 		var cleared *string
 		input.ExecutionPolicyID = &cleared
 	}
+	if value, present := fields["execution_model"]; present && strings.TrimSpace(string(value)) == "null" {
+		var cleared *state.AgentModel
+		input.ExecutionModel = &cleared
+	}
 	return nil
 }
 

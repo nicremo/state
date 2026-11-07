@@ -119,10 +119,13 @@ type Reminder struct {
 	Schedule          *Schedule       `json:"schedule,omitempty"`
 	Recurrence        *RecurrenceRule `json:"recurrence,omitempty"`
 	ExecutionPolicyID *string         `json:"execution_policy_id,omitempty"`
-	Revision          int64           `json:"revision"`
-	Archived          bool            `json:"archived"`
-	CreatedAt         time.Time       `json:"created_at"`
-	UpdatedAt         time.Time       `json:"updated_at"`
+	// ExecutionModel is the model a T3 Code policy runs this reminder with,
+	// both for scheduled sessions and as the default of a manual start.
+	ExecutionModel *AgentModel `json:"execution_model,omitempty"`
+	Revision       int64       `json:"revision"`
+	Archived       bool        `json:"archived"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
 type Comment struct {
@@ -200,6 +203,7 @@ type CreateReminderInput struct {
 	Schedule          *Schedule       `json:"schedule,omitempty"`
 	Recurrence        *RecurrenceRule `json:"recurrence,omitempty"`
 	ExecutionPolicyID *string         `json:"execution_policy_id,omitempty"`
+	ExecutionModel    *AgentModel     `json:"execution_model,omitempty"`
 	ClientTime        *time.Time      `json:"client_time,omitempty"`
 	Source            string          `json:"source,omitempty"`
 	SourceExcerpt     string          `json:"source_excerpt,omitempty"`
@@ -214,6 +218,7 @@ type UpdateReminderInput struct {
 	Schedule          **Schedule       `json:"schedule,omitempty"`
 	Recurrence        **RecurrenceRule `json:"recurrence,omitempty"`
 	ExecutionPolicyID **string         `json:"execution_policy_id,omitempty"`
+	ExecutionModel    **AgentModel     `json:"execution_model,omitempty"`
 	Archived          *bool            `json:"archived,omitempty"`
 	ExpectedRevision  int64            `json:"expected_revision"`
 	ClientTime        *time.Time       `json:"client_time,omitempty"`

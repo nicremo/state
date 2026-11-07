@@ -206,6 +206,10 @@ type TaskContract struct {
 	SessionID       string `json:"session_id,omitempty"`
 	TurnKind        string `json:"turn_kind,omitempty"`
 	ResumeSessionID string `json:"resume_session_id,omitempty"`
+	// ModelProvider and Model choose the model in a multi-provider harness
+	// (T3 Code). Empty for every other adapter, so older hashes hold.
+	ModelProvider string `json:"model_provider,omitempty"`
+	Model         string `json:"model,omitempty"`
 }
 
 // ComputeHash returns the SHA-256 over the canonical JSON encoding of the

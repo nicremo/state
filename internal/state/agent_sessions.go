@@ -75,19 +75,21 @@ func ValidHarnessLink(link string) bool {
 }
 
 type AgentSession struct {
-	ID             string     `json:"id"`
-	ReminderID     string     `json:"reminder_id"`
-	PolicyID       string     `json:"policy_id"`
-	ProjectID      string     `json:"project_id"`
-	ProjectName    string     `json:"project_name"`
-	Adapter        string     `json:"adapter"`
-	Title          string     `json:"title"`
-	Closed         bool       `json:"closed"`
-	ClosedAt       *time.Time `json:"closed_at,omitempty"`
-	CreatedByActor Actor      `json:"created_by_actor"`
-	Revision       int64      `json:"revision"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID          string `json:"id"`
+	ReminderID  string `json:"reminder_id"`
+	PolicyID    string `json:"policy_id"`
+	ProjectID   string `json:"project_id"`
+	ProjectName string `json:"project_name"`
+	Adapter     string `json:"adapter"`
+	// Model is the T3 Code model the session runs with, if one was chosen.
+	Model          *AgentModel `json:"model,omitempty"`
+	Title          string      `json:"title"`
+	Closed         bool        `json:"closed"`
+	ClosedAt       *time.Time  `json:"closed_at,omitempty"`
+	CreatedByActor Actor       `json:"created_by_actor"`
+	Revision       int64       `json:"revision"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
 // AgentSessionView is a session with its rounds in order and what follows
@@ -109,6 +111,9 @@ type StartAgentSessionInput struct {
 	ReminderID  string `json:"reminder_id"`
 	PolicyID    string `json:"policy_id"`
 	Instruction string `json:"instruction,omitempty"`
+	// Model chooses the T3 Code model; only a t3-code policy accepts one.
+	// Without it a t3-code session falls back to the reminder's model.
+	Model *AgentModel `json:"model,omitempty"`
 	MutationMetadata
 }
 
@@ -161,6 +166,13 @@ func (service *Service) StartAgentSession(ctx context.Context, actor Actor, inpu
 	if !policy.Enabled {
 		return AgentSessionView{}, ErrInvalidInput
 	}
+	model := cloneAgentModel(input.Model)
+	if model == nil && policy.Adapter == AdapterT3Code {
+		model = cloneAgentModel(reminder.ExecutionModel)
+	}
+	if !validAgentModelPointer(model) || (model != nil && policy.Adapter != AdapterT3Code) {
+		return AgentSessionView{}, ErrInvalidInput
+	}
 	project, err := service.repository.GetProject(ctx, policy.ProjectID)
 	if err != nil {
 		return AgentSessionView{}, err
@@ -177,6 +189,7 @@ func (service *Service) StartAgentSession(ctx context.Context, actor Actor, inpu
 		ProjectID:      project.ID,
 		ProjectName:    project.Name,
 		Adapter:        policy.Adapter,
+		Model:          model,
 		Title:          reminder.Title,
 		CreatedByActor: actor,
 		Revision:       1,
@@ -309,6 +322,10 @@ func (service *Service) newSessionTurn(ctx context.Context, actor Actor, session
 		SessionID:           session.ID,
 		TurnKind:            string(kind),
 		ResumeSessionID:     resumeID,
+	}
+	if session.Model != nil {
+		contract.ModelProvider = session.Model.Provider
+		contract.Model = session.Model.Model
 	}
 	contract.ContractHash = contract.ComputeHash()
 	run := AgentRun{
