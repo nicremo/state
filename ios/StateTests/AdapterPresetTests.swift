@@ -8,7 +8,7 @@ final class AdapterPresetTests: XCTestCase {
     func testAdapterPresetsMatchTheRunnerRegistry() {
         XCTAssertEqual(
             Set(HarnessCatalog.adapterPresets.map(\.id)),
-            ["codex", "claude-code", "opencode", "pi-agent", "deepseek-harness"]
+            ["codex", "claude-code", "kimi-code", "opencode", "pi-agent", "deepseek-harness", "t3-code"]
         )
     }
 
