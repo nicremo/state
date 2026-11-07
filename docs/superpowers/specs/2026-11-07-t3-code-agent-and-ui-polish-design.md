@@ -38,6 +38,10 @@ A new runner adapter `t3-code` next to `claude-code`, `codex` and the others.
   `Thread <id>` to stderr as soon as the thread exists and the reply to stdout at the end;
   exit codes are the same. So the thread ID is known even when State cancels the round,
   which `--json` (printed only at the end) cannot give.
+- The new thread takes `--provider` and `--model` from the project's newest thread in
+  `t3 thread list --json`. Measured on this Mac: the project's stored default pointed to the
+  disabled provider instance `claudeAgent`, so a start without them failed. Without threads
+  the project default applies.
 - Later rounds: `t3 thread send --wait <threadId> -`. The thread ID is the
   `HarnessSessionID`, so the existing resume plumbing carries it.
 - Before a first round the adapter checks the project with
