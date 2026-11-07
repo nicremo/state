@@ -1017,6 +1017,22 @@ paths:
               schema: { $ref: "#/components/schemas/Runner" }
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
+  /api/v1/connection:
+    get:
+      operationId: getConnection
+      summary: Where else this server answers, for example its Tailscale address on the Mac.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: The remote address, empty when there is none.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [remote_url]
+                properties:
+                  remote_url: { type: string }
+        "401": { $ref: "#/components/responses/Error" }
   /api/v1/runner/harness-models:
     put:
       operationId: reportHarnessModels

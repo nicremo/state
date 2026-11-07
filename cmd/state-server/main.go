@@ -30,6 +30,9 @@ var version = "dev"
 type applicationConfig struct {
 	dataDirectory string
 	version       string
+	// remoteURL reports the Tailscale address of the desktop server; nil
+	// elsewhere.
+	remoteURL func() string
 }
 
 type application struct {
@@ -225,11 +228,12 @@ func newApplication(config applicationConfig) (*application, error) {
 	notesAI := &notesai.Runtime{Gateway: gateway, Store: mediaStore, Worker: notesai.NewWorker(stateService, gateway, mediaStore, slog.Default()), KeyPath: openRouterKeyPath}
 	seedNotesDictionary(stateService, environmentOrDefault("STATE_NOTES_DICTIONARY_SEED_FILE", filepath.Join(config.dataDirectory, "notes-dictionary-seed.txt")))
 	restHandler := api.NewHandler(api.Config{
-		Auth:    authManager,
-		State:   stateService,
-		Push:    pushService,
-		Version: config.version,
-		NotesAI: notesAI,
+		Auth:      authManager,
+		State:     stateService,
+		Push:      pushService,
+		Version:   config.version,
+		NotesAI:   notesAI,
+		RemoteURL: config.remoteURL,
 	})
 	mcpHandler := mcpserver.NewHandler(mcpserver.Config{
 		Auth:    authManager,
