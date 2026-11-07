@@ -187,8 +187,31 @@ interactive resume, and opens it with `/usr/bin/open`, which starts Terminal.
 
 ### T3 Code
 
-The `t3-code` adapter runs each round as a thread in the T3 Code desktop app,
-through the `t3` CLI (on `PATH`, else `~/.t3/bin/t3`; T3 Code must be running):
+The `t3-code` adapter runs each round as a thread in T3 Code. It needs T3's
+background service (`com.t3tools.t3code.service`), not the desktop app: the
+adapter prefers the service's own binary
+`~/.t3/runtime/versions/<activeVersion>/t3` (version from
+`~/.t3/runtime/service-state.json`), then `t3` on `PATH`, then the launcher
+`~/.t3/bin/t3`.
+
+Models: the runner reads `~/.t3/caches/<provider>.json` (enabled and `ready`
+providers, their models) and `~/.t3/userdata/settings.json` (instances the
+owner disabled or removed, hidden models) and reports the catalog with
+`PUT /api/v1/runner/harness-models` at start and every 10 minutes when it
+changed. Only provider IDs, names and model slugs leave the Mac. The app shows
+the catalog grouped by provider. A chosen model reaches the task contract as
+`model_provider` and `model` and becomes `--provider` and `--model`; without
+one the adapter takes the provider and model of the project's newest T3
+thread.
+
+Scheduled work: a due reminder whose policy uses `t3-code` starts an agent
+session (system actor) instead of a bare run, with the reminder's
+`execution_model`. Per reminder only the newest due occurrence starts; the
+first round names the older missed dates so the agent can catch up. The server
+runs the scheduler at start and every 30 seconds, so a date that passed while
+the Mac was off starts as soon as the Mac is back.
+
+The rounds themselves:
 
 - first round: `t3 thread list --json --project <folder>` checks that T3 knows
   the folder and `t3 project add <folder>` registers it otherwise; then

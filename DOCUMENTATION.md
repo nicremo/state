@@ -345,8 +345,26 @@ push is set up). Answer there and the agent continues the same conversation.
 sit in front of it. **Cancel round** stops a round, **End session** closes the
 conversation.
 
-With **T3 Code** as the agent, every session is a thread in the T3 Code app on
-the Mac. **Open in T3 Code** opens that thread, on the Mac or through T3
+**Project and model.** With **Only T3 Code** on (Settings, Agents, the default)
+State offers T3 Code only: you pick the **Project** (the folder the agent works
+in, with its description) and the **Model**, grouped by provider, for example
+Claude Hub, Codex, Kimi and DeepSeek. The list comes from your Mac's T3 Code.
+The reminder editor has the same two fields under **Agent**: when the reminder
+is due, a T3 Code session starts on its own with that model, and if the Mac was
+off it starts as soon as the Mac is back. A start that cannot reach the Mac
+waits in the Agent tab under **Waiting for a connection** and goes out after the
+next successful sync.
+
+**Context for the agent.** Every first round names the State reminder ID and
+asks the agent to read the reminder with the State MCP (`get_reminder`:
+comments with paths, repositories and the last state, recent history) and to
+record its result with `add_comment`, so the next run knows where things stand.
+
+**Away from home.** With the Tailscale app connected on the iPhone, State
+reaches the Mac over Tailscale; see `docs/LOCAL_MAC_CONNECTION.md`.
+
+With **T3 Code** as the agent, every session is a thread in T3 Code on the
+Mac. **Open in T3 Code** opens that thread, on the Mac or through T3
 Connect on the phone, so you can watch the agent work and answer its questions
 there. If the thread stops to ask something, the round reads "Wartet in T3
 Code auf deine Antwort."; your next message in State is queued as the thread's
