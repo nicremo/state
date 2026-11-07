@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -46,6 +47,51 @@ type Runner struct {
 	// OpenTerminal opens a command file in a terminal on this Mac; nil uses
 	// /usr/bin/open. Tests replace it.
 	OpenTerminal func(path string) error
+	// HarnessCatalog lists the models of the runner's harness (T3 Code);
+	// nil reads T3's caches in the home folder. Tests replace it.
+	HarnessCatalog func() ([]state.HarnessModel, error)
+
+	catalogReportedAt time.Time
+	catalogSent       []state.HarnessModel
+	catalogKnown      bool
+}
+
+// catalogInterval paces the model catalog report; an unchanged catalog is
+// not sent again.
+const catalogInterval = 10 * time.Minute
+
+// reportCatalog sends the T3 model catalog when the runner serves t3-code
+// and the catalog changed. Failures are logged, never fatal.
+func (runner *Runner) reportCatalog(ctx context.Context, now time.Time) {
+	if !containsString(runner.Config.Adapters, t3AdapterSlug) || (runner.catalogKnown && now.Sub(runner.catalogReportedAt) < catalogInterval) {
+		return
+	}
+	runner.catalogReportedAt = now
+	read := runner.HarnessCatalog
+	if read == nil {
+		read = func() ([]state.HarnessModel, error) {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return nil, err
+			}
+			return readT3Catalog(home)
+		}
+	}
+	catalog, err := read()
+	if err != nil {
+		runner.note("model catalog unreadable: %v", err)
+		return
+	}
+	if runner.catalogKnown && reflect.DeepEqual(catalog, runner.catalogSent) {
+		return
+	}
+	if _, err := runner.Client.ReportHarnessModels(ctx, catalog); err != nil {
+		runner.note("model catalog report failed: %v", err)
+		return
+	}
+	runner.catalogSent = catalog
+	runner.catalogKnown = true
+	runner.note("reported %d T3 models", len(catalog))
 }
 
 // Run polls for work until the context ends. With once=true it performs one
@@ -53,6 +99,7 @@ type Runner struct {
 // CI. A rejected credential (401) is terminal: re-pair instead of retrying.
 func (runner *Runner) Run(ctx context.Context, once bool) error {
 	for {
+		runner.reportCatalog(ctx, time.Now())
 		claimed, err := runner.claimAndExecute(ctx, once)
 		if once {
 			return err

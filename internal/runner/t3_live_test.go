@@ -56,3 +56,21 @@ func TestT3LiveThread(t *testing.T) {
 		t.Fatalf("second = %+v", second)
 	}
 }
+
+// TestT3LiveCatalog reads the real T3 caches of this machine.
+func TestT3LiveCatalog(t *testing.T) {
+	if os.Getenv("STATE_T3_LIVE_DIR") == "" {
+		t.Skip("set STATE_T3_LIVE_DIR to read the real T3 catalog")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := readT3Catalog(home)
+	if err != nil || len(catalog) == 0 {
+		t.Fatalf("catalog = %d, %v", len(catalog), err)
+	}
+	for _, model := range catalog {
+		t.Logf("%s | %s | %s | %s | default=%v", model.ProviderName, model.ModelName, model.Provider, model.Model, model.Default)
+	}
+}
