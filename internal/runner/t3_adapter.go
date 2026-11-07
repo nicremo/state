@@ -1,0 +1,285 @@
+package runner
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+	"unicode/utf8"
+
+	"github.com/nicremo/state/internal/state"
+)
+
+// T3 Code is a desktop harness with its own local server. Its CLI starts and
+// continues threads on that server; the thread then shows up in the T3 Code
+// app on the Mac and, through T3 Connect, on the owner's other devices.
+const (
+	t3AdapterSlug = "t3-code"
+	// t3WaitingText is the round's answer when the thread stopped to ask the
+	// owner something in T3 Code (CLI exit code 2).
+	t3WaitingText = "Wartet in T3 Code auf deine Antwort."
+	// t3RightsText explains why a policy below full rights is refused: T3
+	// Code applies its own approval settings, not State's rights levels.
+	t3RightsText = "T3 Code setzt die Rechte der Policy nicht durch. Gib der Policy volle Rechte."
+	// t3NoProjectMarker is the CLI's message for a folder without a T3
+	// project.
+	t3NoProjectMarker = "No T3 Code project matches"
+	// t3TitleLimit mirrors the CLI's own title bound.
+	t3TitleLimit = 80
+	// t3HelperTimeout bounds the short helper calls (project check, project
+	// add, thread show).
+	t3HelperTimeout = 30 * time.Second
+)
+
+// t3Adapter runs one agent round as a T3 Code thread: the first round
+// starts a thread in the project folder, later rounds send the owner's
+// message to the same thread. The thread ID is the round's harness session
+// ID and the thread's T3 link its harness link.
+type t3Adapter struct {
+	// home overrides the home directory for the ~/.t3/bin fallback; tests
+	// set it.
+	home string
+}
+
+func (adapter *t3Adapter) Name() string {
+	return t3AdapterSlug
+}
+
+// binary finds the t3 CLI: on PATH, else in ~/.t3/bin where T3 Code installs
+// it (the runner's launchd PATH usually does not contain that folder).
+func (adapter *t3Adapter) binary() (string, error) {
+	if path, err := exec.LookPath("t3"); err == nil {
+		return path, nil
+	}
+	home := adapter.home
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	if home != "" {
+		candidate := filepath.Join(home, ".t3", "bin", "t3")
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("%w: t3 not found on PATH or in ~/.t3/bin, install T3 Code", ErrAdapterUnavailable)
+}
+
+func (adapter *t3Adapter) Validate(contract state.TaskContract) error {
+	if _, err := adapter.binary(); err != nil {
+		return err
+	}
+	if rightsFor(contract.AllowedCapabilities) != rightsFull {
+		return fmt.Errorf("%w: %s", ErrAdapterUnavailable, t3RightsText)
+	}
+	return nil
+}
+
+func (adapter *t3Adapter) Start(ctx context.Context, request StartRequest) (Session, error) {
+	if err := adapter.Validate(request.Contract); err != nil {
+		return nil, err
+	}
+	binary, _ := adapter.binary()
+	threadID := request.Contract.ResumeSessionID
+	var args []string
+	if threadID == "" {
+		if err := ensureT3Project(ctx, binary, request.Dir); err != nil {
+			return nil, err
+		}
+		args = []string{"thread", "start", "--wait", "--title", t3Title(request.Contract.Objective), request.Dir, "-"}
+	} else {
+		if !state.ValidHarnessSessionID(threadID) {
+			return nil, errors.New("invalid T3 thread ID")
+		}
+		args = []string{"thread", "send", "--wait", threadID, "-"}
+	}
+	command := exec.CommandContext(ctx, binary, args...)
+	command.Dir = request.Dir
+	command.Stdin = strings.NewReader(request.Prompt)
+	tail := &tailBuffer{limit: OutputTailLimit}
+	stdout := &tailBuffer{limit: agentOutputLimit}
+	stderr := &t3StderrWatcher{threadID: threadID}
+	command.Stdout = io.MultiWriter(tail, stdout)
+	command.Stderr = io.MultiWriter(tail, stderr)
+	prepareProcessGroup(command)
+	if err := command.Start(); err != nil {
+		return nil, fmt.Errorf("start t3: %w", err)
+	}
+	return &t3Session{binary: binary, command: command, tail: tail, stdout: stdout, stderr: stderr}, nil
+}
+
+// ensureT3Project registers the folder as a T3 project when T3 knows none
+// for it, so a new State project needs no setup in T3 Code.
+func ensureT3Project(ctx context.Context, binary string, dir string) error {
+	output, err := runT3Helper(ctx, binary, dir, "thread", "list", "--json", "--project", dir)
+	if err == nil {
+		return nil
+	}
+	if !strings.Contains(output, t3NoProjectMarker) {
+		return fmt.Errorf("%w: T3 Code is not reachable, is the app running? %s", ErrAdapterUnavailable, lastLine(output))
+	}
+	if output, err := runT3Helper(ctx, binary, dir, "project", "add", dir); err != nil {
+		return fmt.Errorf("%w: add the folder to T3 Code: %s", ErrAdapterUnavailable, lastLine(output))
+	}
+	return nil
+}
+
+// runT3Helper runs a short t3 call with its own deadline and returns the
+// combined output.
+func runT3Helper(ctx context.Context, binary string, dir string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, t3HelperTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, binary, args...)
+	command.Dir = dir
+	output, err := command.CombinedOutput()
+	return string(output), err
+}
+
+// t3Title is the thread title: the objective's first line, bounded like the
+// CLI bounds it.
+func t3Title(objective string) string {
+	line := strings.TrimSpace(strings.SplitN(strings.TrimSpace(objective), "\n", 2)[0])
+	if line == "" {
+		return "State"
+	}
+	if utf8.RuneCountInString(line) <= t3TitleLimit {
+		return line
+	}
+	runes := []rune(line)
+	return strings.TrimSpace(string(runes[:t3TitleLimit-1])) + "…"
+}
+
+// t3StderrWatcher keeps the CLI's error output and picks up the thread ID
+// from the "Thread <id>" line the CLI writes as soon as the thread exists.
+type t3StderrWatcher struct {
+	mutex    sync.Mutex
+	threadID string
+	data     []byte
+}
+
+func (watcher *t3StderrWatcher) Write(chunk []byte) (int, error) {
+	watcher.mutex.Lock()
+	defer watcher.mutex.Unlock()
+	watcher.data = append(watcher.data, chunk...)
+	if len(watcher.data) > OutputTailLimit {
+		watcher.data = append([]byte(nil), watcher.data[len(watcher.data)-OutputTailLimit:]...)
+	}
+	if watcher.threadID == "" {
+		scanner := bufio.NewScanner(bytes.NewReader(watcher.data))
+		for scanner.Scan() {
+			fields := strings.Fields(scanner.Text())
+			if len(fields) == 2 && fields[0] == "Thread" && state.ValidHarnessSessionID(fields[1]) {
+				watcher.threadID = fields[1]
+				break
+			}
+		}
+	}
+	return len(chunk), nil
+}
+
+func (watcher *t3StderrWatcher) result() (string, string) {
+	watcher.mutex.Lock()
+	defer watcher.mutex.Unlock()
+	return watcher.threadID, string(watcher.data)
+}
+
+// t3Session is one running t3 thread call.
+type t3Session struct {
+	binary  string
+	command *exec.Cmd
+	tail    *tailBuffer
+	stdout  *tailBuffer
+	stderr  *t3StderrWatcher
+}
+
+func (session *t3Session) Wait(ctx context.Context) (Result, error) {
+	err := session.command.Wait()
+	exitCode := 0
+	if err != nil {
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) && exitError.ExitCode() >= 0 {
+			exitCode = exitError.ExitCode()
+		} else {
+			exitCode = -1
+		}
+	}
+	threadID, errorOutput := session.stderr.result()
+	result := Result{ExitCode: exitCode, Tail: session.tail.String(), HarnessSessionID: threadID}
+	switch exitCode {
+	case 0:
+		result.Text = strings.TrimSpace(session.stdout.String())
+	case 2:
+		// The thread asks the owner something in T3 Code. Nothing failed;
+		// the round is handed over and State's next message queues there.
+		result.ExitCode = 0
+		result.Text = t3WaitingText
+	default:
+		result.Text = t3ErrorText(errorOutput, threadID)
+	}
+	if threadID != "" {
+		// A fresh context: the round's context may already be cancelled,
+		// and the link is what lets the owner follow the thread anyway.
+		result.HarnessLink = t3ThreadLink(context.WithoutCancel(ctx), session.binary, session.command.Dir, threadID)
+	}
+	return result, nil
+}
+
+func (session *t3Session) Cancel(_ context.Context) error {
+	return killProcessGroup(session.command)
+}
+
+// t3ErrorText is the last meaningful stderr line, without the "Thread <id>"
+// announcement.
+func t3ErrorText(stderr string, threadID string) string {
+	lines := strings.Split(strings.TrimSpace(stderr), "\n")
+	for index := len(lines) - 1; index >= 0; index-- {
+		line := strings.TrimSpace(lines[index])
+		if line == "" || (threadID != "" && line == "Thread "+threadID) {
+			continue
+		}
+		return line
+	}
+	return "T3 Code hat die Runde ohne Antwort beendet."
+}
+
+// t3ThreadLink reads the thread's T3 link; an unreadable or unsafe link is
+// left out rather than failing the round.
+func t3ThreadLink(ctx context.Context, binary string, dir string, threadID string) string {
+	output, err := runT3Helper(ctx, binary, dir, "thread", "show", "--json", "--messages", "1", threadID)
+	if err != nil {
+		return ""
+	}
+	var shown struct {
+		Thread struct {
+			Link string `json:"link"`
+		} `json:"thread"`
+	}
+	if json.Unmarshal([]byte(lastJSONLine(output)), &shown) != nil || !state.ValidHarnessLink(shown.Thread.Link) {
+		return ""
+	}
+	return shown.Thread.Link
+}
+
+// lastJSONLine skips log lines a CLI may print before its JSON.
+func lastJSONLine(output string) string {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for index := len(lines) - 1; index >= 0; index-- {
+		if strings.HasPrefix(strings.TrimSpace(lines[index]), "{") {
+			return lines[index]
+		}
+	}
+	return ""
+}
+
+func lastLine(output string) string {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	return strings.TrimSpace(lines[len(lines)-1])
+}
