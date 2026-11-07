@@ -246,11 +246,14 @@ type AgentRun struct {
 	// A run that belongs to an agent session is one round of it: Prompt is
 	// what the owner wrote, ResultText the agent's final message and
 	// HarnessSessionID the agent CLI's own session, used to resume it.
-	SessionID        string    `json:"session_id,omitempty"`
-	TurnKind         TurnKind  `json:"turn_kind,omitempty"`
-	Prompt           string    `json:"prompt,omitempty"`
-	ResultText       string    `json:"result_text,omitempty"`
-	HarnessSessionID string    `json:"harness_session_id,omitempty"`
+	SessionID        string   `json:"session_id,omitempty"`
+	TurnKind         TurnKind `json:"turn_kind,omitempty"`
+	Prompt           string   `json:"prompt,omitempty"`
+	ResultText       string   `json:"result_text,omitempty"`
+	HarnessSessionID string   `json:"harness_session_id,omitempty"`
+	// HarnessLink opens the round in the agent's own interface, for example
+	// a T3 Code thread. Validated by ValidHarnessLink.
+	HarnessLink      string    `json:"harness_link,omitempty"`
 	CreatedByActor   Actor     `json:"created_by_actor"`
 	CompletedByActor *Actor    `json:"completed_by_actor,omitempty"`
 	Revision         int64     `json:"revision"`
@@ -381,6 +384,9 @@ type CompleteRunInput struct {
 	// CLI's session, both optional.
 	ResultText       string `json:"result_text,omitempty"`
 	HarnessSessionID string `json:"harness_session_id,omitempty"`
+	// HarnessLink is an optional https link to the round in the agent's own
+	// interface.
+	HarnessLink      string `json:"harness_link,omitempty"`
 	ExitCode         int    `json:"exit_code"`
 	ExpectedRevision int64  `json:"expected_revision"`
 	MutationMetadata
