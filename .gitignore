@@ -44,3 +44,6 @@ agent-logs/
 docs/local/
 CLAUDE.md
 AGENTS.md
+
+# Run and session files the State runner writes into project folders
+.state/
